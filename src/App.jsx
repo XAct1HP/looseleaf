@@ -25,6 +25,8 @@ import Profile from './pages/Profile'
 import EditProfile from './pages/EditProfile'
 import Settings from './pages/Settings'
 import Notifications from './pages/Notifications'
+import Mutuals from './pages/Mutuals'
+import MutualChat from './pages/MutualChat'
 import BackstageOverview from './pages/backstage/Overview'
 import BackstageReports from './pages/backstage/Reports'
 import BackstageEvents from './pages/backstage/EventQueue'
@@ -135,6 +137,11 @@ export default function App() {
           <Route path="profile/edit" element={<EditProfile />} />
           <Route path="settings" element={<Settings />} />
           <Route path="notifications" element={<Notifications />} />
+
+          {/* Mutuals work on a closed campus on purpose — building the list
+              while you wait is the most useful thing you can do there. */}
+          <Route path="mutuals" element={<Mutuals />} />
+          <Route path="mutuals/:id" element={<MutualChat />} />
 
           <Route
             path="discover"

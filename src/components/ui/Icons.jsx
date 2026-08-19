@@ -208,3 +208,17 @@ export const IconNote = (p) => (
     <path d="M8.5 9h7M8.5 12h4.5" />
   </svg>
 )
+
+export const IconSearch = (p) => (
+  <svg {...base(p)}>
+    <circle cx="10.8" cy="10.8" r="6.3" />
+    <path d="M15.4 15.6 20 20.2" />
+  </svg>
+)
+
+export const IconLink = (p) => (
+  <svg {...base(p)}>
+    <path d="M10.5 13.5a3.4 3.4 0 0 0 5 .3l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8l-1.5 1.5" />
+    <path d="M13.5 10.5a3.4 3.4 0 0 0-5-.3l-2.6 2.6a3.4 3.4 0 0 0 4.8 4.8l1.5-1.5" />
+  </svg>
+)

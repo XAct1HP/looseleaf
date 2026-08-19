@@ -10,8 +10,54 @@ import RailCard from '../components/common/RailCard'
 import { useRail } from '../components/nav/AppLayout'
 import { useStore } from '../state/store'
 import { intentionById } from '../data/catalog'
-import { IconEye, IconChevron, IconSettings, IconShield } from '../components/ui/Icons'
+import { IconEye, IconChevron, IconSettings, IconShield, IconPeople } from '../components/ui/Icons'
 import * as staff from '../services/staff'
+import * as mutualsApi from '../services/mutuals'
+
+/**
+ * Mutuals live on your own page, not in the tab bar — they're part of who you
+ * are here, and they're the one thing you manage about other people.
+ */
+function MutualsRow() {
+  const [counts, setCounts] = useState({ mutuals: 0, incoming: 0 })
+
+  useEffect(() => {
+    let live = true
+    mutualsApi
+      .list()
+      .then((d) => live && setCounts({ mutuals: d.mutuals.length, incoming: d.incoming.length }))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const sub =
+    counts.incoming > 0
+      ? `${counts.incoming} waiting on you`
+      : counts.mutuals > 0
+        ? `${counts.mutuals} ${counts.mutuals === 1 ? 'person' : 'people'} you both know`
+        : 'People you actually know, on here'
+
+  return (
+    <Link
+      to="/app/mutuals"
+      className="mt-5 flex items-center gap-3 rounded-card border border-rule bg-white px-5 py-4 text-[15px] font-medium text-navy hover:bg-cream/50"
+    >
+      <IconPeople size={20} className="text-mist" />
+      <span className="flex-1">
+        Mutuals
+        <span className="mt-0.5 block text-[12.5px] font-normal text-mist">{sub}</span>
+      </span>
+      {counts.incoming > 0 && (
+        <span className="rounded-full bg-coral px-2 py-0.5 text-[11px] font-bold text-white">
+          {counts.incoming}
+        </span>
+      )}
+      <IconChevron size={16} className="text-mist" />
+    </Link>
+  )
+}
 
 /**
  * Mobile only. The bottom nav is identical for every member — staff included —
@@ -221,6 +267,8 @@ export default function Profile() {
           )}
         </Section>
       </div>
+
+      <MutualsRow />
 
       {me.isAdmin && <BackstageRow />}
 

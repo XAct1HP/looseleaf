@@ -10,6 +10,7 @@ import { DATA_MODE } from '../lib/supabase'
 import { isDemo } from '../services/backend'
 import { INTENTIONS, UNIVERSITY } from '../data/catalog'
 import { IconChevron, IconShield, IconLock, IconBell, IconHeart, IconPerson } from '../components/ui/Icons'
+import * as mutualsApi from '../services/mutuals'
 
 function Group({ title, Icon, children }) {
   return (
@@ -79,7 +80,12 @@ export default function Settings() {
     dates: true,
     campus: false,
   })
-  const [privacy, setPrivacy] = useState({ visible: true, mutuals: true, activity: false })
+  const [privacy, setPrivacy] = useState({
+    visible: true,
+    findable: true,
+    mutuals: true,
+    activity: false,
+  })
 
   return (
     <>
@@ -117,6 +123,15 @@ export default function Settings() {
             description="Turn this off and only people you’ve already matched with can see you."
             on={privacy.visible}
             onChange={(v) => setPrivacy({ ...privacy, visible: v })}
+          />
+          <Toggle
+            label="Findable as a mutual"
+            description="On, someone who already knows your first name and your major can look you up to add you. Off, nobody can find you that way at all."
+            on={privacy.findable}
+            onChange={(v) => {
+              setPrivacy({ ...privacy, findable: v })
+              mutualsApi.setFindable(state.session.userId, v).catch((err) => actions.showToast(err.message))
+            }}
           />
           <Toggle
             label="Show mutual connections"

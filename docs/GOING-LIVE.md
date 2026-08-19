@@ -35,7 +35,8 @@ In the SQL editor, in order (the first two you've already run):
 2. `supabase/migrations/20260819130000_signup_domain_hook.sql`
 3. `supabase/migrations/20260819140000_real_users.sql` ← new
 4. `supabase/migrations/20260819150000_backstage.sql` ← new
-5. `supabase/seed.sql`
+5. `supabase/migrations/20260819160000_mutuals.sql` ← new
+6. `supabase/seed.sql`
 
 Then two things the dashboard has to do:
 
@@ -95,6 +96,63 @@ moderation appears there, even for you. The queue lives in Backstage.
 
 Declining asks for an optional note, which the submitter sees. Being told why
 is the difference between moderation and a black hole.
+
+---
+
+## Mutuals
+
+A mutual is someone you actually know who has agreed that they know you.
+That's the whole definition, and it's what makes "2 mutual connections" on a
+profile worth reading.
+
+**Finding someone.** Profile → Mutuals → Add. You give a first name *and* a
+major, both exact. There is no prefix matching, no fuzzy match, no suggestions
+while you type, and no results before you submit. Get the major wrong and you
+get nothing back — which is the correct answer for someone you don't actually
+know. Results cap at 8; a real name+major pair returns one or two people.
+
+**What you get back** is a reference card: photo, first name, major, year.
+Tapping the photo enlarges it, because two people with the same name and major
+is exactly the case this feature exists for. It is not a profile and it does
+not link to one. `find_mutual_candidates()` and `person_reference()` return
+those columns and structurally cannot return more, so this holds no matter
+what a future screen asks for.
+
+**Nothing counts until they accept.** `request_connection()` writes a row with
+`accepted = false`, and only the person who was asked can flip it. A pending
+request is invisible to everyone but the two of you, opens no message thread,
+and never appears as a mutual on any profile. Adding back someone who already
+asked you is the same as accepting — the pair is unique by
+`least(profile_id, friend_id)`, so there's one row per pair regardless of who
+asked first.
+
+Declining deletes the row rather than recording the refusal. A stored "no" is
+a thing that can leak; a missing row just means nothing happened. The remedy
+for being asked repeatedly is Settings → *Findable as a mutual*, off, or a
+block.
+
+**Threads.** Accepted mutuals get an ordinary message thread — same
+`conversations` and `messages` tables as a match, with `connection_id` set
+instead of `match_id`. From a person's profile, "Ask a mutual" sends
+*"Do you know Grace?"* plus her reference card. A trigger refuses a shared
+card in a match thread: that conversation is between two people, and a third
+person's photo doesn't belong in it. Removing a mutual cascades the thread
+away.
+
+**No directory, enforced in the database.** This migration also narrows the
+`profiles` select policy. Previously any signed-in student could read every
+profile row on their campus; nothing in the app did that, but "the client
+doesn't" isn't "it can't". Now a row is readable when it's yours, when
+`deck_visible()` says the deck would have handed it to you anyway, or when
+`knows()` finds a like, match, connection, or prior deck view. Photos,
+prompts, and interests inherit it — their policies read through `profiles`.
+
+Two consequences worth knowing when discovery gets ported: `get_deck()` is
+security-definer so it is unaffected, and on a **closed** campus `deck_visible`
+returns false for everyone, so a waitlisted student can read no profiles at
+all. Mutuals still work there, deliberately — the search RPC doesn't gate on
+the campus being open, and building your list while you wait is the most
+useful thing to do on a waitlist.
 
 ---
 

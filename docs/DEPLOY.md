@@ -89,6 +89,7 @@ preview URL.
    - `20260819130000_signup_domain_hook.sql` — campus-only signups
    - `20260819140000_real_users.sql` — admins, event moderation, waitlist
    - `20260819150000_backstage.sql` — report triage, staff-only RPCs
+   - `20260819160000_mutuals.sql` — mutual connections, lookup, no directory
 4. New query → paste `supabase/seed.sql` → **Run**. This loads the campus, the
    interests, the prompt library, and the date spots. No people, no events.
    (Run seed *before* enabling the signup hook — the hook reads the university

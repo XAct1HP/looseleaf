@@ -26,7 +26,8 @@ export default function AppLayout() {
   const { state, newMatch, actions, toast, dismissToast } = useStore()
   const unread = useUnreadCount()
 
-  const isChat = pathname.startsWith('/app/chat/')
+  // Both kinds of thread take the whole column: no page padding, no top bar.
+  const isChat = pathname.startsWith('/app/chat/') || /^\/app\/mutuals\/[^/]+$/.test(pathname)
   const wide = isChat
 
   const setRailFn = useMemo(() => (fn) => setRail(() => (typeof fn === 'function' ? fn() : fn)), [])

@@ -7,7 +7,15 @@ import { connectionById } from '../data/people'
  */
 export function overlapWith(person, me) {
   const sharedInterests = (person.interests || []).filter((i) => me.interests?.includes(i))
-  const mutuals = (person.mutuals || []).map(connectionById).filter(Boolean)
+
+  // An intersection, not their list. "You two both know" has to mean people
+  // you have actually connected with — otherwise it's telling you who someone
+  // else knows, which is theirs to share, not ours.
+  const mine = new Set(me.mutuals || [])
+  const mutuals = (person.mutuals || [])
+    .filter((id) => mine.has(id))
+    .map(connectionById)
+    .filter(Boolean)
 
   const lines = []
 

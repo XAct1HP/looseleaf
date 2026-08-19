@@ -5,16 +5,27 @@
  *            + profile_interests + connections
  */
 
-/** People who exist only as mutual connections / friends, not in Discover. */
+/**
+ * People who exist only as mutual connections / friends, not in Discover.
+ *
+ * `Ben, Information Science` appears twice on purpose: the demo search has to
+ * be able to show the case this feature is really for — two people who match
+ * what you typed, and you have to look at the photos to know which one is
+ * the Ben you actually know.
+ */
 export const CONNECTIONS = [
-  { id: 'c-cameron', firstName: 'Cameron', major: 'Econ' },
-  { id: 'c-nadia', firstName: 'Nadia', major: 'Nursing' },
-  { id: 'c-theo', firstName: 'Theo', major: 'Architecture' },
-  { id: 'c-priya', firstName: 'Priya', major: 'Biology' },
-  { id: 'c-marcus', firstName: 'Marcus', major: 'Sport Management' },
-  { id: 'c-elena', firstName: 'Elena', major: 'History' },
-  { id: 'c-ben', firstName: 'Ben', major: 'Info' },
-  { id: 'c-sofia', firstName: 'Sofia', major: 'Design' },
+  { id: 'c-cameron', firstName: 'Cameron', major: 'Econ', gradYear: '27' },
+  { id: 'c-nadia', firstName: 'Nadia', major: 'Nursing', gradYear: '28' },
+  { id: 'c-theo', firstName: 'Theo', major: 'Architecture', gradYear: '26' },
+  { id: 'c-priya', firstName: 'Priya', major: 'Biology', gradYear: '27' },
+  { id: 'c-marcus', firstName: 'Marcus', major: 'Sport Management', gradYear: '28' },
+  { id: 'c-elena', firstName: 'Elena', major: 'History', gradYear: '27' },
+  { id: 'c-ben', firstName: 'Ben', major: 'Information Science', gradYear: '27' },
+  { id: 'c-sofia', firstName: 'Sofia', major: 'Design', gradYear: '26' },
+  { id: 'c-ben-2', firstName: 'Ben', major: 'Information Science', gradYear: '29' },
+  { id: 'c-jordan', firstName: 'Jordan', major: 'Psychology', gradYear: '27' },
+  { id: 'c-alina', firstName: 'Alina', major: 'Chemical Engineering', gradYear: '26' },
+  { id: 'c-dev', firstName: 'Dev', major: 'Computer Science', gradYear: '28' },
 ]
 
 export const connectionById = (id) => CONNECTIONS.find((c) => c.id === id)
@@ -429,6 +440,9 @@ export const CURRENT_USER = {
   // unless you set it by hand. Flip to false if you'd rather the public demo
   // not show the Backstage section.
   isAdmin: true,
+  // Who you've already connected with. In live mode this is the `connections`
+  // table; here it seeds the demo so the Mutuals page isn't empty on arrival.
+  mutuals: ['c-cameron', 'c-ben', 'c-sofia'],
   interests: ['coffee', 'live-music', 'cars', 'hiking', 'cooking', 'basketball'],
   photos: [{ scene: 'portrait' }, { scene: 'coffee' }, { scene: 'bike' }, { scene: 'mountains' }],
   prompts: [

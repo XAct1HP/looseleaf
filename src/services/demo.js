@@ -12,7 +12,7 @@
  * services/backend.js.
  */
 
-import { CURRENT_USER, PEOPLE, personById } from '../data/people'
+import { CURRENT_USER, PEOPLE, CONNECTIONS, personById, connectionById } from '../data/people'
 const STORAGE_KEY = 'looseleaf.demo.v1'
 const wait = (ms = 90) => new Promise((r) => setTimeout(r, ms))
 
@@ -420,4 +420,126 @@ export function staffSpots() {
     { id: 'ashley', name: "Ashley's", kind: 'Drinks', walk_minutes: 7, is_sponsored: false },
     { id: 'arb', name: 'Nichols Arboretum', kind: 'Something fun', walk_minutes: 15, is_sponsored: false },
   ]
+}
+
+/* ─────────────────────────────────────────────────────────── mutuals ─────
+ *
+ * The demo campus, searched the same way the real one is: exact first name
+ * AND exact major, or nothing. Same rule, same shape of answer — the point of
+ * the demo is that it can't do anything the live app can't.
+ */
+
+const seedMutuals = () =>
+  (CURRENT_USER.mutuals ?? []).map((id) => ({
+    connectionId: `conn-${id}`,
+    ...connectionById(id),
+    state: 'connected',
+    scene: 'portrait',
+  }))
+
+let demoConnections = [
+  ...seedMutuals(),
+  {
+    connectionId: 'conn-incoming-1',
+    ...connectionById('c-priya'),
+    state: 'incoming',
+    scene: 'portrait',
+    createdAt: hoursAgo(20),
+  },
+]
+
+let demoThreads = {}
+
+export function mutualsList() {
+  return {
+    mutuals: demoConnections.filter((c) => c.state === 'connected'),
+    incoming: demoConnections.filter((c) => c.state === 'incoming'),
+    sent: demoConnections.filter((c) => c.state === 'sent'),
+  }
+}
+
+export async function mutualsSearch(firstName, major) {
+  await wait(280)
+  const n = (firstName || '').trim().toLowerCase()
+  const m = (major || '').trim().toLowerCase()
+  if (n.length < 2 || m.length < 3) throw new Error('Give both a first name and a major.')
+
+  return CONNECTIONS.filter(
+    (c) => c.firstName.toLowerCase() === n && c.major.toLowerCase() === m
+  ).map((c) => ({
+    ...c,
+    scene: 'portrait',
+    state: demoConnections.find((x) => x.id === c.id)?.state ?? 'none',
+  }))
+}
+
+export function mutualsRequest(personId) {
+  const person = connectionById(personId)
+  if (!person) throw new Error('That person is not available.')
+  const existing = demoConnections.find((c) => c.id === personId)
+  if (existing) {
+    if (existing.state === 'incoming') existing.state = 'connected'
+    return existing.connectionId
+  }
+  const connectionId = nid('conn')
+  demoConnections = [
+    ...demoConnections,
+    { connectionId, ...person, state: 'sent', scene: 'portrait', createdAt: Date.now() },
+  ]
+  return connectionId
+}
+
+export function mutualsRespond(connectionId, accept) {
+  demoConnections = accept
+    ? demoConnections.map((c) => (c.connectionId === connectionId ? { ...c, state: 'connected' } : c))
+    : demoConnections.filter((c) => c.connectionId !== connectionId)
+}
+
+export function mutualsRemove(connectionId) {
+  demoConnections = demoConnections.filter((c) => c.connectionId !== connectionId)
+  delete demoThreads[connectionId]
+}
+
+/** Who you and one other person both know — an intersection of two lists. */
+export function mutualsSharedWith(personId) {
+  const person = personById(personId)
+  const mine = new Set(demoConnections.filter((c) => c.state === 'connected').map((c) => c.id))
+  return (person?.mutuals ?? [])
+    .filter((id) => mine.has(id))
+    .map((id) => ({ ...connectionById(id), scene: 'portrait' }))
+}
+
+export function mutualsThread(connectionId) {
+  return demoThreads[connectionId] ?? []
+}
+
+export function mutualsSend(connectionId, text, personRef = null) {
+  const message = {
+    id: nid('mm'),
+    from: 'me',
+    text,
+    card: personRef ? { ...personById(personRef), scene: 'portrait' } : null,
+    at: Date.now(),
+  }
+  demoThreads = { ...demoThreads, [connectionId]: [...(demoThreads[connectionId] ?? []), message] }
+  return message
+}
+
+/** A mutual replies once, warmly, so the thread reads like a conversation. */
+export function mutualsReply(connectionId, seed = 0) {
+  const lines = [
+    'ha yes I know her, she’s great',
+    'we had a class together last year — you’d get on',
+    'don’t know them well but I’ve only heard good things',
+    'go for it honestly',
+  ]
+  const message = {
+    id: nid('mm'),
+    from: 'them',
+    text: lines[seed % lines.length],
+    card: null,
+    at: Date.now(),
+  }
+  demoThreads = { ...demoThreads, [connectionId]: [...(demoThreads[connectionId] ?? []), message] }
+  return message
 }

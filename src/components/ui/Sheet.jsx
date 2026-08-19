@@ -1,22 +1,42 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { IconX } from './Icons'
 import { IconButton } from './Button'
+
+/**
+ * Open sheets, innermost last. Sheets can nest — enlarging a photo from
+ * inside the add-a-mutual sheet, for one — and without this, Escape would
+ * close every one of them at once instead of just the one you're looking at.
+ */
+const stack = []
 
 /**
  * One overlay primitive: a centered sheet on desktop, a bottom sheet on
  * mobile. Used for notes, reporting, date planning, filters.
  */
 export default function Sheet({ open, onClose, title, subtitle, children, footer, maxWidth = 'max-w-md' }) {
+  const token = useRef({})
+
   useEffect(() => {
     if (!open) return
-    const onKey = (e) => e.key === 'Escape' && onClose?.()
+    const me = token.current
+    stack.push(me)
+
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      if (stack[stack.length - 1] !== me) return
+      e.stopPropagation()
+      onClose?.()
+    }
+
     document.addEventListener('keydown', onKey)
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      const i = stack.indexOf(me)
+      if (i > -1) stack.splice(i, 1)
+      if (stack.length === 0) document.body.style.overflow = prev
     }
   }, [open, onClose])
 
