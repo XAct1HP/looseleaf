@@ -21,7 +21,7 @@ git commit -m "Looseleaf: college dating app, demo data"
 git branch -M main
 ```
 
-Sanity check before you push — this should list ~79 files and **no**
+Sanity check before you push — this should list ~80 files and **no**
 `node_modules`, `dist`, `.env`, or `_to_delete`:
 
 ```bash
@@ -88,6 +88,8 @@ preview URL.
    It should finish with "Success. No rows returned."
 4. New query again → paste `supabase/seed.sql` → **Run**. This loads the
    university, interests, prompt library, date spots, and campus events.
+   (Run seed *before* the signup hook below — the hook reads the university
+   list, so with no rows seeded it would reject every signup.)
 5. **Authentication → Providers → Email**: turn on *Confirm email*, and turn
    **off** *Enable email signups* only if you want invite-only. Under
    **URL Configuration**, set:
@@ -95,28 +97,43 @@ preview URL.
    - Redirect URLs: add `http://localhost:5173/**` and `https://<your-vercel-url>/**`
 6. **Project Settings → API**: copy the *Project URL* and the *anon public* key.
 
-### Restricting signups to .edu
+### Restricting signups to campus email domains
 
-Supabase doesn't gate signups by domain in the dashboard. Add this in the SQL
-editor once you turn auth on:
+Supabase doesn't gate signups by domain in the dashboard, and you **cannot** do
+it with a trigger on `auth.users` — Supabase revoked write access to the `auth`
+schema for the `postgres` role, so that fails with
+`42501: permission denied for schema auth`. The supported mechanism is a
+**Before User Created** auth hook (free plan, Postgres function).
+
+Two steps, and it does nothing until you do both.
+
+1. Run `supabase/migrations/20260819130000_signup_domain_hook.sql` in the SQL
+   editor. It creates `public.restrict_signup_to_campus(event jsonb)`, grants it
+   to `supabase_auth_admin`, and revokes it from `anon`/`authenticated`.
+2. **Dashboard → Authentication → Hooks → Before User Created** → choose
+   **Postgres**, select `public.restrict_signup_to_campus`, enable.
+
+The hook checks the address against `universities.email_domains`, so adding a
+campus is an insert rather than a code change:
 
 ```sql
-create or replace function auth.enforce_edu_domain()
-returns trigger language plpgsql as $$
-begin
-  if new.email !~ '@[a-z0-9.-]+\.edu$' then
-    raise exception 'Looseleaf is for university email addresses.';
-  end if;
-  return new;
-end;
-$$;
-
-create trigger enforce_edu_domain
-  before insert on auth.users
-  for each row execute function auth.enforce_edu_domain();
+insert into universities (name, short_name, city, email_domains, areas)
+values ('Michigan State University', 'MSU', 'East Lansing, MI',
+        array['msu.edu'], array['North', 'South', 'Off Campus']);
 ```
 
-Tighten `\.edu$` to `@umich\.edu$` while you're only running one campus.
+Verified behaviour (case-insensitive, and unknown `.edu` domains are rejected
+too — it's an allowlist, not a `.edu` regex):
+
+| signup email | result |
+| --- | --- |
+| `Javi@UMICH.edu` | allowed |
+| `javi@gmail.com` | 403, "Looseleaf isn't on your campus yet…" |
+| `someone@msu.edu` (before the insert above) | 403 |
+| no email | 400 |
+
+Calling the hook as `anon` or `authenticated` fails with permission denied, so
+it can't be probed through the Data APIs.
 
 ### Wiring the keys
 
