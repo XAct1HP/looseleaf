@@ -4,35 +4,75 @@ import AuthShell from './AuthShell'
 import Button from '../../components/ui/Button'
 import { Underline, Star } from '../../components/brand/Doodles'
 import { IconVerified } from '../../components/ui/Icons'
-import { UNIVERSITY } from '../../data/catalog'
 import { useStore } from '../../state/store'
+import { isDemo } from '../../services/backend'
 
 export default function Verify() {
   const { state, actions } = useStore()
   const navigate = useNavigate()
   const [digits, setDigits] = useState(['', '', '', '', '', ''])
-  const [done, setDone] = useState(false)
+  const [stage, setStage] = useState('entry') // entry | checking | done
+  const [error, setError] = useState('')
+  const [resent, setResent] = useState(false)
   const inputs = useRef([])
 
-  const setDigit = (i, v) => {
-    const clean = v.replace(/\D/g, '').slice(-1)
-    const next = [...digits]
-    next[i] = clean
-    setDigits(next)
-    if (clean && i < 5) inputs.current[i + 1]?.focus()
-    if (next.every((d) => d)) {
-      setTimeout(() => {
-        actions.verify()
-        setDone(true)
-      }, 320)
+  const email = state.session.email
+
+  const attempt = async (code) => {
+    setStage('checking')
+    setError('')
+    try {
+      const { onboarded } = await actions.verifyCode(email, code)
+      if (onboarded) {
+        navigate('/app/discover')
+        return
+      }
+      setStage('done')
+    } catch (err) {
+      setError(err.message)
+      setStage('entry')
+      setDigits(['', '', '', '', '', ''])
+      inputs.current[0]?.focus()
     }
+  }
+
+  const setDigit = (i, value) => {
+    // Handles paste of a whole code as well as single keystrokes.
+    const cleaned = value.replace(/\D/g, '')
+    if (!cleaned) {
+      const next = [...digits]
+      next[i] = ''
+      setDigits(next)
+      return
+    }
+
+    const next = [...digits]
+    for (let k = 0; k < cleaned.length && i + k < 6; k++) next[i + k] = cleaned[k]
+    setDigits(next)
+
+    const landed = Math.min(i + cleaned.length, 5)
+    inputs.current[landed]?.focus()
+
+    if (next.every(Boolean)) attempt(next.join(''))
   }
 
   const onKeyDown = (i, e) => {
     if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus()
   }
 
-  if (done) {
+  const resend = async () => {
+    setDigits(['', '', '', '', '', ''])
+    setError('')
+    try {
+      await actions.sendCode(email)
+      setResent(true)
+      setTimeout(() => setResent(false), 4000)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  if (stage === 'done') {
     return (
       <AuthShell step="2 of 3" back="/join">
         <div className="relative text-center">
@@ -48,9 +88,11 @@ export default function Verify() {
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-notebook-deep">
               <IconVerified size={22} />
             </span>
-            <div>
-              <p className="text-[15.5px] font-semibold text-[#22406E]">{UNIVERSITY.name}</p>
-              <p className="text-[13px] text-[#4A6A99]">Verified · {UNIVERSITY.city}</p>
+            <div className="min-w-0">
+              <p className="truncate text-[15.5px] font-semibold text-[#22406E]">
+                {state.me?.university?.name ?? 'University of Michigan'}
+              </p>
+              <p className="text-[13px] text-[#4A6A99]">Verified · {email}</p>
             </div>
           </div>
 
@@ -74,9 +116,8 @@ export default function Verify() {
       </h1>
 
       <p className="mt-6 max-w-[42ch] text-[15.5px] leading-relaxed text-graphite">
-        We sent a six-digit code to{' '}
-        <span className="font-medium text-navy">{state.session.email || 'your school email'}</span>. It expires in
-        ten minutes.
+        We sent a six-digit code to <span className="font-medium text-navy">{email || 'your school email'}</span>.
+        It expires in an hour.
       </p>
 
       <div className="mt-9 flex justify-between gap-2 sm:gap-3">
@@ -91,21 +132,32 @@ export default function Verify() {
             autoComplete="one-time-code"
             aria-label={`Digit ${i + 1}`}
             autoFocus={i === 0}
-            className="h-16 w-full rounded-2xl border border-rule bg-white text-center font-display text-[26px] font-semibold text-navy transition focus:border-coral/50 focus:outline-none focus:ring-4 focus:ring-coral/15"
+            disabled={stage === 'checking'}
+            className="h-16 w-full rounded-2xl border border-rule bg-white text-center font-display text-[26px] font-semibold text-navy transition focus:border-coral/50 focus:outline-none focus:ring-4 focus:ring-coral/15 disabled:opacity-50"
           />
         ))}
       </div>
 
-      <p className="mt-5 text-center text-[13px] text-mist">
-        Demo: type any six digits.
-      </p>
+      {stage === 'checking' && (
+        <p className="mt-5 text-center text-[13.5px] text-graphite">Checking…</p>
+      )}
+
+      {error && (
+        <p className="mt-5 rounded-xl bg-coral-wash px-4 py-3 text-center text-[13.5px] leading-relaxed text-coral-deep">
+          {error}
+        </p>
+      )}
+
+      {isDemo && (
+        <p className="mt-5 text-center text-[13px] text-mist">Demo mode — any six digits will do.</p>
+      )}
 
       <button
         type="button"
-        onClick={() => setDigits(['', '', '', '', '', ''])}
+        onClick={resend}
         className="mx-auto mt-6 block text-[13.5px] font-medium text-graphite underline underline-offset-4 hover:text-navy"
       >
-        Didn’t get it? Send another
+        {resent ? 'Sent — check your inbox' : 'Didn’t get it? Send another'}
       </button>
     </AuthShell>
   )

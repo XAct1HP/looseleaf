@@ -3,21 +3,43 @@ import { Link, useNavigate } from 'react-router-dom'
 import AuthShell from './AuthShell'
 import Button from '../../components/ui/Button'
 import { Underline } from '../../components/brand/Doodles'
-import { IconMail, IconLock } from '../../components/ui/Icons'
+import { IconMail } from '../../components/ui/Icons'
 import { useStore } from '../../state/store'
+import { isDemo } from '../../services/backend'
 
+/**
+ * There are no passwords. Signing in is the same six-digit code as signing up,
+ * which means one less thing to leak and one less thing to forget.
+ */
 export default function Login() {
   const { actions } = useStore()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('javi@umich.edu')
-  const [password, setPassword] = useState('••••••••')
+  const [email, setEmail] = useState(isDemo ? 'javi@umich.edu' : '')
+  const [error, setError] = useState('')
+  const [sending, setSending] = useState(false)
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
-    actions.signIn(email.trim().toLowerCase())
-    actions.verify()
-    actions.finishOnboarding({})
-    navigate('/app/discover')
+    const value = email.trim().toLowerCase()
+
+    if (isDemo) {
+      await actions.sendCode(value)
+      await actions.verifyCode(value, '000000')
+      await actions.finishOnboarding({})
+      navigate('/app/discover')
+      return
+    }
+
+    setSending(true)
+    setError('')
+    try {
+      await actions.sendCode(value, { existingOnly: true })
+      navigate('/verify')
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -39,54 +61,43 @@ export default function Login() {
         Someone might have left you a note.
       </p>
 
-      <form onSubmit={submit} className="mt-9 space-y-4">
-        <div>
-          <label htmlFor="login-email" className="label">
-            University email
-          </label>
-          <div className="relative">
-            <IconMail size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-mist" />
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="field pl-11"
-            />
-          </div>
+      <form onSubmit={submit} className="mt-9">
+        <label htmlFor="login-email" className="label">
+          University email
+        </label>
+        <div className="relative">
+          <IconMail size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-mist" />
+          <input
+            id="login-email"
+            type="email"
+            autoComplete="email"
+            autoFocus
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              setError('')
+            }}
+            placeholder="you@umich.edu"
+            className="field pl-11"
+          />
         </div>
 
-        <div>
-          <div className="flex items-baseline justify-between">
-            <label htmlFor="login-password" className="label">
-              Password
-            </label>
-            <button type="button" className="mb-2 text-[12.5px] text-graphite underline underline-offset-4">
-              Forgot?
-            </button>
-          </div>
-          <div className="relative">
-            <IconLock size={19} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-mist" />
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="field pl-11"
-            />
-          </div>
-        </div>
+        {error && (
+          <p className="mt-2.5 rounded-xl bg-coral-wash px-3.5 py-2.5 text-[13.5px] leading-relaxed text-coral-deep">
+            {error}
+          </p>
+        )}
 
-        <Button type="submit" variant="coral" size="lg" full className="!mt-7">
-          Log in
+        <Button type="submit" variant="coral" size="lg" full className="mt-6" disabled={sending}>
+          {sending ? 'Sending…' : isDemo ? 'Log in' : 'Email me a code'}
         </Button>
       </form>
 
-      <p className="mt-6 rounded-2xl border border-rule bg-cream/70 px-4 py-3 text-center text-[12.5px] leading-relaxed text-graphite">
-        Demo build — log in with anything to land in Javi’s account.
-      </p>
+      {isDemo && (
+        <p className="mt-6 rounded-2xl border border-rule bg-cream/70 px-4 py-3 text-center text-[12.5px] leading-relaxed text-graphite">
+          Demo build — log in with anything to land in Javi’s account.
+        </p>
+      )}
     </AuthShell>
   )
 }

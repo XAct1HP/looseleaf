@@ -7,6 +7,7 @@ import UniversityBadge from '../components/common/UniversityBadge'
 import { SelectChip } from '../components/ui/Chip'
 import { useStore } from '../state/store'
 import { DATA_MODE } from '../lib/supabase'
+import { isDemo } from '../services/backend'
 import { INTENTIONS, UNIVERSITY } from '../data/catalog'
 import { IconChevron, IconShield, IconLock, IconBell, IconHeart, IconPerson } from '../components/ui/Icons'
 
@@ -86,25 +87,26 @@ export default function Settings() {
 
       <div className="space-y-4 pb-6">
         <Group title="Account" Icon={IconPerson}>
-          <Row label="Email" value={state.session.email || state.me.email} />
-          <Row label="Password" value="••••••••" onClick={() => setSheet('password')} />
+          <Row label="Email" value={state.session.email || state.me?.email} />
+          {isDemo && <Row label="Password" value="••••••••" onClick={() => setSheet('password')} />}
+          {!isDemo && <Row label="Sign in" value="Six-digit code by email" />}
           <Row label="University" value={<UniversityBadge size="sm" name={UNIVERSITY.short} />} />
         </Group>
 
         <Group title="Dating preferences" Icon={IconHeart}>
           <Row
             label="Who I see"
-            value={(state.me.prefs.interestedIn ?? []).join(', ') || 'Everyone'}
+            value={(state.me?.prefs?.interestedIn ?? []).join(', ') || 'Everyone'}
             onClick={() => setSheet('who')}
           />
           <Row
             label="Age range"
-            value={`${state.me.prefs.ageRange[0]}–${state.me.prefs.ageRange[1]}`}
+            value={`${state.me?.prefs?.ageRange?.[0] ?? 18}–${state.me?.prefs?.ageRange?.[1] ?? 30}`}
             onClick={() => setSheet('age')}
           />
           <Row
             label="Intentions"
-            value={INTENTIONS.find((i) => i.id === state.me.intention)?.label}
+            value={INTENTIONS.find((i) => i.id === state.me?.intention)?.label}
             onClick={() => navigate('/app/profile/edit#intention')}
           />
         </Group>
@@ -154,8 +156,8 @@ export default function Settings() {
             label={state.paused ? 'Unpause Looseleaf' : 'Pause Looseleaf'}
             onClick={() => setSheet('pause')}
           />
-          <Row label="Reset demo data" onClick={() => setSheet('reset')} />
-          <Row label="Log out" onClick={() => { actions.signOut(); navigate('/') }} />
+          {isDemo && <Row label="Reset demo data" onClick={() => setSheet('reset')} />}
+          <Row label="Log out" onClick={async () => { await actions.signOut(); navigate('/') }} />
           <Row label="Delete account" danger onClick={() => setSheet('delete')} />
         </Group>
 
@@ -253,9 +255,9 @@ export default function Settings() {
           ].map((o) => (
             <SelectChip
               key={o.id}
-              selected={state.me.prefs.interestedIn.includes(o.id)}
+              selected={(state.me?.prefs?.interestedIn ?? []).includes(o.id)}
               onClick={() => {
-                const current = state.me.prefs.interestedIn
+                const current = state.me?.prefs?.interestedIn ?? []
                 if (o.id === 'everyone') return actions.updatePrefs({ interestedIn: ['everyone'] })
                 const without = current.filter((x) => x !== 'everyone')
                 actions.updatePrefs({
@@ -277,16 +279,16 @@ export default function Settings() {
           <div>
             <div className="mb-2 flex justify-between text-[13px] text-graphite">
               <span>Minimum</span>
-              <span className="font-semibold tabular-nums">{state.me.prefs.ageRange[0]}</span>
+              <span className="font-semibold tabular-nums">{(state.me?.prefs?.ageRange?.[0] ?? 18)}</span>
             </div>
             <input
               type="range"
               min="18"
               max="30"
-              value={state.me.prefs.ageRange[0]}
+              value={(state.me?.prefs?.ageRange?.[0] ?? 18)}
               onChange={(e) =>
                 actions.updatePrefs({
-                  ageRange: [Math.min(+e.target.value, state.me.prefs.ageRange[1] - 1), state.me.prefs.ageRange[1]],
+                  ageRange: [Math.min(+e.target.value, (state.me?.prefs?.ageRange?.[1] ?? 30) - 1), (state.me?.prefs?.ageRange?.[1] ?? 30)],
                 })
               }
               className="w-full accent-coral"
@@ -295,16 +297,16 @@ export default function Settings() {
           <div>
             <div className="mb-2 flex justify-between text-[13px] text-graphite">
               <span>Maximum</span>
-              <span className="font-semibold tabular-nums">{state.me.prefs.ageRange[1]}</span>
+              <span className="font-semibold tabular-nums">{(state.me?.prefs?.ageRange?.[1] ?? 30)}</span>
             </div>
             <input
               type="range"
               min="18"
               max="30"
-              value={state.me.prefs.ageRange[1]}
+              value={(state.me?.prefs?.ageRange?.[1] ?? 30)}
               onChange={(e) =>
                 actions.updatePrefs({
-                  ageRange: [state.me.prefs.ageRange[0], Math.max(+e.target.value, state.me.prefs.ageRange[0] + 1)],
+                  ageRange: [(state.me?.prefs?.ageRange?.[0] ?? 18), Math.max(+e.target.value, (state.me?.prefs?.ageRange?.[0] ?? 18) + 1)],
                 })
               }
               className="w-full accent-coral"

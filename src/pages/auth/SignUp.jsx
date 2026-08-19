@@ -5,22 +5,36 @@ import Button from '../../components/ui/Button'
 import { Underline } from '../../components/brand/Doodles'
 import { IconMail } from '../../components/ui/Icons'
 import { useStore } from '../../state/store'
+import { isDemo } from '../../services/backend'
 
 export default function SignUp() {
   const [email, setEmail] = useState('')
   const [error, setError] = useState('')
+  const [sending, setSending] = useState(false)
   const { actions } = useStore()
   const navigate = useNavigate()
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     const value = email.trim().toLowerCase()
-    if (!/^[^@\s]+@[^@\s]+\.edu$/.test(value)) {
-      setError('That doesn’t look like a university email yet.')
+
+    if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(value)) {
+      setError('That doesn’t look like an email address yet.')
       return
     }
-    actions.signIn(value)
-    navigate('/verify')
+
+    setSending(true)
+    setError('')
+    try {
+      await actions.sendCode(value)
+      navigate('/verify')
+    } catch (err) {
+      // Off-campus rejections come back from the signup hook already worded
+      // for a person, so they're shown as-is.
+      setError(err.message)
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -41,8 +55,8 @@ export default function SignUp() {
       </h1>
 
       <p className="mt-6 max-w-[42ch] text-[15.5px] leading-relaxed text-graphite">
-        Looseleaf is built around real campus communities. We’ll send you a quick verification email — that’s the
-        whole sign-up.
+        Looseleaf is built around real campus communities. We’ll send you a six-digit code — that’s the whole
+        sign-up.
       </p>
 
       <form onSubmit={submit} className="mt-9">
@@ -69,17 +83,19 @@ export default function SignUp() {
           />
         </div>
         {error && (
-          <p id="email-error" className="mt-2 text-[13px] text-coral-deep">
+          <p id="email-error" className="mt-2.5 rounded-xl bg-coral-wash px-3.5 py-2.5 text-[13.5px] leading-relaxed text-coral-deep">
             {error}
           </p>
         )}
 
-        <Button type="submit" variant="coral" size="lg" full className="mt-6">
-          Send me a code
+        <Button type="submit" variant="coral" size="lg" full className="mt-6" disabled={sending}>
+          {sending ? 'Sending…' : 'Send me a code'}
         </Button>
 
         <p className="mt-4 text-center text-[12.5px] leading-relaxed text-mist">
-          We only use your school email to verify your campus. It’s never shown on your profile.
+          {isDemo
+            ? 'Demo mode — no email is actually sent.'
+            : 'We only use your school email to verify your campus. It’s never shown on your profile.'}
         </p>
       </form>
     </AuthShell>

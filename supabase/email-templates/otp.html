@@ -1,0 +1,106 @@
+<!--
+  Looseleaf — sign-in code email
+
+  Paste this into BOTH templates in Supabase → Authentication → Emails:
+    · "Magic Link" (sent to people who already have an account)
+    · "Confirm sign up" (sent the first time an address is seen)
+  signInWithOtp picks between them depending on whether the user exists, so
+  they need to match or half your users get Supabase's default email.
+
+  Deliberately code-only, no clickable link. University mail systems
+  (Defender, Proofpoint) follow links in incoming mail to scan them, and
+  following a Supabase confirmation URL consumes the token — which would
+  invalidate the code before the student ever typed it.
+
+  Email clients strip webfonts, so Fraunces falls back to Georgia and DM Sans
+  to the system stack. Tables and inline styles, because Outlook.
+-->
+
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+  Your Looseleaf code is {{ .Token }} — it expires in an hour.
+</div>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background-color:#FFF6EB;margin:0;padding:32px 12px;">
+  <tr>
+    <td align="center">
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+             style="width:100%;max-width:480px;background-color:#FFFDF8;border:1px solid #EDE7DC;border-radius:22px;">
+
+        <!-- wordmark -->
+        <tr>
+          <td style="padding:30px 28px 0 28px;">
+            <span style="font-family:Georgia,'Times New Roman',serif;font-size:21px;font-weight:600;color:#111C38;letter-spacing:-0.3px;">
+              looseleaf
+            </span>
+            <span style="color:#FF6468;font-size:15px;">&nbsp;&#9829;</span>
+          </td>
+        </tr>
+
+        <!-- headline -->
+        <tr>
+          <td style="padding:24px 28px 0 28px;">
+            <h1 style="margin:0;font-family:Georgia,'Times New Roman',serif;font-size:27px;line-height:1.2;font-weight:600;color:#111C38;">
+              Here&rsquo;s your code.
+            </h1>
+            <p style="margin:14px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.6;color:#566070;">
+              Type these six digits into Looseleaf to finish signing in.
+            </p>
+          </td>
+        </tr>
+
+        <!-- the code, set on a scrap of ruled paper -->
+        <tr>
+          <td style="padding:22px 28px 0 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background-color:#FFF6EB;border:1px solid #F2E6D6;border-left:4px solid #F0B6CE;border-radius:16px;">
+              <tr>
+                <td align="center" style="padding:22px 16px;">
+                  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:34px;font-weight:700;letter-spacing:9px;color:#111C38;text-indent:9px;">
+                    {{ .Token }}
+                  </div>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:12px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.6;color:#8B93A3;">
+              It expires in an hour and only works once.
+            </p>
+          </td>
+        </tr>
+
+        <!-- reassurance -->
+        <tr>
+          <td style="padding:24px 28px 0 28px;">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="border-top:1px solid #EDE7DC;">
+              <tr>
+                <td style="padding-top:22px;">
+                  <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13.5px;line-height:1.65;color:#566070;">
+                    Didn&rsquo;t ask for this? You can ignore it &mdash; nobody gets into your
+                    account without the code, and we won&rsquo;t email you again.
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- footer -->
+        <tr>
+          <td style="padding:24px 28px 30px 28px;">
+            <p style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#8B93A3;">
+              Looseleaf &middot; Ann Arbor, MI<br />
+              Free, and staying that way.
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      <p style="margin:18px 0 0 0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:11.5px;line-height:1.6;color:#A9A396;">
+        Sent to {{ .Email }}
+      </p>
+
+    </td>
+  </tr>
+</table>

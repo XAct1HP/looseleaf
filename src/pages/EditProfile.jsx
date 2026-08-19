@@ -4,7 +4,8 @@ import Portrait, { SCENE_KEYS } from '../components/brand/Portrait'
 import Button from '../components/ui/Button'
 import Sheet from '../components/ui/Sheet'
 import { SelectChip } from '../components/ui/Chip'
-import { IconBack, IconPlus, IconX } from '../components/ui/Icons'
+import { IconBack } from '../components/ui/Icons'
+import PhotoSlot from '../components/profile/PhotoSlot'
 import { INTENTIONS, INTERESTS, PROMPT_CATEGORIES, UNIVERSITY } from '../data/catalog'
 import { useStore } from '../state/store'
 import { Underline } from '../components/brand/Doodles'
@@ -35,9 +36,9 @@ export default function EditProfile() {
     navigate('/app/profile')
   }
 
-  const setSlot = (i, scene) => {
+  const setSlot = (i, value) => {
     const photos = [...(draft.photos ?? [])]
-    if (scene) photos[i] = { scene }
+    if (value) photos[i] = typeof value === 'string' ? { scene: value } : value
     else photos.splice(i, 1)
     set({ photos })
     setPicking(null)
@@ -63,36 +64,17 @@ export default function EditProfile() {
       <div className="space-y-4 pb-24">
         <Block id="photos" title="Photos">
           <div className="grid grid-cols-3 gap-2.5">
-            {Array.from({ length: 6 }).map((_, i) => {
-              const photo = draft.photos?.[i]
-              return (
-                <div key={i} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setPicking(i)}
-                    className={`focus-ring flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition ${
-                      photo ? 'border-transparent' : 'border-navy/12 bg-cream/60 hover:border-coral/40'
-                    }`}
-                  >
-                    {photo ? (
-                      <Portrait id={`me-${i}`} scene={photo.scene} rounded="rounded-2xl" />
-                    ) : (
-                      <IconPlus size={20} className="text-mist" />
-                    )}
-                  </button>
-                  {photo && (
-                    <button
-                      type="button"
-                      aria-label="Remove"
-                      onClick={() => setSlot(i, null)}
-                      className="press absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-rule bg-white text-graphite shadow-paper"
-                    >
-                      <IconX size={14} />
-                    </button>
-                  )}
-                </div>
-              )
-            })}
+            {Array.from({ length: 6 }).map((_, i) => (
+              <PhotoSlot
+                key={i}
+                index={i}
+                photo={draft.photos?.[i]}
+                hint="Add"
+                onPick={setPicking}
+                onChoose={(idx, value) => setSlot(idx, value)}
+                onRemove={(idx) => setSlot(idx, null)}
+              />
+            ))}
           </div>
         </Block>
 

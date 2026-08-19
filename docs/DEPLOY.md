@@ -83,12 +83,14 @@ preview URL.
    - Region: pick the one nearest your users (`us-east-1` for Michigan)
    - Save the database password somewhere real — it is shown once.
 2. Wait for provisioning (~2 minutes).
-3. **SQL Editor** → New query → paste the entire contents of
-   `supabase/migrations/20260819120000_init.sql` → **Run**.
-   It should finish with "Success. No rows returned."
-4. New query again → paste `supabase/seed.sql` → **Run**. This loads the
-   university, interests, prompt library, date spots, and campus events.
-   (Run seed *before* the signup hook below — the hook reads the university
+3. **SQL Editor** → run each migration in `supabase/migrations/` in filename
+   order. Each should finish with "Success. No rows returned."
+   - `20260819120000_init.sql` — schema, RLS, storage
+   - `20260819130000_signup_domain_hook.sql` — campus-only signups
+   - `20260819140000_real_users.sql` — admins, event moderation, waitlist
+4. New query → paste `supabase/seed.sql` → **Run**. This loads the campus, the
+   interests, the prompt library, and the date spots. No people, no events.
+   (Run seed *before* enabling the signup hook — the hook reads the university
    list, so with no rows seeded it would reject every signup.)
 5. **Authentication → Providers → Email**: turn on *Confirm email*, and turn
    **off** *Enable email signups* only if you want invite-only. Under
@@ -152,9 +154,14 @@ The anon key is *meant* to be public; it's safe in the browser because every
 table has row-level security. The **service role** key is not — it bypasses all
 policies. It never belongs in a `VITE_` variable or in this repo.
 
-Leave `VITE_DATA_MODE=demo` until the read/write bodies in
-`src/services/backend.js` are ported. Flipping it to `supabase` before then just
-logs a warning and falls back to demo.
+Set `VITE_DATA_MODE=supabase` once the migrations are applied — signup,
+profiles, photos, events, and the waitlist all run live. Discovery, likes,
+matches, and chat are not ported yet, and a campus stays closed until it has
+enough members, so those surfaces aren't reachable. See
+**[docs/GOING-LIVE.md](GOING-LIVE.md)**.
+
+Missing keys aren't fatal: the app logs a warning and falls back to demo rather
+than shipping a blank page.
 
 ---
 

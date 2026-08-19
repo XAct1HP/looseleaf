@@ -15,12 +15,16 @@ export default function ProfilePhoto({
   caption,
   className = '',
 }) {
-  const scene = person.photos?.[index]?.scene ?? 'portrait'
+  const photo = person.photos?.[index]
+  const scene = photo?.scene ?? 'portrait'
+  // A real uploaded photo wins; the illustration is the fallback for slots
+  // that don't have one.
+  const image = src ?? photo?.url ?? photo?.previewUrl ?? null
 
   return (
     <figure className={`group relative overflow-hidden rounded-card bg-cream shadow-paper ${aspect} ${className}`}>
-      {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
+      {image ? (
+        <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <Portrait id={`${person.id}-${index}`} scene={scene} rounded="rounded-card" />
       )}

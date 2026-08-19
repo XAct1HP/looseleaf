@@ -256,7 +256,7 @@ const SCENES = {
       <path d="M20 24l6 10M80 24l-6 10" stroke="#DF62AD" strokeWidth="2.4" strokeLinecap="round" opacity=".7" />
     </g>
   ),
-  dog: (c) => (
+  dog: () => (
     <g>
       <rect x="0" y="74" width="100" height="26" fill="#5C9A72" opacity=".4" />
       <ellipse cx="52" cy="66" rx="24" ry="14" fill="#C58A46" />
@@ -278,7 +278,7 @@ const SCENES = {
       <path d="M0 86h100" stroke={c.ink} strokeWidth="2" opacity=".2" />
     </g>
   ),
-  books: (c) => (
+  books: () => (
     <g>
       <rect x="26" y="30" width="48" height="10" rx="2.5" fill="#FF6468" />
       <rect x="22" y="42" width="56" height="10" rx="2.5" fill="#A9C8F5" />
@@ -287,7 +287,7 @@ const SCENES = {
       <path d="M32 35h12M28 47h14M34 59h10M30 71h12" stroke="#FFFDF8" strokeWidth="2" strokeLinecap="round" opacity=".8" />
     </g>
   ),
-  camera: (c) => (
+  camera: () => (
     <g>
       <rect x="20" y="38" width="60" height="40" rx="8" fill={c.ink} />
       <rect x="38" y="30" width="24" height="10" rx="4" fill={c.ink} />
@@ -318,7 +318,7 @@ const SCENES = {
       </g>
     </g>
   ),
-  plants: (c) => (
+  plants: () => (
     <g>
       <path d="M36 70h28l-4 24H40l-4-24Z" fill="#C58A46" />
       <path d="M50 70V40" stroke="#5C9A72" strokeWidth="3" strokeLinecap="round" />
@@ -326,7 +326,7 @@ const SCENES = {
       <path d="M34 76h32" stroke="#9A6134" strokeWidth="2" opacity=".6" />
     </g>
   ),
-  guitar: (c) => (
+  guitar: () => (
     <g>
       <ellipse cx="44" cy="66" rx="22" ry="24" fill="#C58A46" />
       <ellipse cx="44" cy="60" rx="16" ry="15" fill="#C58A46" />
@@ -336,7 +336,7 @@ const SCENES = {
       <path d="M40 40l14-14M46 42l14-14" stroke="#FFFDF8" strokeWidth="1" opacity=".5" />
     </g>
   ),
-  skis: (c) => (
+  skis: () => (
     <g>
       <path d="M0 74h100v26H0z" fill="#FFFDF8" opacity=".9" />
       <path d="M0 74c18-8 34-8 52 0s30 6 48-2" stroke="#A9C8F5" strokeWidth="2" fill="none" opacity=".8" />

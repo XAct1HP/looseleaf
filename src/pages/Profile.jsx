@@ -84,7 +84,11 @@ export default function Profile() {
 
       <div className="mb-5 flex items-center gap-4 rounded-card border border-rule bg-cream/70 px-5 py-5">
         <span className="h-[92px] w-[76px] shrink-0 overflow-hidden rounded-2xl bg-white">
-          <Portrait id="me-0" scene={me.photos?.[0]?.scene ?? 'portrait'} rounded="rounded-2xl" />
+          {me.photos?.[0]?.url ? (
+            <img src={me.photos[0].url} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <Portrait id="me-0" scene={me.photos?.[0]?.scene ?? 'portrait'} rounded="rounded-2xl" />
+          )}
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-display text-[22px] font-semibold leading-tight">
@@ -109,7 +113,11 @@ export default function Profile() {
           <div className="grid grid-cols-4 gap-2">
             {me.photos?.map((p, i) => (
               <span key={i} className="aspect-[4/5] overflow-hidden rounded-xl bg-cream">
-                <Portrait id={`me-${i}`} scene={p.scene} rounded="rounded-xl" />
+                {p.url ? (
+                  <img src={p.url} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <Portrait id={`me-${i}`} scene={p.scene} rounded="rounded-xl" />
+                )}
               </span>
             ))}
           </div>

@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StepShell from './StepShell'
-import Button from '../../components/ui/Button'
 import { SelectChip, Chip } from '../../components/ui/Chip'
 import Portrait, { SCENE_KEYS } from '../../components/brand/Portrait'
 import Sheet from '../../components/ui/Sheet'
-import { IconPlus, IconCheck, IconX } from '../../components/ui/Icons'
+import { IconCheck } from '../../components/ui/Icons'
+import PhotoSlot from '../../components/profile/PhotoSlot'
+import { isDemo } from '../../services/backend'
+import { ageFrom } from '../../services/live/profiles'
 import { Star, HandHeart } from '../../components/brand/Doodles'
 import { INTENTIONS, INTERESTS, PROMPT_CATEGORIES, UNIVERSITY } from '../../data/catalog'
 import { useStore } from '../../state/store'
@@ -288,74 +290,49 @@ const PHOTO_HINTS = [
 function Photos({ draft, set }) {
   const [picking, setPicking] = useState(null)
 
-  const setSlot = (i, scene) => {
+  const write = (i, value) => {
     const photos = [...draft.photos]
-    photos[i] = scene ? { scene } : null
+    photos[i] = value
     set({ photos })
-    setPicking(null)
   }
 
   return (
     <>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => {
-          const photo = draft.photos[i]
-          return (
-            <div key={i} className="group relative">
-              <button
-                type="button"
-                onClick={() => setPicking(i)}
-                className={`focus-ring relative flex aspect-[4/5] w-full items-center justify-center overflow-hidden rounded-card border-2 border-dashed transition-colors ${
-                  photo ? 'border-transparent' : 'border-navy/12 bg-cream/60 hover:border-coral/40 hover:bg-coral-wash/40'
-                }`}
-              >
-                {photo ? (
-                  <Portrait id={`me-${i}`} scene={photo.scene} rounded="rounded-card" />
-                ) : (
-                  <span className="flex flex-col items-center gap-2 px-3 text-center">
-                    <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-graphite shadow-paper">
-                      <IconPlus size={18} />
-                    </span>
-                    <span className="text-[11.5px] leading-tight text-mist">{PHOTO_HINTS[i]}</span>
-                  </span>
-                )}
-                {i === 0 && photo && (
-                  <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-1 text-[10.5px] font-semibold text-navy shadow-paper">
-                    Main
-                  </span>
-                )}
-              </button>
-              {photo && (
-                <button
-                  type="button"
-                  aria-label="Remove photo"
-                  onClick={() => setSlot(i, null)}
-                  className="press absolute -right-2 -top-2 flex h-7 w-7 items-center justify-center rounded-full border border-rule bg-white text-graphite shadow-paper"
-                >
-                  <IconX size={14} />
-                </button>
-              )}
-            </div>
-          )
-        })}
+        {Array.from({ length: 6 }).map((_, i) => (
+          <PhotoSlot
+            key={i}
+            index={i}
+            photo={draft.photos[i]}
+            hint={PHOTO_HINTS[i]}
+            onPick={setPicking}
+            onChoose={write}
+            onRemove={(idx) => write(idx, null)}
+          />
+        ))}
       </div>
 
       <p className="mt-5 rounded-2xl border border-rule bg-cream/70 px-4 py-3.5 text-[13px] leading-relaxed text-graphite">
-        Four is plenty, six is the max. No completion percentage, no nagging — this is a profile, not a form.
+        {isDemo
+          ? 'Four is plenty, six is the max. No completion percentage, no nagging \u2014 this is a profile, not a form.'
+          : 'Four is plenty, six is the max. Photos upload when you finish, and only people on your campus can see them.'}
       </p>
 
       <Sheet
         open={picking !== null}
         onClose={() => setPicking(null)}
         title="Pick an illustration"
-        subtitle="Demo build — real photo uploads land here."
+        subtitle="Demo build \u2014 real photo uploads land here."
       >
         <div className="grid grid-cols-3 gap-2.5">
           {['portrait', ...SCENE_KEYS].map((scene) => (
             <button
               key={scene}
               type="button"
-              onClick={() => setSlot(picking, scene)}
+              onClick={() => {
+                write(picking, { scene })
+                setPicking(null)
+              }}
               className="focus-ring aspect-square overflow-hidden rounded-2xl border border-rule transition hover:scale-[1.03]"
             >
               <Portrait id={`me-${picking}`} scene={scene} rounded="rounded-2xl" />
@@ -497,7 +474,15 @@ function Review({ draft }) {
 
       <div className="mx-auto w-[190px] rotate-[-3deg] rounded-card border border-rule bg-white p-3 shadow-lift">
         <div className="aspect-[4/5] overflow-hidden rounded-xl">
-          <Portrait id="me-0" scene={draft.photos[0]?.scene ?? 'portrait'} rounded="rounded-xl" />
+          {draft.photos[0]?.previewUrl || draft.photos[0]?.url ? (
+            <img
+              src={draft.photos[0].previewUrl ?? draft.photos[0].url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <Portrait id="me-0" scene={draft.photos[0]?.scene ?? 'portrait'} rounded="rounded-xl" />
+          )}
         </div>
         <p className="mt-3 font-display text-[18px] font-semibold">{draft.firstName || 'You'}</p>
         <p className="text-[12.5px] text-mist">
@@ -524,45 +509,44 @@ export default function Onboarding() {
   const { state, actions } = useStore()
   const navigate = useNavigate()
   const [step, setStep] = useState(1)
+  const [saving, setSaving] = useState(null)
+  const [saveError, setSaveError] = useState('')
+
+  // In live mode there is no profile yet, so everything starts empty.
+  const me = state.me ?? {}
 
   const [draft, setDraft] = useState({
-    firstName: state.me.firstName,
-    birthday: '2005-03-14',
-    gender: 'Man',
-    pronouns: state.me.pronouns,
-    interestedIn: state.me.prefs.interestedIn,
-    ageRange: state.me.prefs.ageRange,
-    intentions: [state.me.intention],
-    gradYear: state.me.gradYear,
-    major: state.me.major,
-    minor: state.me.minor ?? '',
-    area: state.me.area,
-    orgsText: (state.me.orgs ?? []).join(', '),
-    photos: state.me.photos,
-    prompts: state.me.prompts,
-    interests: state.me.interests,
+    firstName: me.firstName ?? '',
+    birthday: '',
+    gender: '',
+    pronouns: me.pronouns ?? '',
+    interestedIn: me.prefs?.interestedIn ?? [],
+    ageRange: me.prefs?.ageRange ?? [18, 24],
+    intentions: me.intention ? [me.intention] : [],
+    gradYear: me.gradYear ?? '',
+    major: me.major ?? '',
+    minor: me.minor ?? '',
+    area: me.area ?? '',
+    orgsText: (me.orgs ?? []).join(', '),
+    photos: me.photos ?? [],
+    prompts: me.prompts ?? [],
+    interests: me.interests ?? [],
   })
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
   const next = () => setStep((s) => Math.min(TOTAL, s + 1))
   const back = () => (step === 1 ? navigate('/verify') : setStep((s) => s - 1))
 
-  const finish = () => {
-    actions.finishOnboarding({
-      firstName: draft.firstName,
-      pronouns: draft.pronouns,
-      gradYear: draft.gradYear,
-      major: draft.major,
-      minor: draft.minor,
-      area: draft.area,
-      orgs: draft.orgsText.split(',').map((s) => s.trim()).filter(Boolean),
-      photos: draft.photos.filter(Boolean),
-      prompts: draft.prompts.filter((p) => p?.a?.trim()),
-      interests: draft.interests,
-      intention: draft.intentions[0] ?? 'seeing',
-      prefs: { interestedIn: draft.interestedIn, ageRange: draft.ageRange, intentions: draft.intentions },
-    })
-    navigate('/app/discover')
+  const finish = async () => {
+    setSaveError('')
+    setSaving('Saving')
+    try {
+      await actions.finishOnboarding(draft, { onProgress: setSaving })
+      navigate(isDemo ? '/app/discover' : '/waitlist')
+    } catch (err) {
+      setSaveError(err.message)
+      setSaving(null)
+    }
   }
 
   const steps = {
@@ -570,7 +554,12 @@ export default function Onboarding() {
       title: 'What should people call you?',
       subtitle: 'The basics, and then we’ll get to the interesting part.',
       node: <Basics draft={draft} set={set} />,
-      can: draft.firstName.trim().length > 0 && !!draft.gender,
+      // Birthday is required in live mode — age is stored on the profile and
+      // Looseleaf is 18+.
+      can:
+        draft.firstName.trim().length > 0 &&
+        !!draft.gender &&
+        (isDemo || (!!draft.birthday && ageFrom(draft.birthday) >= 18)),
     },
     2: {
       title: 'Who are you hoping to meet?',
@@ -626,11 +615,18 @@ export default function Onboarding() {
       subtitle={current.subtitle}
       onBack={back}
       onNext={step === TOTAL ? finish : next}
-      canContinue={current.can}
-      nextLabel={step === TOTAL ? 'Meet your campus' : 'Continue'}
+      canContinue={current.can && !saving}
+      nextLabel={
+        step === TOTAL ? (saving ? `${saving}…` : isDemo ? 'Meet your campus' : 'Finish') : 'Continue'
+      }
       skip={step === 4 || step === 7 ? { label: 'Skip', onClick: next } : null}
     >
       {current.node}
+      {saveError && (
+        <p className="mt-6 rounded-2xl bg-coral-wash px-4 py-3 text-[13.5px] leading-relaxed text-coral-deep">
+          {saveError}
+        </p>
+      )}
     </StepShell>
   )
 }

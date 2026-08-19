@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import ChatBubble from '../components/chat/ChatBubble'
 import DateNudge from '../components/chat/DateNudge'
@@ -29,6 +29,18 @@ export default function Chat() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
   const endRef = useRef(null)
+
+  // Read the clock once when the conversation loads rather than on every
+  // render, so the header line doesn't tick over mid-scroll.
+  const startedAt = convo?.startedAt
+  const matchedAgo = useMemo(() => {
+    if (!startedAt) return ''
+    const hours = Math.round((Date.now() - startedAt) / 3_600_000)
+    if (hours < 1) return 'just now'
+    if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`
+    const days = Math.round(hours / 24)
+    return `${days} day${days === 1 ? '' : 's'} ago`
+  }, [startedAt])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
@@ -170,7 +182,7 @@ export default function Chat() {
       <div className="flex-1 overflow-y-auto px-4 py-6 md:px-6">
         <div className="mx-auto max-w-[620px] space-y-3.5">
           <p className="pb-2 text-center text-[12.5px] text-mist">
-            You found each other {Math.round((Date.now() - convo.startedAt) / 3600000)} hours ago.
+            You found each other {matchedAgo}.
           </p>
 
           {convo.messages.map((m) => (

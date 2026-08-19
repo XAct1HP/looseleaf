@@ -1,7 +1,15 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 --  looseleaf — reference data
---  Run after the migration. Safe to re-run.
---  Mirrors src/data/catalog.js so demo mode and live mode agree.
+--  Run after the migrations. Safe to re-run.
+--
+--  This file contains ONLY things the app needs in order to function: the
+--  campus list, the interest vocabulary, and the prompt library. It contains
+--  no people and no events — those come from real students now.
+--
+--  Date spots are real Ann Arbor places, seeded unsponsored. A row may only be
+--  marked is_sponsored once an actual agreement exists with that business;
+--  inventing an offer for a real business is a claim about someone else's
+--  prices, not placeholder content.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 insert into universities (id, name, short_name, city, email_domains, areas)
@@ -81,20 +89,18 @@ insert into prompt_catalog (category, text) values
   ('plans',    'Say yes to this and I am yours:')
 on conflict (text) do nothing;
 
-insert into date_spots (university_id, name, kind, tags, walk_minutes, note, is_sponsored, sponsor_name, offer_headline, offer_detail) values
-  ('11111111-1111-4111-8111-111111111111', 'Vertex Coffee',            'Coffee',        array['Quiet','$'],       8,  'Good for a first date',                    true,  'Vertex Coffee', 'First-date special', 'Two coffees for $5'),
-  ('11111111-1111-4111-8111-111111111111', 'Roos Roast',               'Coffee',        array['Bright','$'],      11, 'Big tables, easy to talk',                 false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Sava''s',                  'Food',          array['Lively','$$'],     6,  'Never a bad brunch',                       false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Blank Slate Creamery',     'Something fun', array['Casual','$'],      14, 'Low stakes, high reward',                  false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Nichols Arboretum',        'Something fun', array['Outdoors','Free'], 15, 'Best in the fall',                         false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Shapiro Library, 3rd floor','Study date',   array['Quiet','Free'],    4,  'Actually get work done. Allegedly.',       false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Ashley''s',                'Drinks',        array['Classic','$$'],    7,  'Two hundred beers, one decision',          false, null, null, null),
-  ('11111111-1111-4111-8111-111111111111', 'Pinball Pete''s',          'Something fun', array['Loud','$'],        5,  'Nothing kills a silence like air hockey',  false, null, null, null)
+insert into date_spots (university_id, name, kind, tags, walk_minutes, note) values
+  ('11111111-1111-4111-8111-111111111111', 'Vertex Coffee',            'Coffee',        array['Quiet','$'],       8,  'Good for a first date'),
+  ('11111111-1111-4111-8111-111111111111', 'Roos Roast',               'Coffee',        array['Bright','$'],      11, 'Big tables, easy to talk'),
+  ('11111111-1111-4111-8111-111111111111', 'Sava''s',                  'Food',          array['Lively','$$'],     6,  'Never a bad brunch'),
+  ('11111111-1111-4111-8111-111111111111', 'Blank Slate Creamery',     'Something fun', array['Casual','$'],      14, 'Low stakes, high reward'),
+  ('11111111-1111-4111-8111-111111111111', 'Nichols Arboretum',        'Something fun', array['Outdoors','Free'], 15, 'Best in the fall'),
+  ('11111111-1111-4111-8111-111111111111', 'Shapiro Library, 3rd floor','Study date',   array['Quiet','Free'],    4,  'Actually get work done. Allegedly.'),
+  ('11111111-1111-4111-8111-111111111111', 'Ashley''s',                'Drinks',        array['Classic','$$'],    7,  'Two hundred beers, one decision'),
+  ('11111111-1111-4111-8111-111111111111', 'Pinball Pete''s',          'Something fun', array['Loud','$'],        5,  'Nothing kills a silence like air hockey')
 on conflict do nothing;
 
-insert into campus_events (university_id, title, when_text, venue, kind, emoji) values
-  ('11111111-1111-4111-8111-111111111111', 'Michigan vs Wisconsin',    'Saturday · 3:30 PM',   'Michigan Stadium', 'Football',    '🏈'),
-  ('11111111-1111-4111-8111-111111111111', 'Kerrytown night market',   'Thursday · 6 PM',      'Kerrytown',        'Around town', '🏮'),
-  ('11111111-1111-4111-8111-111111111111', 'Student film showcase',    'Friday · 8 PM',        'State Theatre',    'Arts',        '🎬'),
-  ('11111111-1111-4111-8111-111111111111', 'Hockey vs Michigan State', 'Next Friday · 7 PM',   'Yost Ice Arena',   'Hockey',      '🏒')
-on conflict do nothing;
+-- No campus_events here on purpose. Events are student-submitted and
+-- admin-approved (see the events policies in 20260819140000_real_users.sql).
+-- An empty Events tab on day one is honest; a tab full of games that were
+-- never scheduled is not.

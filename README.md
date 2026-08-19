@@ -18,21 +18,25 @@ npm run build    # production build into dist/
 npm run preview  # serve the build
 ```
 
-The demo starts signed out. `Join your campus` walks the full signup →
-verification → 8-step onboarding flow (any six digits verify). `Log in` drops
-you straight into Javi's account with likes, matches, and conversations
-already seeded.
+Defaults to `VITE_DATA_MODE=demo`: the whole app runs off a bundled fictional
+campus, with no backend and no account. `Join your campus` walks the full
+signup → verification → 8-step onboarding flow (any six digits verify); `Log in`
+drops you straight into Javi's account with likes, matches, and conversations
+already seeded. Settings → *Reset demo data* puts everything back.
 
-Settings → *Reset demo data* puts everything back.
+Set `VITE_DATA_MODE=supabase` (plus keys) for real accounts — see
+[docs/GOING-LIVE.md](docs/GOING-LIVE.md) for what's ported and what isn't.
 
 ## Where things live
 
 ```
 src/
-  data/          catalog.js (interests, prompts, spots, events)
-                 people.js  (18 demo students + the signed-in user)
+  data/          catalog.js (interests, prompts, spots)
+                 people.js  (demo students — demo mode only)
   services/
     backend.js   ← THE ONLY MODULE THAT TALKS TO "THE BACKEND"
+    demo.js      the bundled fictional campus (dynamically imported)
+    live/        auth · profiles · photos · events (Supabase)
   state/
     store.jsx    reducer + actions + selectors (useStore, useDeck, useIncoming)
   lib/
@@ -56,6 +60,7 @@ src/
 ## Deploying
 
 Step-by-step for GitHub, Vercel, and Supabase: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
+Turning off demo data and opening a campus: **[docs/GOING-LIVE.md](docs/GOING-LIVE.md)**.
 
 Short version: push to GitHub, import the repo at vercel.com/new (Vite preset,
 `dist` output — `vercel.json` already handles the SPA rewrite), and set
@@ -86,11 +91,12 @@ Three rules have to survive that migration:
 
 ## Photos
 
-There are no real photo uploads yet. `components/brand/Portrait.jsx` generates
-a deterministic illustrated stand-in from a person's id — portraits with varied
-hair, skin, clothing and backdrop, plus a set of flat "scene" illustrations for
-the non-portrait slots. `ProfilePhoto` already accepts a `src`, so real uploads
-drop in with the illustrations as the fallback.
+Live mode uploads to a private Supabase bucket and renders through short-lived
+signed URLs, so a leaked link expires instead of becoming a permanent public
+photo of a student. Empty slots — and all of demo mode — fall back to
+`components/brand/Portrait.jsx`, which generates a deterministic illustrated
+stand-in from a person's id: portraits with varied hair, skin, clothing and
+backdrop, plus flat "scene" illustrations for the non-portrait slots.
 
 ## Design system
 
