@@ -43,3 +43,23 @@ function resolveMode() {
 
 export const DATA_MODE = resolveMode()
 export const isDemo = DATA_MODE === 'demo'
+
+/**
+ * How many digits are in an emailed sign-in code.
+ *
+ * Supabase decides this, not us — it's `GOTRUE_MAILER_OTP_LENGTH`, exposed in
+ * the dashboard under Authentication → Email provider settings. The default is
+ * not consistent: some projects send 6, some send 8, and it has differed
+ * between the signup and magic-link flows. So this is configurable, and the
+ * Verify screen also accepts a shorter code via its button rather than only
+ * auto-submitting at exactly this length. Hard-coding 6 is how sign-in breaks
+ * silently.
+ */
+const requestedOtpLength = Number(import.meta.env.VITE_OTP_LENGTH)
+export const OTP_LENGTH =
+  Number.isInteger(requestedOtpLength) && requestedOtpLength >= 6 && requestedOtpLength <= 10
+    ? requestedOtpLength
+    : 8
+
+/** Shortest code we'll let someone submit, whatever the box count is. */
+export const OTP_MIN_LENGTH = 6
