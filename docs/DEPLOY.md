@@ -99,6 +99,40 @@ preview URL.
    - Redirect URLs: add `http://localhost:5173/**` and `https://<your-vercel-url>/**`
 6. **Project Settings → API**: copy the *Project URL* and the *anon public* key.
 
+### The domain
+
+Production is **hellolooseleaf.com**.
+
+1. Vercel → Project → Settings → Domains → add `hellolooseleaf.com` **and**
+   `www.hellolooseleaf.com`. Set the apex as primary and let `www` redirect to
+   it, so there's one canonical URL rather than two versions of every page.
+2. At your registrar, add the records Vercel shows you — usually an `A` record
+   on the apex pointing at `76.76.21.21`, and a `CNAME` on `www` pointing at
+   `cname.vercel-dns.com`. Vercel's panel is authoritative; use what it prints.
+3. Wait for the certificate to go green (usually a couple of minutes).
+
+Then tell the app and Supabase about it, or shared links will keep pointing at
+the old `.vercel.app` URL:
+
+- **Vercel → Environment Variables:** `VITE_SITE_URL=https://hellolooseleaf.com`
+  Every shareable link is built from this, never from `window.location` — which
+  on a preview deployment would hand someone a link to a preview build.
+- **Supabase → Authentication → URL Configuration:**
+  - Site URL: `https://hellolooseleaf.com`
+  - Redirect URLs: `https://hellolooseleaf.com/**`, `https://www.hellolooseleaf.com/**`,
+    and `http://localhost:5173/**` for local dev.
+
+`index.html` carries absolute `og:` and `twitter:` tags pointing at
+`https://hellolooseleaf.com/og.png`. They have to be absolute — iMessage,
+Instagram, Slack and the rest fetch them server-side, where a relative path
+means nothing. If the domain ever changes, those tags and `VITE_SITE_URL`
+change together.
+
+Check the share card renders with any OG debugger (opengraph.dev, or just
+paste the link into a group chat) once DNS is live.
+
+---
+
 ### Restricting signups to campus email domains
 
 Supabase doesn't gate signups by domain in the dashboard, and you **cannot** do

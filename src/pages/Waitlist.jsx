@@ -5,6 +5,7 @@ import Button from '../components/ui/Button'
 import { Underline, Star, SheetDoodle } from '../components/brand/Doodles'
 import UniversityBadge from '../components/common/UniversityBadge'
 import { useStore } from '../state/store'
+import { shareInvite } from '../lib/site'
 
 /**
  * The honest answer to "what does user #7 see". Not an empty Discover feed —
@@ -14,6 +15,7 @@ export default function Waitlist() {
   const { state, actions } = useStore()
   const [checking, setChecking] = useState(false)
   const campus = state.campus
+  const canShare = typeof navigator !== 'undefined' && Boolean(navigator.share)
 
   useEffect(() => {
     actions.refreshCampus()
@@ -119,17 +121,14 @@ export default function Waitlist() {
             size="md"
             full
             className="mt-5"
-            onClick={async () => {
-              const url = `${window.location.origin}/join`
-              try {
-                await navigator.clipboard.writeText(url)
-                actions.showToast('Link copied. Send it to someone good.')
-              } catch {
-                actions.showToast(url)
-              }
-            }}
+            onClick={() =>
+              shareInvite({
+                onCopied: () => actions.showToast('Link copied. Send it to someone good.'),
+                onFailed: (link) => actions.showToast(link),
+              })
+            }
           >
-            Copy an invite link
+            {canShare ? 'Share an invite' : 'Copy an invite link'}
           </Button>
         </section>
 
