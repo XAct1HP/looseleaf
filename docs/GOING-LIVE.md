@@ -34,7 +34,8 @@ In the SQL editor, in order (the first two you've already run):
 1. `supabase/migrations/20260819120000_init.sql`
 2. `supabase/migrations/20260819130000_signup_domain_hook.sql`
 3. `supabase/migrations/20260819140000_real_users.sql` ← new
-4. `supabase/seed.sql`
+4. `supabase/migrations/20260819150000_backstage.sql` ← new
+5. `supabase/seed.sql`
 
 Then two things the dashboard has to do:
 
@@ -88,12 +89,52 @@ nobody could create one through the app at all — not even you. Now:
 The `status = 'pending'` constraint is in the insert policy, so a crafted
 request can't self-publish — verified against Postgres, along with the rest.
 
-The queue lives on the Events page itself: if you're staff, pending
-submissions appear at the top with Publish and Decline. There's no separate
-admin app to build or secure.
+Students see the Events page as students: approved events, plus their own
+submissions marked "waiting for review" or "not published". Nothing about
+moderation appears there, even for you. The queue lives in Backstage.
 
 Declining asks for an optional note, which the submitter sees. Being told why
 is the difference between moderation and a black hole.
+
+---
+
+## Backstage
+
+Staff work happens in one place, deliberately separate from using the app.
+
+Your five tabs — Discover, Likes, Matches, Campus, Profile — are byte-identical
+to everyone else's. There is no staff badge on your profile, no moderation
+button grafted onto a member page, no admin row in Discover. You use Looseleaf
+the way a sophomore does.
+
+Backstage sits below a divider in the desktop sidebar, under its own heading.
+On mobile there's no sidebar and the bottom nav must stay identical for
+everyone, so the door is a row at the bottom of your Profile page instead.
+Both are rendered only when `profiles.is_admin` is true.
+
+| page | what it does |
+| --- | --- |
+| Overview | campus status, signups per day, member and activity counts |
+| Reports | the safety queue — dismiss, or act (which pauses the account) |
+| Event queue | publish or decline student submissions |
+| Sponsors | placeholder for the local-business interface, and the rules it will follow |
+
+**Routes.** `/app/backstage`, `/app/backstage/reports`, `/app/backstage/events`,
+`/app/backstage/sponsors`. `RequireStaff` in `App.jsx` redirects non-staff to
+Discover, but that guard is only about not showing a door that won't open. The
+real enforcement is in the database: `staff_overview()` and `staff_set_paused()`
+both raise "Not authorised" unless `is_admin()`, and the reports and pending-event
+policies check it too. Verified against Postgres — a non-staff session gets an
+error, not an empty result.
+
+**What the numbers are for.** Counts, not a growth dashboard. There is no
+retention curve, no per-person engagement score, and nothing in Backstage can
+change who gets seen — ranking reads preferences and campus context only. If a
+metric here ever starts driving a decision that makes the product worse, the
+right move is to delete the metric.
+
+**Becoming staff** is still the one `update profiles set is_admin = true` above.
+There is no UI for granting it, on purpose.
 
 ---
 
@@ -158,9 +199,10 @@ Discover tab running on fixtures.
 
 Things that are not code, and are not optional:
 
-- **A way to answer reports.** `reports` collects them and staff can read them,
-  but nothing notifies you. At minimum, check the table daily; better, add a
-  Supabase webhook to email you on insert.
+- **A way to answer reports.** Backstage → Reports shows the queue with a count
+  in the sidebar, but nothing pushes it to you — you only see it when you open
+  the app. At minimum, check it daily; better, add a Supabase webhook to email
+  you on insert.
 - **Terms and a privacy policy.** You're storing photos, birthdates, and
   messages for people who are mostly 18–22. This needs to exist before signup,
   not after.

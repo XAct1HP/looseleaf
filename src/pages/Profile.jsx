@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/common/PageHeader'
 import ProfileCard from '../components/profile/ProfileCard'
@@ -10,7 +10,46 @@ import RailCard from '../components/common/RailCard'
 import { useRail } from '../components/nav/AppLayout'
 import { useStore } from '../state/store'
 import { intentionById } from '../data/catalog'
-import { IconEye, IconChevron, IconSettings } from '../components/ui/Icons'
+import { IconEye, IconChevron, IconSettings, IconShield } from '../components/ui/Icons'
+import * as staff from '../services/staff'
+
+/**
+ * Mobile only. The bottom nav is identical for every member — staff included —
+ * so Backstage gets its door here instead. On desktop the sidebar has it.
+ */
+function BackstageRow() {
+  const [waiting, setWaiting] = useState(0)
+
+  useEffect(() => {
+    let live = true
+    staff
+      .overview(1)
+      .then((d) => live && setWaiting((d.open_reports ?? 0) + (d.pending_events ?? 0)))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+
+  return (
+    <Link
+      to="/app/backstage"
+      className="mt-5 flex items-center gap-3 rounded-card border border-navy/15 bg-cream/70 px-5 py-4 text-[15px] font-medium text-navy hover:bg-cream md:hidden"
+    >
+      <IconShield size={20} className="text-mist" />
+      <span className="flex-1">
+        Backstage
+        <span className="mt-0.5 block text-[12.5px] font-normal text-mist">
+          Reports, event queue, and numbers
+        </span>
+      </span>
+      {waiting > 0 && (
+        <span className="rounded-full bg-coral px-2 py-0.5 text-[11px] font-bold text-white">{waiting}</span>
+      )}
+      <IconChevron size={16} className="text-mist" />
+    </Link>
+  )
+}
 
 function Section({ title, editTo, children }) {
   return (
@@ -182,6 +221,8 @@ export default function Profile() {
           )}
         </Section>
       </div>
+
+      {me.isAdmin && <BackstageRow />}
 
       <Link
         to="/app/settings"

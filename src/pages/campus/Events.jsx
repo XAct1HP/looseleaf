@@ -9,7 +9,7 @@ import { PersonAvatar } from '../../components/brand/Portrait'
 import { useRail } from '../../components/nav/AppLayout'
 import { CAMPUS_EVENTS } from '../../data/catalog'
 import { PEOPLE } from '../../data/people'
-import { IconCheck, IconPlus, IconX } from '../../components/ui/Icons'
+import { IconCheck, IconPlus } from '../../components/ui/Icons'
 import { useStore } from '../../state/store'
 import { isDemo, events as eventApi } from '../../services/backend'
 
@@ -142,7 +142,7 @@ function SubmitSheet({ open, onClose, onSubmit }) {
 
 /* ── one row ────────────────────────────────────────────────────────────── */
 
-function EventRow({ event, interested, faces, onToggle, admin, onReview, onWithdraw }) {
+function EventRow({ event, interested, faces, onToggle, onWithdraw }) {
   const pending = event.status === 'pending'
   const rejected = event.status === 'rejected'
 
@@ -186,18 +186,7 @@ function EventRow({ event, interested, faces, onToggle, admin, onReview, onWithd
         </div>
       </div>
 
-      {admin && pending ? (
-        <div className="mt-4 flex gap-2">
-          <Button variant="outline" size="md" className="flex-1" onClick={() => onReview(event, 'rejected')}>
-            <IconX size={16} />
-            Decline
-          </Button>
-          <Button variant="coral" size="md" className="flex-1" onClick={() => onReview(event, 'approved')}>
-            <IconCheck size={16} />
-            Publish
-          </Button>
-        </div>
-      ) : pending ? (
+      {pending ? (
         <Button variant="ghost" size="md" full className="mt-4" onClick={() => onWithdraw(event)}>
           Withdraw
         </Button>
@@ -234,8 +223,6 @@ export default function Events() {
   const [loading, setLoading] = useState(!isDemo)
   const [submitting, setSubmitting] = useState(false)
 
-  const admin = Boolean(state.me?.isAdmin)
-
   const load = useCallback(async () => {
     if (isDemo) {
       setEvents(CAMPUS_EVENTS.map((e) => ({ ...e, status: 'approved' })))
@@ -267,15 +254,8 @@ export default function Events() {
           Anyone on campus can suggest one. A human reads it before it goes up, so the list stays real.
         </p>
       </RailCard>
-      {admin && (
-        <RailCard title="You're staff" tone="coral">
-          <p className="text-[13.5px] leading-relaxed text-[#8A3A3E]">
-            Pending suggestions appear at the top of this page with Publish and Decline on them.
-          </p>
-        </RailCard>
-      )}
     </>,
-    [admin]
+    []
   )
 
   const toggleInterest = async (event) => {
@@ -287,20 +267,6 @@ export default function Events() {
     } catch (err) {
       actions.showToast(err.message)
       load()
-    }
-  }
-
-  const review = async (event, decision) => {
-    const note =
-      decision === 'rejected'
-        ? window.prompt('Optional: why not? The person who suggested it will see this.') ?? ''
-        : ''
-    try {
-      await eventApi.reviewEvent(event.id, state.session.userId, decision, note)
-      actions.showToast(decision === 'approved' ? 'Published to campus.' : 'Declined.')
-      load()
-    } catch (err) {
-      actions.showToast(err.message)
     }
   }
 
@@ -356,18 +322,11 @@ export default function Events() {
           {pending.length > 0 && (
             <section>
               <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-mist">
-                {admin ? `Waiting for review · ${pending.length}` : 'Yours, waiting for review'}
+                Yours, waiting for review
               </h2>
               <ul className="space-y-4">
                 {pending.map((e) => (
-                  <EventRow
-                    key={e.id}
-                    event={e}
-                    admin={admin}
-                    onReview={review}
-                    onWithdraw={withdraw}
-                    onToggle={toggleInterest}
-                  />
+                  <EventRow key={e.id} event={e} onWithdraw={withdraw} onToggle={toggleInterest} />
                 ))}
               </ul>
             </section>

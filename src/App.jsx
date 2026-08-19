@@ -25,6 +25,10 @@ import Profile from './pages/Profile'
 import EditProfile from './pages/EditProfile'
 import Settings from './pages/Settings'
 import Notifications from './pages/Notifications'
+import BackstageOverview from './pages/backstage/Overview'
+import BackstageReports from './pages/backstage/Reports'
+import BackstageEvents from './pages/backstage/EventQueue'
+import BackstageSponsors from './pages/backstage/Sponsors'
 import Logo from './components/brand/Logo'
 
 function ScrollToTop() {
@@ -65,6 +69,18 @@ function RequireProfile({ children }) {
   const { state } = useStore()
   if (!state.session.authed) return <Navigate to="/" replace />
   if (!state.session.onboarded) return <Navigate to="/onboarding" replace />
+  return children
+}
+
+/**
+ * Backstage is staff-only. The database enforces this too — every staff RPC
+ * checks is_admin() — so this guard is about not showing a door that won't
+ * open, not about security.
+ */
+function RequireStaff({ children }) {
+  const { state } = useStore()
+  if (!state.session.authed) return <Navigate to="/" replace />
+  if (!state.me?.isAdmin) return <Navigate to="/app/discover" replace />
   return children
 }
 
@@ -187,6 +203,39 @@ export default function App() {
             }
           />
           <Route path="campus/spots" element={<DateSpots />} />
+
+          <Route
+            path="backstage"
+            element={
+              <RequireStaff>
+                <BackstageOverview />
+              </RequireStaff>
+            }
+          />
+          <Route
+            path="backstage/reports"
+            element={
+              <RequireStaff>
+                <BackstageReports />
+              </RequireStaff>
+            }
+          />
+          <Route
+            path="backstage/events"
+            element={
+              <RequireStaff>
+                <BackstageEvents />
+              </RequireStaff>
+            }
+          />
+          <Route
+            path="backstage/sponsors"
+            element={
+              <RequireStaff>
+                <BackstageSponsors />
+              </RequireStaff>
+            }
+          />
         </Route>
 
         <Route path="*" element={<Navigate to={isDemo ? '/' : '/'} replace />} />

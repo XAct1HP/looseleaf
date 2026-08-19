@@ -291,3 +291,133 @@ export const CANNED_REPLIES = [
 export function pickReply(seed = 0) {
   return CANNED_REPLIES[seed % CANNED_REPLIES.length]
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Backstage fixtures
+
+   Demo-mode equivalents of the staff_overview RPC and the moderation queues,
+   so the Backstage section is explorable without a backend. Mutated in memory
+   only — approving something here changes nothing anywhere.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+let demoReports = [
+  {
+    id: 'rp-1',
+    reason: 'Fake profile or someone else’s photos',
+    status: 'open',
+    note: null,
+    at: hoursAgo(5),
+    reporter: { id: 'p-grace', first_name: 'Grace', major: 'Nursing', grad_year: '28' },
+    reported: { id: 'p-nate', first_name: 'Nate', major: 'Kinesiology', grad_year: '28', is_paused: false },
+  },
+  {
+    id: 'rp-2',
+    reason: 'Harassment or hate',
+    status: 'open',
+    note: null,
+    at: hoursAgo(26),
+    reporter: { id: 'p-riley', first_name: 'Riley', major: 'Information Science', grad_year: '27' },
+    reported: { id: 'p-tyler', first_name: 'Tyler', major: 'Sport Management', grad_year: '28', is_paused: false },
+  },
+  {
+    id: 'rp-3',
+    reason: 'Spam, scam, or selling something',
+    status: 'dismissed',
+    note: 'Looked like a normal profile — no action.',
+    at: hoursAgo(70),
+    reporter: { id: 'p-omar', first_name: 'Omar', major: 'Political Science', grad_year: '26' },
+    reported: { id: 'p-zoe', first_name: 'Zoe', major: 'Economics', grad_year: '28', is_paused: false },
+  },
+]
+
+let demoPending = [
+  {
+    id: 'ev-1',
+    title: 'Kerrytown night market',
+    when: 'Thursday · 6 PM',
+    venue: 'Kerrytown',
+    kind: 'Around town',
+    emoji: '🏮',
+    status: 'pending',
+    authorName: 'Chloe',
+    submittedAt: hoursAgo(9),
+  },
+  {
+    id: 'ev-2',
+    title: 'Student film showcase',
+    when: 'Friday · 8 PM',
+    venue: 'State Theatre',
+    kind: 'Arts',
+    emoji: '🎬',
+    status: 'pending',
+    authorName: 'Eli',
+    submittedAt: hoursAgo(31),
+  },
+]
+
+export function staffOverview(days = 14) {
+  // A believable pre-launch curve: slow, with a bump when someone posted it.
+  const shape = [1, 0, 2, 3, 1, 4, 6, 3, 2, 5, 9, 7, 4, 6]
+  const today = new Date()
+  const signups = Array.from({ length: days }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() - (days - 1 - i))
+    return { day: d.toISOString(), count: shape[(shape.length - days + i + shape.length) % shape.length] }
+  })
+
+  return {
+    campus: {
+      name: 'University of Michigan',
+      short_name: 'Michigan',
+      threshold: 50,
+      is_live: false,
+      is_open: false,
+    },
+    members: 34,
+    signed_up: 41,
+    incomplete: 7,
+    paused: 1,
+    likes: 128,
+    notes: 47,
+    matches: 22,
+    messages: 310,
+    open_reports: demoReports.filter((r) => r.status === 'open').length,
+    pending_events: demoPending.filter((e) => e.status === 'pending').length,
+    live_tonight: 12,
+    signups,
+  }
+}
+
+export function staffReports(status = 'open') {
+  return status === 'all' ? demoReports : demoReports.filter((r) => r.status === status)
+}
+
+export function staffResolveReport(id, decision, note) {
+  demoReports = demoReports.map((r) =>
+    r.id === id ? { ...r, status: decision, note: note || null, reviewedAt: Date.now() } : r
+  )
+}
+
+export function staffSetPaused(profileId, paused) {
+  demoReports = demoReports.map((r) =>
+    r.reported.id === profileId ? { ...r, reported: { ...r.reported, is_paused: paused } } : r
+  )
+}
+
+export function staffPendingEvents() {
+  return demoPending.filter((e) => e.status === 'pending')
+}
+
+export function staffReviewEvent(id, decision) {
+  demoPending = demoPending.map((e) => (e.id === id ? { ...e, status: decision } : e))
+}
+
+export function staffSpots() {
+  return [
+    { id: 'vertex', name: 'Vertex Coffee', kind: 'Coffee', walk_minutes: 8, is_sponsored: false },
+    { id: 'roos', name: 'Roos Roast', kind: 'Coffee', walk_minutes: 11, is_sponsored: false },
+    { id: 'sava', name: "Sava's", kind: 'Food', walk_minutes: 6, is_sponsored: false },
+    { id: 'ashley', name: "Ashley's", kind: 'Drinks', walk_minutes: 7, is_sponsored: false },
+    { id: 'arb', name: 'Nichols Arboretum', kind: 'Something fun', walk_minutes: 15, is_sponsored: false },
+  ]
+}

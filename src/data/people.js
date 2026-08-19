@@ -425,6 +425,10 @@ export const CURRENT_USER = {
   orgs: ['Solar Car', 'Intramural soccer'],
   intention: 'relationship',
   email: 'javi@umich.edu',
+  // Demo only. In live mode this comes from profiles.is_admin, which is false
+  // unless you set it by hand. Flip to false if you'd rather the public demo
+  // not show the Backstage section.
+  isAdmin: true,
   interests: ['coffee', 'live-music', 'cars', 'hiking', 'cooking', 'basketball'],
   photos: [{ scene: 'portrait' }, { scene: 'coffee' }, { scene: 'bike' }, { scene: 'mountains' }],
   prompts: [

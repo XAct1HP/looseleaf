@@ -4,6 +4,7 @@ export default function RailCard({ title, children, action, tone = 'default', cl
     cream: 'border-[#F2E6D6] bg-cream',
     blue: 'border-notebook/45 bg-notebook-soft',
     coral: 'border-coral/25 bg-coral-wash',
+    moss: 'border-moss/30 bg-moss-soft',
   }
   return (
     <section className={`rounded-card border px-5 py-4 ${tones[tone]} ${className}`}>
