@@ -1,0 +1,14 @@
+{
+  "name": "Looseleaf",
+  "short_name": "Looseleaf",
+  "description": "Meet someone worth keeping. A free, college-focused dating app.",
+  "start_url": "/app/discover",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFDF8",
+  "theme_color": "#FFFDF8",
+  "icons": [
+    { "src": "/leaf.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
