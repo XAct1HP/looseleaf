@@ -89,15 +89,50 @@ insert into prompt_catalog (category, text) values
   ('plans',    'Say yes to this and I am yours:')
 on conflict (text) do nothing;
 
-insert into date_spots (university_id, name, kind, tags, walk_minutes, note) values
-  ('11111111-1111-4111-8111-111111111111', 'Vertex Coffee',            'Coffee',        array['Quiet','$'],       8,  'Good for a first date'),
-  ('11111111-1111-4111-8111-111111111111', 'Roos Roast',               'Coffee',        array['Bright','$'],      11, 'Big tables, easy to talk'),
-  ('11111111-1111-4111-8111-111111111111', 'Sava''s',                  'Food',          array['Lively','$$'],     6,  'Never a bad brunch'),
-  ('11111111-1111-4111-8111-111111111111', 'Blank Slate Creamery',     'Something fun', array['Casual','$'],      14, 'Low stakes, high reward'),
-  ('11111111-1111-4111-8111-111111111111', 'Nichols Arboretum',        'Something fun', array['Outdoors','Free'], 15, 'Best in the fall'),
-  ('11111111-1111-4111-8111-111111111111', 'Shapiro Library, 3rd floor','Study date',   array['Quiet','Free'],    4,  'Actually get work done. Allegedly.'),
-  ('11111111-1111-4111-8111-111111111111', 'Ashley''s',                'Drinks',        array['Classic','$$'],    7,  'Two hundred beers, one decision'),
-  ('11111111-1111-4111-8111-111111111111', 'Pinball Pete''s',          'Something fun', array['Loud','$'],        5,  'Nothing kills a silence like air hockey')
+-- Organic date spots. `date_types` is what the recommender filters on, so a
+-- spot without them is a spot that can never be suggested — these are the
+-- honest tags for each place rather than everything that might apply.
+insert into date_spots (university_id, name, kind, tags, walk_minutes, distance_miles,
+                        price_level, date_types, vibes, note) values
+  ('11111111-1111-4111-8111-111111111111', 'Vertex Coffee', 'Coffee',
+   array['Quiet','$'], 8, 0.4, 1,
+   array['coffee','first-date','study'], array['quiet','cozy','low-key'],
+   'Good for a first date'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Roos Roast', 'Coffee',
+   array['Bright','$'], 11, 0.6, 1,
+   array['coffee','casual','study'], array['social','playful'],
+   'Big tables, easy to talk'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Sava''s', 'Food',
+   array['Lively','$$'], 6, 0.3, 2,
+   array['dinner','first-date','casual'], array['social','foodie'],
+   'Never a bad brunch'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Blank Slate Creamery', 'Dessert',
+   array['Casual','$'], 14, 0.7, 1,
+   array['dessert','casual','first-date'], array['playful','low-key'],
+   'Low stakes, high reward'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Nichols Arboretum', 'Outdoors',
+   array['Outdoors','Free'], 15, 0.9, 1,
+   array['outdoors','activity','first-date','casual'], array['adventurous','quiet','romantic'],
+   'Best in the fall'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Shapiro Library, 3rd floor', 'Study date',
+   array['Quiet','Free'], 4, 0.2, 1,
+   array['study','casual'], array['quiet','low-key'],
+   'Actually get work done. Allegedly.'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Ashley''s', 'Drinks',
+   array['Classic','$$'], 7, 0.4, 2,
+   array['drinks','late-night','casual'], array['social','low-key'],
+   'Two hundred beers, one decision'),
+
+  ('11111111-1111-4111-8111-111111111111', 'Pinball Pete''s', 'Arcade',
+   array['Loud','$'], 5, 0.3, 1,
+   array['fun','activity','group','late-night'], array['playful','competitive','social'],
+   'Nothing kills a silence like air hockey')
 on conflict do nothing;
 
 -- No campus_events here on purpose. Events are student-submitted and

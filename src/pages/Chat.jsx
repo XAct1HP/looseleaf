@@ -14,8 +14,7 @@ import { useRail } from '../components/nav/AppLayout'
 import RailCard from '../components/common/RailCard'
 import { InterestChip } from '../components/ui/Chip'
 import { overlapWith } from '../lib/overlap'
-
-const NUDGE_AFTER = 6
+import { shouldSuggest } from '../lib/dateNudge'
 
 export default function Chat() {
   const { id } = useParams()
@@ -25,6 +24,7 @@ export default function Chat() {
   const person = convo ? personById(convo.personId) : null
 
   const [text, setText] = useState('')
+  const [planning, setPlanning] = useState(false)
   const [dateType, setDateType] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [showReport, setShowReport] = useState(false)
@@ -86,6 +86,25 @@ export default function Chat() {
     [id]
   )
 
+  // Whether Looseleaf is allowed to suggest anything lives in one place, reads
+  // only what this conversation already contains, and errs heavily towards
+  // staying quiet. See lib/dateNudge.js.
+  //
+  // Held in state rather than recomputed every render, and deliberately: the
+  // act of showing a card records that it was shown, which immediately makes
+  // the frequency rule say "not again yet". Recomputing would tear the card
+  // back off the screen under someone's thumb. So it is decided when the
+  // conversation opens and re-checked only while nothing is showing.
+  const [nudge, setNudge] = useState(() => shouldSuggest(convo))
+
+  useEffect(() => {
+    if (nudge.show) return
+    setNudge(shouldSuggest(state.conversations[id]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, convo?.messages.length, convo?.datePlan])
+
+  const hideNudge = () => setNudge({ show: false, reason: 'waved away' })
+
   if (!convo || !person) {
     return (
       <div className="px-4 py-10">
@@ -102,9 +121,6 @@ export default function Chat() {
     setText('')
   }
 
-  const showNudge =
-    convo.messages.length >= NUDGE_AFTER && !convo.nudgeDismissed && !convo.datePlan
-
   const confirmPlan = (plan) => {
     actions.setDatePlan(convo.id, plan)
     actions.send(
@@ -112,6 +128,8 @@ export default function Chat() {
       `${plan.emoji} ${plan.type} — ${plan.when}, ${plan.spot}. Does that work?`
     )
     setDateType(null)
+    setPlanning(false)
+    hideNudge()
   }
 
   return (
@@ -146,6 +164,16 @@ export default function Chat() {
             <>
               <button className="fixed inset-0 z-10 cursor-default" aria-hidden="true" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-11 z-20 w-48 animate-pop-in overflow-hidden rounded-2xl border border-rule bg-white py-1 shadow-lift">
+                <button
+                  className="block w-full px-4 py-2.5 text-left text-[14px] text-graphite hover:bg-cream"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setDateType(null)
+                    setPlanning(true)
+                  }}
+                >
+                  Plan a date
+                </button>
                 <Link
                   to={`/app/person/${person.id}`}
                   className="block px-4 py-2.5 text-[14px] text-graphite hover:bg-cream"
@@ -210,9 +238,21 @@ export default function Chat() {
             </div>
           )}
 
-          {showNudge && (
+          {nudge.show && (
             <div className="!mt-7">
-              <DateNudge onPick={setDateType} onDismiss={() => actions.dismissNudge(convo.id)} />
+              <DateNudge
+                conversationId={convo.id}
+                reason={nudge.reason}
+                onShown={() => actions.noteNudgeShown(convo.id)}
+                onDismiss={() => {
+                  actions.dismissNudge(convo.id)
+                  hideNudge()
+                }}
+                onPlan={(spot) => {
+                  setDateType(spot ? { id: spot.dateTypes?.[0] ?? null } : null)
+                  setPlanning(true)
+                }}
+              />
             </div>
           )}
 
@@ -248,10 +288,14 @@ export default function Chat() {
       <div className="h-[58px] md:hidden" aria-hidden="true" />
 
       <DatePlanner
-        open={!!dateType}
+        open={planning}
         dateType={dateType}
         person={person}
-        onClose={() => setDateType(null)}
+        conversationId={convo.id}
+        onClose={() => {
+          setPlanning(false)
+          setDateType(null)
+        }}
         onConfirm={confirmPlan}
       />
       <ReportSheet

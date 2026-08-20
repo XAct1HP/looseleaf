@@ -49,6 +49,16 @@ export const url = (path = '/') => `${SITE_URL}${path.startsWith('/') ? path : `
 export const inviteUrl = () => url('/join')
 
 /**
+ * What a Date Pass QR code actually encodes.
+ *
+ * A URL rather than a bare code, so a member of staff who points a phone
+ * camera at it — with no dashboard open, mid-shift — lands on the scanner with
+ * the code already filled in. The scanner still verifies it server-side; this
+ * only saves the typing.
+ */
+export const passUrl = (code) => url(`/partners/dashboard/scan?code=${encodeURIComponent(code)}`)
+
+/**
  * Share sheet on a phone, clipboard everywhere else. Returns how it went so
  * the caller can say the right thing.
  */

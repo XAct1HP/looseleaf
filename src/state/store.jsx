@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { DATA_MODE, isDemo, loadDemo, auth, profiles as profileApi } from '../services/backend'
+import { DATA_MODE, isDemo, loadDemo, supabase, auth, profiles as profileApi } from '../services/backend'
 import { PEOPLE, personById } from '../data/people'
 
 /**
@@ -21,7 +21,16 @@ const EMPTY = {
   mode: DATA_MODE,
   boot: 'loading',
   error: null,
-  session: { authed: false, email: '', userId: null, verified: false, onboarded: false },
+  session: {
+    authed: false,
+    email: '',
+    userId: null,
+    verified: false,
+    onboarded: false,
+    // A business owner, not a student. Set at boot so the router never sends
+    // a restaurant into the member onboarding flow.
+    isPartner: false,
+  },
   me: null,
   campus: null,
   seen: [],
@@ -222,6 +231,20 @@ export function StoreProvider({ children }) {
     const me = await profileApi.loadMe(userId)
     const campus = me?.onboarded ? await profileApi.campusStatus().catch(() => null) : null
 
+    // No profile can mean two very different things: a student who hasn't
+    // finished onboarding, or a business owner. Asking costs one round trip,
+    // and only in the case where there was nothing to load anyway — while
+    // getting it wrong would drop a restaurant into a dating questionnaire.
+    // One RPC rather than an import of the partner service, so none of that
+    // module graph is pulled into the bundle every student downloads.
+    let isPartner = false
+    if (!me && supabase) {
+      isPartner = await supabase
+        .rpc('is_partner_user')
+        .then(({ data }) => Boolean(data))
+        .catch(() => false)
+    }
+
     dispatch({
       type: 'hydrate',
       state: {
@@ -231,6 +254,7 @@ export function StoreProvider({ children }) {
           userId,
           verified: true,
           onboarded: Boolean(me?.onboarded),
+          isPartner,
         },
         me,
         campus,
@@ -432,6 +456,21 @@ export function StoreProvider({ children }) {
 
       dismissNudge: (conversationId) =>
         dispatch({ type: 'convo-patch', conversationId, patch: { nudgeDismissed: true } }),
+
+      /**
+       * A date suggestion actually reached the screen. Counted so the same
+       * conversation isn't offered one over and over — the frequency rules
+       * read these two fields. See lib/dateNudge.js.
+       */
+      noteNudgeShown: (conversationId) =>
+        dispatch({
+          type: 'convo-patch',
+          conversationId,
+          patch: {
+            nudgesShown: (state.conversations[conversationId]?.nudgesShown ?? 0) + 1,
+            lastNudgeAt: Date.now(),
+          },
+        }),
 
       setDatePlan: (conversationId, datePlan) =>
         dispatch({ type: 'convo-patch', conversationId, patch: { datePlan } }),

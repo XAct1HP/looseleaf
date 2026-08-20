@@ -412,16 +412,6 @@ export function staffReviewEvent(id, decision) {
   demoPending = demoPending.map((e) => (e.id === id ? { ...e, status: decision } : e))
 }
 
-export function staffSpots() {
-  return [
-    { id: 'vertex', name: 'Vertex Coffee', kind: 'Coffee', walk_minutes: 8, is_sponsored: false },
-    { id: 'roos', name: 'Roos Roast', kind: 'Coffee', walk_minutes: 11, is_sponsored: false },
-    { id: 'sava', name: "Sava's", kind: 'Food', walk_minutes: 6, is_sponsored: false },
-    { id: 'ashley', name: "Ashley's", kind: 'Drinks', walk_minutes: 7, is_sponsored: false },
-    { id: 'arb', name: 'Nichols Arboretum', kind: 'Something fun', walk_minutes: 15, is_sponsored: false },
-  ]
-}
-
 /* ─────────────────────────────────────────────────────────── mutuals ─────
  *
  * The demo campus, searched the same way the real one is: exact first name

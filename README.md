@@ -3,9 +3,12 @@
 **Meet someone worth keeping.**
 
 A college-focused dating web app. Free by design: no premium tier, no boosts,
-no paid likes, no paywall in front of who likes you. Revenue is meant to come
-later from clearly-labelled local sponsorships on the *date planning* surfaces
-only — never from anything that ranks people.
+no paid likes, no paywall in front of who likes you.
+
+Revenue comes from **Loose Leaf for Partners** — local businesses that become
+Date Partners, appear on the *date planning* surfaces, and keep a perk for
+Looseleaf couples. Always labelled, and never anywhere near anything that ranks
+people. See [docs/PARTNERS.md](docs/PARTNERS.md).
 
 React + Vite + Tailwind. Mobile-first, desktop-native, PWA-ready.
 
@@ -51,11 +54,36 @@ src/
     likes/       IncomingLikeCard
     match/       MatchModal
     chat/        ChatBubble, ConversationItem, DateNudge, DatePlanner
+    dates/       DateSpotCard, SpotSheet, DatePassCard, QrCode
+    partners/    PartnerShell, PlanCards, FunnelChart, fields
     safety/      ReportSheet
   pages/         Landing, auth/, onboarding/, Discover, PersonPage, Likes,
                  Matches, Chat, Campus, campus/*, Profile, EditProfile,
-                 Settings, Notifications
+                 Settings, Notifications, DatePasses
+    partners/    PartnersLanding, PartnerAuth, PartnerOnboarding,
+                 DashboardLayout, dashboard/*
+supabase/
+  migrations/    schema, RLS, and the callable surface
+  functions/     Stripe checkout, billing portal, webhook (Deno)
+tests/
+  partners_test.sql   the partner platform's invariants, against real Postgres
 ```
+
+### The partner platform in one paragraph
+
+A business signs up at `/partners`, describes what kind of *date* it's good for,
+picks a plan, and pays through Stripe-hosted Checkout. Once a human approves it,
+its Date Spot appears to students — in the Date Spots directory, in Plan a Date,
+and occasionally as a suggestion inside a conversation that's clearly going
+somewhere. A couple unlocks the perk, gets a Date Pass with a QR code, and the
+restaurant scans it. That scan is a verified date in the partner's dashboard.
+
+Two rules hold it together, both enforced in the database rather than in the
+UI: **relevance comes before payment** (the date type is a filter, and a
+matching type is worth 34 points against a ceiling of 10 for everything money
+can buy), and **partners get attribution, not dating data** (a partner has no
+`profiles` row and no select policy on `date_passes` at all). `tests/partners_test.sql`
+asserts both against a real Postgres.
 
 ## Deploying
 

@@ -31,11 +31,6 @@ export async function setPaused(profileId, paused) {
   return live.setPaused(profileId, paused)
 }
 
-export async function listSpots() {
-  if (isDemo) return (await demo()).staffSpots()
-  return live.listSpots()
-}
-
 export async function pendingEvents() {
   if (isDemo) return (await demo()).staffPendingEvents()
   return liveEvents.pendingEvents()

@@ -20,8 +20,12 @@ dist-ssr
 .vercel
 .supabase
 
+# Edge function secrets. The Stripe secret key lives here and nowhere else.
+supabase/functions/.env
+
 # Scratch
 _to_delete/
+_sync/
 
 # Editor / OS
 .vscode/*

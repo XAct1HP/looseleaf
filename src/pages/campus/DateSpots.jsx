@@ -1,20 +1,71 @@
+import { useEffect, useMemo, useState } from 'react'
 import SubPageHeader from '../../components/common/SubPageHeader'
 import RailCard from '../../components/common/RailCard'
-import { Chip } from '../../components/ui/Chip'
+import DateSpotCard from '../../components/dates/DateSpotCard'
+import SpotSheet from '../../components/dates/SpotSheet'
+import { SelectChip } from '../../components/ui/Chip'
 import { useRail } from '../../components/nav/AppLayout'
-import { DATE_SPOTS, SPONSORED_OFFERS } from '../../data/catalog'
-import { IconPin } from '../../components/ui/Icons'
+import { DATE_TYPE_TAGS } from '../../data/partnerCatalog'
+import * as dates from '../../services/dates'
 
+/**
+ * ── Date Spots ──────────────────────────────────────────────────────────────
+ *
+ * Places worth going, filtered by the kind of date rather than by cuisine.
+ * Partners and organic spots sit in the same list and wear the same card — the
+ * only difference is a small "Loose Leaf Partner" line and, sometimes, a perk.
+ *
+ * Filtering by date type is a filter and not a sort, so asking for coffee
+ * cannot return a brewery no matter who is paying. What a partner buys shows up
+ * as *what is on the card*, never as *which card is at the top*.
+ */
 export default function DateSpots() {
+  const [spots, setSpots] = useState([])
+  const [offers, setOffers] = useState({})
+  const [type, setType] = useState(null)
+  const [openSpot, setOpenSpot] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let live = true
+    Promise.all([dates.spots(), dates.offersByPartner()])
+      .then(([s, o]) => {
+        if (!live) return
+        setSpots(s)
+        setOffers(o)
+      })
+      .catch((e) => live && setError(e.message))
+      .finally(() => live && setLoading(false))
+    return () => {
+      live = false
+    }
+  }, [])
+
   useRail(
-    <RailCard title="About sponsored spots">
+    <RailCard title="About Loose Leaf Partners">
       <p className="text-[13.5px] leading-relaxed text-graphite">
-        Local places can sponsor an offer here, and it’s always labelled. Sponsorship buys a spot on this page and
-        nothing else — it can’t touch who appears in Discover or Likes.
+        Some places here are Loose Leaf Partners — local businesses that keep a perk for Looseleaf
+        dates. They’re always labelled.
+      </p>
+      <p className="mt-3 text-[13.5px] leading-relaxed text-graphite">
+        Being a partner puts a place on this page and can put an offer on its card. It can’t change
+        who appears in Discover, whose likes you see, or the order of anything involving a person.
       </p>
     </RailCard>,
     []
   )
+
+  // Only offer a filter that would actually return something.
+  const availableTypes = useMemo(() => {
+    const present = new Set(spots.flatMap((s) => s.dateTypes ?? []))
+    return DATE_TYPE_TAGS.filter((t) => present.has(t.id))
+  }, [spots])
+
+  const shown = useMemo(() => {
+    const list = type ? spots.filter((s) => (s.dateTypes ?? []).includes(type)) : spots
+    return list.map((s) => ({ ...s, offer: s.isPartner ? (offers[s.partnerId] ?? null) : null }))
+  }, [spots, offers, type])
 
   return (
     <>
@@ -23,60 +74,60 @@ export default function DateSpots() {
         subtitle="Places around campus that work when you barely know each other yet."
       />
 
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {DATE_SPOTS.map((s) => (
-          <li key={s.id} className="lift-corner rounded-card border border-rule bg-white px-5 py-4">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cream text-graphite">
-                <IconPin size={18} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-[15.5px] font-medium leading-tight text-navy">{s.name}</p>
-                <p className="mt-1 text-[12.5px] text-mist">
-                  {s.kind} · {s.walk}
-                </p>
-                <p className="mt-2 text-[13.5px] leading-relaxed text-graphite">{s.note}</p>
-                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                  {s.tags.map((t) => (
-                    <Chip key={t} tone="cream" className="!px-2.5 !py-1 !text-[11.5px]">
-                      {t}
-                    </Chip>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
+      {availableTypes.length > 1 && (
+        <div className="hide-scrollbar -mx-4 mb-5 flex gap-2 overflow-x-auto px-4 pb-1">
+          <SelectChip selected={type === null} onClick={() => setType(null)} className="shrink-0">
+            Everything
+          </SelectChip>
+          {availableTypes.map((t) => (
+            <SelectChip
+              key={t.id}
+              selected={type === t.id}
+              onClick={() => setType(type === t.id ? null : t.id)}
+              className="shrink-0"
+            >
+              <span aria-hidden="true">{t.emoji}</span>
+              {t.label}
+            </SelectChip>
+          ))}
+        </div>
+      )}
 
-      <section className="mt-6">
-        <h2 className="mb-3 text-[13px] font-semibold uppercase tracking-[0.08em] text-mist">
-          Need somewhere to go?
-        </h2>
-        {SPONSORED_OFFERS.map((o) => (
-          <div key={o.id} className="rounded-card border border-[#F2E6D6] bg-cream px-5 py-5">
-            <div className="flex items-start gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[22px]">
-                <span aria-hidden="true">{o.emoji}</span>
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-display text-[18px] font-semibold leading-tight">{o.headline}</p>
-                <p className="mt-1 text-[14.5px] text-graphite">{o.detail}</p>
-                <p className="mt-1 text-[13px] text-mist">
-                  {o.sponsor} · {o.distance}
-                </p>
-              </div>
-              <span className="shrink-0 rounded-full border border-rule bg-white px-2.5 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-mist">
-                Sponsored
-              </span>
-            </div>
-          </div>
-        ))}
-        <p className="mt-3 px-1 text-[12.5px] leading-relaxed text-mist">
-          This is how Looseleaf plans to make money — offers that are useful when you’re already going out, never
-          ads placed between people.
+      {error && (
+        <p className="mb-5 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] text-coral-deep">
+          {error}
         </p>
-      </section>
+      )}
+
+      {loading ? (
+        <p className="py-12 text-center text-[14px] text-mist">Loading…</p>
+      ) : !shown.length ? (
+        <p className="rounded-card border border-rule bg-cream/50 px-5 py-10 text-center text-[14px] leading-relaxed text-graphite">
+          Nothing tagged for that yet. Try another kind of date.
+        </p>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {shown.map((s) => (
+            <li key={s.id}>
+              <DateSpotCard
+                spot={s}
+                onChoose={() => {
+                  setOpenSpot(s)
+                  dates.logSpotView(s.id)
+                }}
+                chooseLabel="View Date Spot"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <p className="mt-7 px-1 text-[12.5px] leading-relaxed text-mist">
+        Loose Leaf Partners pay to be listed here and to keep a perk for Looseleaf dates. They can’t
+        pay to be suggested for a kind of date they don’t suit, and none of it touches Discover.
+      </p>
+
+      <SpotSheet spot={openSpot} onClose={() => setOpenSpot(null)} />
     </>
   )
 }

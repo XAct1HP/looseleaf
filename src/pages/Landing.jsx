@@ -4,7 +4,7 @@ import Button from '../components/ui/Button'
 import Portrait from '../components/brand/Portrait'
 import UniversityBadge from '../components/common/UniversityBadge'
 import { Underline, Star, HandHeart, Squiggle } from '../components/brand/Doodles'
-import { IconEye, IconCap, IconPeople, IconCoffee, IconLock } from '../components/ui/Icons'
+import { IconEye, IconCap, IconPeople, IconCoffee, IconLock, IconPin } from '../components/ui/Icons'
 
 function Annotation({ children, className = '', rotate = -4 }) {
   return (
@@ -209,6 +209,115 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── somewhere to go ─────────────────────────────────────── */}
+      <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-24">
+        <div className="grid items-center gap-12 lg:grid-cols-[1fr_0.85fr]">
+          <div className="max-w-[540px]">
+            <span className="inline-flex items-center gap-2 rounded-full bg-margin-soft px-3 py-1.5 text-[12.5px] font-medium text-[#A93E7F]">
+              <IconPin size={14} />
+              Date Spots
+            </span>
+
+            <h2 className="mt-6 font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] sm:text-[40px]">
+              Match. Talk.{' '}
+              <span className="relative inline-block">
+                Actually go somewhere.
+                <Underline className="absolute -bottom-2 left-0 w-full text-margin/70" width={300} />
+              </span>
+            </h2>
+
+            <p className="mt-6 max-w-[50ch] text-[16.5px] leading-relaxed text-graphite">
+              The hardest part of a good conversation is the bit where somebody has to suggest a
+              plan. Looseleaf knows what you both like and what’s a short walk from campus, so when
+              you’re ready it can just tell you where to go — and some of those places keep a perk
+              for Looseleaf dates.
+            </p>
+
+            <ul className="mt-7 space-y-3">
+              {[
+                ['Picked around you two', 'Suggestions come from what you both actually said you like.'],
+                ['Perks you can carry', 'Unlock an offer and you get a Date Pass to show when you arrive.'],
+                ['Say no and it goes away', 'Wave one off and it doesn’t come back. Nothing here nags.'],
+              ].map(([t, d]) => (
+                <li key={t} className="flex gap-3">
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-coral" />
+                  <span>
+                    <span className="text-[15px] font-medium text-navy">{t}</span>
+                    <span className="mt-0.5 block text-[14px] leading-relaxed text-graphite">{d}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* what a suggestion looks like in a conversation */}
+          <div className="relative mx-auto w-full max-w-[400px]">
+            <Star className="absolute -right-3 -top-4 animate-twinkle text-margin" size={18} />
+
+            <div className="rounded-sheet border border-rule bg-cream/70 p-4 shadow-paper sm:p-5">
+              <div className="space-y-2.5">
+                <p className="ml-auto w-fit max-w-[80%] rounded-[18px] rounded-br-md bg-navy px-4 py-2.5 text-[14px] text-paper">
+                  ok but where though
+                </p>
+                <p className="w-fit max-w-[80%] rounded-[18px] rounded-bl-md border border-rule bg-white px-4 py-2.5 text-[14px] text-navy">
+                  genuinely no idea, you pick
+                </p>
+              </div>
+
+              <div className="relative mt-4 rounded-card border border-rule bg-white px-5 py-5 shadow-paper">
+                <h3 className="font-display text-[17px] font-semibold leading-tight">
+                  You two might like this 👀
+                </h3>
+
+                <div className="mt-3.5 flex items-start gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cream text-graphite">
+                    <IconPin size={18} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="font-display text-[17px] font-semibold leading-tight text-navy">
+                      The Lantern Room
+                    </p>
+                    <p className="mt-0.5 text-[12.5px] text-mist">
+                      Casual · Food &amp; Drinks · 9 min walk
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3.5 rounded-2xl border border-[#F2E6D6] bg-cream px-4 py-2.5">
+                  <p className="text-[11.5px] font-semibold uppercase tracking-[0.07em] text-mist">
+                    Looseleaf perk
+                  </p>
+                  <p className="mt-0.5 text-[14px] font-medium text-navy">15% off your date</p>
+                </div>
+
+                <div className="mt-4 flex gap-2">
+                  <span className="flex-1 rounded-2xl bg-coral px-4 py-2.5 text-center text-[14px] font-medium text-white">
+                    Plan this date
+                  </span>
+                  <span className="rounded-2xl border border-rule px-4 py-2.5 text-[14px] font-medium text-graphite">
+                    Not this one
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <p className="mt-3 px-1 text-center text-[12px] leading-relaxed text-mist">
+              Suggestions are labelled, occasional, and always dismissible.
+            </p>
+          </div>
+        </div>
+
+        <p className="mt-12 border-t border-rule pt-6 text-[13.5px] text-mist">
+          Own a great date spot?{' '}
+          <Link
+            to="/partners"
+            className="font-medium text-graphite underline underline-offset-2 hover:text-navy"
+          >
+            Become a Looseleaf Partner →
+          </Link>
+        </p>
+      </section>
+
       {/* ── the promise ─────────────────────────────────────────── */}
       <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-24">
         <div className="relative overflow-hidden rounded-sheet border border-navy/10 bg-navy px-7 py-12 text-paper sm:px-14 sm:py-16">
@@ -284,6 +393,9 @@ export default function Landing() {
             </Link>
             <Link to="/join" className="hover:text-navy">
               Privacy
+            </Link>
+            <Link to="/partners" className="hover:text-navy">
+              For businesses
             </Link>
             <Link to="/join" className="hover:text-navy">
               Contact

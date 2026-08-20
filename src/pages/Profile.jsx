@@ -10,9 +10,10 @@ import RailCard from '../components/common/RailCard'
 import { useRail } from '../components/nav/AppLayout'
 import { useStore } from '../state/store'
 import { intentionById } from '../data/catalog'
-import { IconEye, IconChevron, IconSettings, IconShield, IconPeople } from '../components/ui/Icons'
+import { IconEye, IconChevron, IconSettings, IconShield, IconPeople, IconSpark } from '../components/ui/Icons'
 import * as staff from '../services/staff'
 import * as mutualsApi from '../services/mutuals'
+import * as dates from '../services/dates'
 
 /**
  * Mutuals live on your own page, not in the tab bar — they're part of who you
@@ -53,6 +54,47 @@ function MutualsRow() {
         <span className="rounded-full bg-coral px-2 py-0.5 text-[11px] font-bold text-white">
           {counts.incoming}
         </span>
+      )}
+      <IconChevron size={16} className="text-mist" />
+    </Link>
+  )
+}
+
+/**
+ * Perks you're carrying. Sits next to Mutuals rather than in the tab bar,
+ * because it's something you go and look for when you're about to walk in
+ * somewhere, not something to be reminded of five times a day.
+ */
+function PassesRow() {
+  const [live, setLive] = useState(0)
+
+  useEffect(() => {
+    let mounted = true
+    dates
+      .myPasses()
+      .then((rows) => mounted && setLive(rows.length))
+      .catch(() => {})
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  return (
+    <Link
+      to="/app/passes"
+      className="mt-3 flex items-center gap-3 rounded-card border border-rule bg-white px-5 py-4 text-[15px] font-medium text-navy hover:bg-cream/50"
+    >
+      <IconSpark size={20} className="text-mist" />
+      <span className="flex-1">
+        Date Passes
+        <span className="mt-0.5 block text-[12.5px] font-normal text-mist">
+          {live > 0
+            ? `${live} ready to use`
+            : 'Perks you’ve unlocked at local places'}
+        </span>
+      </span>
+      {live > 0 && (
+        <span className="rounded-full bg-moss px-2 py-0.5 text-[11px] font-bold text-white">{live}</span>
       )}
       <IconChevron size={16} className="text-mist" />
     </Link>
@@ -269,6 +311,7 @@ export default function Profile() {
       </div>
 
       <MutualsRow />
+      <PassesRow />
 
       {me.isAdmin && <BackstageRow />}
 

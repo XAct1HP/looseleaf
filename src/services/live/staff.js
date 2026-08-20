@@ -66,21 +66,3 @@ export async function setPaused(profileId, paused) {
   const { error } = await supabase.rpc('staff_set_paused', { target: profileId, paused })
   if (error) throw new Error(error.message)
 }
-
-/* ── sponsorship ───────────────────────────────────────────────────────── */
-
-/**
- * Read-only for now. The management UI lands here later; until then this at
- * least makes it visible which spots carry a sponsored label, because that is
- * the one thing on the platform that money touches.
- */
-export async function listSpots() {
-  const { data, error } = await supabase
-    .from('date_spots')
-    .select('id, name, kind, walk_minutes, is_sponsored, sponsor_name, offer_headline, offer_detail')
-    .order('is_sponsored', { ascending: false })
-    .order('name')
-
-  if (error) throw new Error(error.message)
-  return data ?? []
-}

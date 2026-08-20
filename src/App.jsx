@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { Suspense, lazy, useEffect } from 'react'
 import { useStore, useCampusOpen } from './state/store'
 import { isDemo } from './services/backend'
+import { PartnerAccountProvider } from './state/partnerAccount'
 
 import AppLayout from './components/nav/AppLayout'
 import Landing from './pages/Landing'
@@ -25,13 +26,33 @@ import Profile from './pages/Profile'
 import EditProfile from './pages/EditProfile'
 import Settings from './pages/Settings'
 import Notifications from './pages/Notifications'
+import DatePasses from './pages/DatePasses'
 import Mutuals from './pages/Mutuals'
 import MutualChat from './pages/MutualChat'
 import BackstageOverview from './pages/backstage/Overview'
 import BackstageReports from './pages/backstage/Reports'
 import BackstageEvents from './pages/backstage/EventQueue'
-import BackstageSponsors from './pages/backstage/Sponsors'
+import BackstagePartners from './pages/backstage/Partners'
 import Logo from './components/brand/Logo'
+
+/**
+ * The partner platform is a whole second product — a marketing site, an
+ * onboarding flow, and a seven-page dashboard — and almost no student will
+ * ever load a byte of it. Lazily importing it keeps all of that out of the
+ * bundle a nineteen-year-old downloads on campus wifi.
+ */
+const PartnersLanding = lazy(() => import('./pages/partners/PartnersLanding'))
+const PartnerAuth = lazy(() => import('./pages/partners/PartnerAuth'))
+const PartnerOnboarding = lazy(() => import('./pages/partners/PartnerOnboarding'))
+const PartnerDashboard = lazy(() => import('./pages/partners/DashboardLayout'))
+const PartnerOverview = lazy(() => import('./pages/partners/dashboard/Overview'))
+const PartnerSpot = lazy(() => import('./pages/partners/dashboard/DateSpotEditor'))
+const PartnerOffers = lazy(() => import('./pages/partners/dashboard/Offers'))
+const PartnerScan = lazy(() => import('./pages/partners/dashboard/Scan'))
+const PartnerRedemptions = lazy(() => import('./pages/partners/dashboard/Redemptions'))
+const PartnerAnalytics = lazy(() => import('./pages/partners/dashboard/Analytics'))
+const PartnerBilling = lazy(() => import('./pages/partners/dashboard/Billing'))
+const PartnerSettings = lazy(() => import('./pages/partners/dashboard/Settings'))
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -86,6 +107,31 @@ function RequireStaff({ children }) {
   return children
 }
 
+/** Everything under /partners. Split out so the whole subtree can be lazy. */
+function PartnerRoutes() {
+  return (
+    <Routes>
+      <Route index element={<PartnersLanding />} />
+      <Route path="join" element={<PartnerAuth />} />
+      <Route path="login" element={<PartnerAuth />} />
+      <Route path="onboarding" element={<PartnerOnboarding />} />
+
+      <Route path="dashboard" element={<PartnerDashboard />}>
+        <Route index element={<PartnerOverview />} />
+        <Route path="spot" element={<PartnerSpot />} />
+        <Route path="offers" element={<PartnerOffers />} />
+        <Route path="scan" element={<PartnerScan />} />
+        <Route path="redemptions" element={<PartnerRedemptions />} />
+        <Route path="analytics" element={<PartnerAnalytics />} />
+        <Route path="billing" element={<PartnerBilling />} />
+        <Route path="settings" element={<PartnerSettings />} />
+      </Route>
+
+      <Route path="*" element={<Navigate to="/partners" replace />} />
+    </Routes>
+  )
+}
+
 export default function App() {
   const { state } = useStore()
 
@@ -100,7 +146,9 @@ export default function App() {
         <Route
           path="/"
           element={
-            state.session.onboarded ? (
+            state.session.isPartner ? (
+              <Navigate to="/partners/dashboard" replace />
+            ) : state.session.onboarded ? (
               <Navigate to="/app/discover" replace />
             ) : state.session.authed ? (
               <Navigate to="/onboarding" replace />
@@ -109,6 +157,21 @@ export default function App() {
             )
           }
         />
+
+        {/* Loose Leaf for Partners — a whole second product, deliberately
+            outside /app. A business is not a member: no member shell, no
+            member store, and nothing here can reach dating data. */}
+        <Route
+          path="/partners/*"
+          element={
+            <Suspense fallback={<Booting />}>
+              <PartnerAccountProvider>
+                <PartnerRoutes />
+              </PartnerAccountProvider>
+            </Suspense>
+          }
+        />
+
         <Route path="/join" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/verify" element={<Verify />} />
@@ -210,6 +273,9 @@ export default function App() {
             }
           />
           <Route path="campus/spots" element={<DateSpots />} />
+          {/* Passes are yours whether or not the campus is open — an unlocked
+              perk shouldn't vanish because a campus closed behind you. */}
+          <Route path="passes" element={<DatePasses />} />
 
           <Route
             path="backstage"
@@ -236,12 +302,17 @@ export default function App() {
             }
           />
           <Route
-            path="backstage/sponsors"
+            path="backstage/partners"
             element={
               <RequireStaff>
-                <BackstageSponsors />
+                <BackstagePartners />
               </RequireStaff>
             }
+          />
+          {/* The old name, kept so any bookmarked link still lands. */}
+          <Route
+            path="backstage/sponsors"
+            element={<Navigate to="/app/backstage/partners" replace />}
           />
         </Route>
 
