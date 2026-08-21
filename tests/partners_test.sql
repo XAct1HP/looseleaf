@@ -630,5 +630,230 @@ begin
                  'and somebody can always leave on their own');
 end $$;
 
+-- ─── 13. what each role can actually reach ────────────────────────────────
+--  The bug this section exists for: roles used to come in two flavours —
+--  "admin" (owner or manager) and "member" — so a staff login could read the
+--  overview, the analytics and the redemption ledger, and a manager could
+--  rewrite the Date Spot. Permission is now a role *plus a grant*, and every
+--  policy and RPC routes through partner_can().
+
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_staff uuid := current_setting('test.shift')::uuid;
+  v_mgr uuid;
+begin
+  -- Put the shift worker back, and add a manager beside them.
+  perform act_as(current_setting('test.biz')::uuid);
+  insert into partner_members (partner_id, partner_user_id, role)
+  values (v_partner, v_staff, 'staff')
+  on conflict (partner_id, partner_user_id) do update set role = 'staff';
+
+  insert into auth.users (email) values ('mgr@jolly.com') returning id into v_mgr;
+  insert into partner_users (id, email, full_name) values (v_mgr, 'mgr@jolly.com', 'Mo');
+  insert into partner_members (partner_id, partner_user_id, role)
+  values (v_partner, v_mgr, 'manager');
+  perform set_config('test.mgr', v_mgr::text, false);
+
+  perform assert(partner_my_role(v_partner) = 'owner', 'the owner reads as an owner');
+  perform assert(array_length(partner_my_pages(v_partner), 1) = 9,
+                 'an owner reaches every page');
+  perform assert(partner_can(v_partner, 'settings'), 'including settings');
+end $$;
+
+--  Staff: the scanner, and nothing else.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  ok boolean; n int;
+begin
+  perform act_as(current_setting('test.shift')::uuid);
+
+  perform assert(partner_my_pages(v_partner) = array['scan'],
+                 'staff reach exactly one page: the scanner');
+  perform assert(partner_can(v_partner, 'scan'), 'and scanning works');
+  perform assert(not partner_can(v_partner, 'overview'), 'no overview');
+  perform assert(not partner_can(v_partner, 'analytics'), 'no analytics');
+  perform assert(not partner_can(v_partner, 'redemptions'), 'no redemption ledger');
+  perform assert(not partner_can(v_partner, 'team'), 'no team');
+  perform assert(not partner_can(v_partner, 'billing'), 'no billing');
+  perform assert(not partner_can(v_partner, 'settings'), 'no settings');
+
+  -- And the refusals are the database's, not the navigation's.
+  foreach ok in array array[true] loop
+    begin ok := false; perform partner_overview(v_partner);
+    exception when others then ok := true; end;
+    perform assert(ok, 'staff calling partner_overview is refused');
+
+    begin ok := false; perform partner_funnel(v_partner, 30);
+    exception when others then ok := true; end;
+    perform assert(ok, 'staff calling partner_funnel is refused');
+
+    begin ok := false; perform save_date_spot(current_setting('test.loc')::uuid, '{}'::jsonb);
+    exception when others then ok := true; end;
+    perform assert(ok, 'staff cannot save the Date Spot');
+  end loop;
+
+  select count(*) into n from partner_redemptions(v_partner, 50, 0);
+  perform assert(n = 0, 'staff read no redemption rows');
+
+  set local role authenticated;
+  select count(*) into n from partner_subscriptions;
+  perform assert(n = 0, 'staff read no billing');
+  select count(*) into n from partner_offers where partner_id = v_partner;
+  perform assert(n = 0, 'staff read no offers — not even their employer''s caps');
+  reset role;
+end $$;
+
+--  Manager: the scanner and the team, and nothing else until it's handed over.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  ok boolean := false; n int;
+begin
+  perform act_as(current_setting('test.mgr')::uuid);
+
+  perform assert(partner_my_pages(v_partner) = array['scan','team'],
+                 'a manager reaches the scanner and the team');
+  perform assert(not partner_can(v_partner, 'spot'), 'not the Date Spot');
+  perform assert(not partner_can(v_partner, 'offers'), 'not the offers');
+  perform assert(not partner_can(v_partner, 'billing'), 'not billing');
+  perform assert(not partner_can(v_partner, 'settings'), 'and never settings');
+
+  begin
+    perform save_date_spot(current_setting('test.loc')::uuid, '{"name":"Hijacked"}'::jsonb);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a manager cannot rewrite the Date Spot by default');
+
+  set local role authenticated;
+  select count(*) into n from partner_subscriptions;
+  perform assert(n = 0, 'nor read the billing state');
+  reset role;
+
+  perform assert((select count(*) from partner_team(v_partner)) = 3,
+                 'but they can see the team');
+end $$;
+
+--  A manager hires and fires, but cannot manufacture an owner.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_inv uuid; ok boolean := false;
+begin
+  perform act_as(current_setting('test.mgr')::uuid);
+
+  v_inv := invite_partner_member(v_partner, 'newhire@jolly.com', 'staff');
+  perform assert(v_inv is not null, 'a manager can invite staff');
+  perform revoke_partner_invite(v_inv);
+
+  begin
+    perform invite_partner_member(v_partner, 'sneaky@jolly.com', 'owner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a manager cannot invite an owner');
+
+  ok := false;
+  begin
+    perform set_partner_member_role(v_partner, current_setting('test.mgr')::uuid, 'owner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'nor promote themselves to one');
+
+  ok := false;
+  begin
+    perform remove_partner_member(v_partner, current_setting('test.biz')::uuid);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'nor remove the owner');
+
+  -- Moving staff around is exactly their job, though.
+  perform set_partner_member_role(v_partner, current_setting('test.shift')::uuid, 'manager');
+  perform set_partner_member_role(v_partner, current_setting('test.shift')::uuid, 'staff');
+  perform assert(true, 'a manager can move somebody between staff and manager');
+end $$;
+
+--  The owner hands billing over, and it takes effect immediately.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_pages jsonb; n int; ok boolean := false;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  v_pages := set_partner_role_pages(v_partner, 'manager', array['scan','team','billing']);
+  perform assert(v_pages -> 'manager' ? 'billing', 'the grant is stored');
+
+  perform act_as(current_setting('test.mgr')::uuid);
+  perform assert(partner_can(v_partner, 'billing'), 'the manager can now reach billing');
+  set local role authenticated;
+  select count(*) into n from partner_subscriptions;
+  perform assert(n = 1, 'and actually read the subscription');
+  reset role;
+
+  -- Settings is never grantable, however it is asked for.
+  perform act_as(current_setting('test.biz')::uuid);
+  perform set_partner_role_pages(v_partner, 'manager', array['scan','team','billing','settings']);
+  perform act_as(current_setting('test.mgr')::uuid);
+  perform assert(not partner_can(v_partner, 'settings'),
+                 'settings cannot be granted, whatever is written to the column');
+
+  -- And a manager cannot rewrite the grid to widen themselves.
+  begin
+    perform set_partner_role_pages(v_partner, 'manager', array['scan','team','billing','spot','offers']);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'only an owner edits what the team can see');
+
+  -- Put it back.
+  perform act_as(current_setting('test.biz')::uuid);
+  perform set_partner_role_pages(v_partner, 'manager', array['scan','team']);
+  perform act_as(current_setting('test.mgr')::uuid);
+  perform assert(not partner_can(v_partner, 'billing'), 'and revoking it takes effect too');
+end $$;
+
+--  Scanning still works for everybody who is meant to have it — the point of
+--  the staff role would be lost otherwise.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  r record;
+begin
+  perform act_as(current_setting('test.shift')::uuid);
+  select * into r from partner_lookup_pass(v_partner, current_setting('test.code'));
+  perform assert(r.status = 'redeemed', 'staff can still look a pass up');
+
+  perform act_as(current_setting('test.mgr')::uuid);
+  select * into r from partner_lookup_pass(v_partner, current_setting('test.code'));
+  perform assert(r.status = 'redeemed', 'and so can a manager');
+end $$;
+
+--  Students still see live offers — through the view, not the table.
+do $$
+declare n int;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+
+  select count(*) into n from partner_offers;
+  perform assert(n = 0, 'a student reads no rows from the offers table');
+
+  select count(*) into n from public_offers
+   where partner_id = current_setting('test.partner')::uuid;
+  perform assert(n = 1, 'but does see the live offer through the public view');
+
+  reset role;
+end $$;
+
+--  And the view cannot be used to reach a cap, because the column isn't in it.
+do $$
+declare bad text;
+begin
+  select string_agg(column_name, ', ') into bad
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'public_offers'
+    and column_name ~ 'max_|new_customers|multi_use|pass_valid|status';
+  perform assert(bad is null, 'the public offer view exposes no commercial limits');
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'

@@ -1,62 +1,95 @@
 import { useEffect } from 'react'
-import { Link, NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Logo from '../../components/brand/Logo'
 import Button from '../../components/ui/Button'
-import { IconPin, IconSpark, IconCalendar, IconEye, IconLock, IconSettings, IconDiscover, IconPeople } from '../../components/ui/Icons'
+import {
+  IconPin, IconSpark, IconScan, IconTicket, IconEye, IconLock,
+  IconSettings, IconDiscover, IconPeople,
+} from '../../components/ui/Icons'
 import { usePartnerAccount } from '../../state/partnerAccount'
 import { can } from '../../lib/partnerPlans'
 import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
+import ForPartners from '../../components/partners/ForPartners'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
  * ── The Partner Dashboard shell ─────────────────────────────────────────────
  *
  * Warm, not enterprise. A restaurant manager checking this on a phone between
- * covers should recognise it as the same Loose Leaf their customers use, and
- * should be able to find the scanner in one tap — so Scan is a nav item, not
- * something buried inside Redemptions.
+ * covers should recognise it as the same Loose Leaf their customers use.
  *
- * Nav items appear or don't based on the plan's entitlements, never on a plan
- * id. A tier that doesn't include Date Passes simply has no Scan tab.
+ * Two filters decide what's in the nav, and they answer different questions:
+ *
+ *   `needs`  what the *business* bought. A Date Spot plan has no Scan tab
+ *            because that plan has no Date Passes.
+ *   `page`   what *this person* may reach. Decided by partner_can() in the
+ *            database, so a hidden tab is a locked door and not a curtain —
+ *            typing the URL gets you a redirect, and the RPC behind it would
+ *            refuse anyway.
+ *
+ * When somebody can reach exactly one page, the nav is noise. A staff login
+ * gets the scanner and nothing to navigate — see ScannerOnlyShell.
  */
 
 const NAV = [
-  { to: '/partners/dashboard', label: 'Overview', Icon: IconDiscover, end: true },
-  { to: '/partners/dashboard/spot', label: 'Date Spot', Icon: IconPin },
-  { to: '/partners/dashboard/offers', label: 'Offers', Icon: IconSpark, needs: 'offers' },
-  { to: '/partners/dashboard/scan', label: 'Scan a pass', Icon: IconCalendar, needs: 'redemption' },
-  { to: '/partners/dashboard/redemptions', label: 'Redemptions', Icon: IconCalendar, needs: 'redemption' },
-  { to: '/partners/dashboard/analytics', label: 'Analytics', Icon: IconEye },
-  { to: '/partners/dashboard/team', label: 'Team', Icon: IconPeople },
-  { to: '/partners/dashboard/billing', label: 'Billing', Icon: IconLock },
-  { to: '/partners/dashboard/settings', label: 'Settings', Icon: IconSettings },
+  { page: 'overview', to: '/partners/dashboard', label: 'Overview', Icon: IconDiscover, end: true },
+  { page: 'spot', to: '/partners/dashboard/spot', label: 'Date Spot', Icon: IconPin },
+  { page: 'offers', to: '/partners/dashboard/offers', label: 'Offers', Icon: IconSpark, needs: 'offers' },
+  { page: 'scan', to: '/partners/dashboard/scan', label: 'Scan a pass', Icon: IconScan, needs: 'redemption' },
+  { page: 'redemptions', to: '/partners/dashboard/redemptions', label: 'Redemptions', Icon: IconTicket, needs: 'redemption' },
+  { page: 'analytics', to: '/partners/dashboard/analytics', label: 'Analytics', Icon: IconEye },
+  { page: 'team', to: '/partners/dashboard/team', label: 'Team', Icon: IconPeople },
+  { page: 'billing', to: '/partners/dashboard/billing', label: 'Billing', Icon: IconLock },
+  { page: 'settings', to: '/partners/dashboard/settings', label: 'Settings', Icon: IconSettings },
 ]
+
+/** Which nav entry a path belongs to, so a guard can ask "may they be here?". */
+function pageForPath(pathname) {
+  const rest = pathname.replace(/^\/partners\/dashboard\/?/, '').split('/')[0]
+  return rest === '' ? 'overview' : rest
+}
 
 export default function DashboardLayout() {
   const { status, partner, partners: list, entitlements, select } = usePartnerAccount()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   useEffect(() => {
     if (status === 'ready' && list.length === 0) navigate('/partners/onboarding', { replace: true })
   }, [status, list.length, navigate])
+
+  const items = partner
+    ? NAV.filter((n) => (partner.pages ?? []).includes(n.page))
+        .filter((n) => !n.needs || can(entitlements, n.needs))
+    : []
+
+  const home = items[0]?.to ?? '/partners/dashboard/scan'
+  const allowedHere = items.some((n) => n.page === pageForPath(pathname))
+
+  // Somebody who lands on a page they can't reach is moved to their own first
+  // page rather than shown an error — for a staff login the dashboard root is
+  // simply not where they live.
+  useEffect(() => {
+    if (status !== 'ready' || !partner || !items.length) return
+    if (!allowedHere) navigate(home, { replace: true })
+  }, [status, partner, items.length, allowedHere, home, navigate])
 
   if (!partners.partnersEnabled) return <PartnerOffline />
   if (status === 'loading') return <Booting />
   if (status === 'error') return <Navigate to="/partners/login" replace />
   if (!partner) return <Booting />
 
-  const items = NAV.filter((n) => !n.needs || can(entitlements, n.needs))
+  if (!items.length) return <NoAccess partner={partner} />
+  if (items.length === 1) return <ScannerOnlyShell partner={partner} />
 
   return (
     <div className="min-h-screen bg-paper">
-      {/* top bar */}
       <header className="sticky top-0 z-40 border-b border-rule/70 bg-paper/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-[1240px] items-center gap-3 px-4 py-3 sm:px-6">
-          <Link to="/partners/dashboard" className="focus-ring flex items-center gap-2.5 rounded-lg">
+          <Link to={home} className="focus-ring flex items-center gap-2.5 rounded-lg">
             <Logo size="sm" />
-            <span className="hidden h-4 w-px bg-rule sm:block" />
-            <span className="hidden text-[13px] font-medium text-graphite sm:block">for Partners</span>
+            <ForPartners />
           </Link>
 
           <div className="ml-auto flex items-center gap-2">
@@ -74,22 +107,12 @@ export default function DashboardLayout() {
                 ))}
               </select>
             )}
-            <button
-              type="button"
-              onClick={async () => {
-                await auth.signOut()
-                navigate('/partners', { replace: true })
-              }}
-              className="focus-ring rounded-xl px-3 py-2 text-[13.5px] font-medium text-graphite hover:text-navy"
-            >
-              Log out
-            </button>
+            <LogOut />
           </div>
         </div>
       </header>
 
       <div className="mx-auto flex max-w-[1240px] gap-8 px-4 py-6 sm:px-6 md:py-9">
-        {/* desktop nav */}
         <nav className="hidden w-[212px] shrink-0 md:block">
           <p className="mb-1 px-3 font-display text-[17px] font-semibold leading-tight text-navy">
             {partner.name}
@@ -127,7 +150,6 @@ export default function DashboardLayout() {
         </main>
       </div>
 
-      {/* mobile nav — a manager on the floor needs Scan in one tap */}
       <nav
         className="fixed inset-x-0 bottom-0 z-40 border-t border-rule bg-paper/95 backdrop-blur-md md:hidden"
         style={{ paddingBottom: 'var(--safe-bottom)' }}
@@ -152,6 +174,82 @@ export default function DashboardLayout() {
         </ul>
       </nav>
     </div>
+  )
+}
+
+/**
+ * ── The staff experience ────────────────────────────────────────────────────
+ *
+ * Somebody whose whole job here is redeeming passes gets a phone-shaped
+ * screen: the business name, the scanner, a way out. No tab bar to mis-tap
+ * mid-shift, no sidebar taking a third of a 390px screen, and nothing to
+ * wonder whether they're allowed to press.
+ */
+function ScannerOnlyShell({ partner }) {
+  return (
+    <div className="flex min-h-[100dvh] flex-col bg-paper">
+      <header className="sticky top-0 z-40 border-b border-rule/70 bg-paper/90 backdrop-blur-md">
+        <div
+          className="mx-auto flex max-w-[560px] items-center gap-3 px-4 py-3"
+          style={{ paddingTop: 'calc(var(--safe-top) + 0.65rem)' }}
+        >
+          <Logo size="sm" />
+          <div className="ml-auto flex items-center gap-2">
+            <span className="hidden truncate text-[13px] font-medium text-graphite sm:block">
+              {partner.name}
+            </span>
+            <LogOut />
+          </div>
+        </div>
+      </header>
+
+      <main
+        className="mx-auto w-full max-w-[560px] flex-1 px-4 pt-5"
+        style={{ paddingBottom: 'calc(var(--safe-bottom) + 1.5rem)' }}
+      >
+        <p className="mb-4 truncate text-[15px] font-medium text-navy sm:hidden">{partner.name}</p>
+        <Outlet />
+      </main>
+    </div>
+  )
+}
+
+/**
+ * A plan can take the scanner away — Date Passes start at the top tier — and
+ * that can leave a staff login with nowhere to go. Better to say so than to
+ * bounce them around an empty dashboard.
+ */
+function NoAccess({ partner }) {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-paper px-6 text-center">
+      <Logo size="md" />
+      <h1 className="mt-8 font-display text-[24px] font-semibold leading-tight">
+        Nothing here for you yet.
+      </h1>
+      <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-graphite">
+        Your account at {partner.name} doesn’t have access to any part of the dashboard right now.
+        Ask whoever runs the account to give you a page in Settings.
+      </p>
+      <div className="mt-7">
+        <LogOut />
+      </div>
+    </div>
+  )
+}
+
+function LogOut() {
+  const navigate = useNavigate()
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        await auth.signOut()
+        navigate('/partners', { replace: true })
+      }}
+      className="focus-ring rounded-xl px-3 py-2 text-[13.5px] font-medium text-graphite hover:text-navy"
+    >
+      Log out
+    </button>
   )
 }
 
@@ -189,9 +287,12 @@ export function StatusPill({ partner, className = '' }) {
 
 /**
  * The one banner. It says what is wrong and what to press — a partner should
- * never have to work out from a status word why nobody can see them.
+ * never have to work out from a status word why nobody can see them. Only
+ * shown to people who can act on it; telling a shift worker that the card
+ * bounced is noise they can do nothing about.
  */
 function StatusBanner({ partner }) {
+  const canBill = (partner.pages ?? []).includes('billing')
   const billingBroken = ['past_due', 'unpaid', 'incomplete'].includes(partner.subStatus)
   const noPlan = !partner.subStatus
 
@@ -217,21 +318,21 @@ function StatusBanner({ partner }) {
       </Note>
     )
   }
-  if (billingBroken) {
+  if (billingBroken && canBill) {
     return (
       <Note tone="coral" title="Your payment didn’t go through." action={{ to: '/partners/dashboard/billing', label: 'Fix billing' }}>
         Your Date Spot is hidden from students until this is sorted. Nothing else has been lost.
       </Note>
     )
   }
-  if (noPlan) {
+  if (noPlan && canBill) {
     return (
       <Note tone="blue" title="One thing left: pick a plan." action={{ to: '/partners/dashboard/billing', label: 'Choose a plan' }}>
         Your profile is saved. Students will see it once billing is set up and we’ve approved you.
       </Note>
     )
   }
-  if (partner.cancelAtEnd) {
+  if (partner.cancelAtEnd && canBill) {
     return (
       <Note tone="blue" title="Set to cancel." action={{ to: '/partners/dashboard/billing', label: 'Manage billing' }}>
         You’ll stay live until the end of the current period.

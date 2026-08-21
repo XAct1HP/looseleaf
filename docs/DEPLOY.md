@@ -165,8 +165,8 @@ too — it's an allowlist, not a `.edu` regex):
 
 | signup email | result |
 | --- | --- |
-| `Javi@UMICH.edu` | allowed |
-| `javi@gmail.com` | 403, "Looseleaf isn't on your campus yet…" |
+| `John@UMICH.edu` | allowed |
+| `john@gmail.com` | 403, "Looseleaf isn't on your campus yet…" |
 | `someone@msu.edu` (before the insert above) | 403 |
 | no email | 400 |
 

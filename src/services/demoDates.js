@@ -146,6 +146,13 @@ export function spots() {
   return DEMO_SPOTS.map((s) => ({ ...s }))
 }
 
+/**
+ * The demo campus has no storage bucket behind it, so `coverPath` is null
+ * everywhere and every card falls back to SpotImage's tinted paper. That is
+ * the honest thing to show: these are invented places and there are no
+ * photographs of them.
+ */
+
 /* ── ranking ────────────────────────────────────────────────────────────── */
 //  Deliberately the same shape as the SQL. If you change one, change both.
 

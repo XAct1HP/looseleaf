@@ -29,7 +29,7 @@ function Basics({ draft, set }) {
           className="field"
           value={draft.firstName}
           onChange={(e) => set({ firstName: e.target.value })}
-          placeholder="Javi"
+          placeholder="Alex"
           autoFocus
         />
         <p className="mt-2 px-1 text-[12.5px] text-mist">This is what people see. Last names stay off Looseleaf.</p>

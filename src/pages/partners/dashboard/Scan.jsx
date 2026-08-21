@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
-import { IconCheck, IconX, IconSearch } from '../../../components/ui/Icons'
+import { IconCheck, IconX, IconSearch, IconScan } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import * as partners from '../../../services/partners'
 
@@ -14,9 +14,15 @@ import * as partners from '../../../services/partners'
  * confirm button.
  *
  * Two ways in, and the typed one is not a fallback bolted on afterwards — it's
- * the path that always works. Camera QR scanning uses the browser's built-in
- * BarcodeDetector where it exists (Chrome, Android) and simply isn't offered
- * where it doesn't, rather than shipping a decoder nobody asked for.
+ * the path that always works, including when a camera is refused or there
+ * isn't one.
+ *
+ * Camera scanning uses the browser's own BarcodeDetector where it exists —
+ * Chrome and Android — and a small JS decoder everywhere else. That second
+ * path is not optional: iOS Safari has no BarcodeDetector, and a restaurant's
+ * phone behind the counter is very often an iPhone. The decoder is imported
+ * only when the camera actually opens on such a device, so nobody downloads it
+ * to type a code.
  *
  * Neither path decides anything. `partner_lookup_pass` and `redeem_date_pass`
  * are what determine validity, inside the database, under a row lock — this
@@ -34,13 +40,14 @@ export default function Scan() {
   const [scanning, setScanning] = useState(false)
 
   const videoRef = useRef(null)
+  const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const loopRef = useRef(null)
 
+  // A camera is all that's required; the decoding is our problem, not the
+  // browser's.
   const cameraSupported =
-    typeof window !== 'undefined' &&
-    'BarcodeDetector' in window &&
-    Boolean(navigator.mediaDevices?.getUserMedia)
+    typeof window !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
 
   const stopCamera = useCallback(() => {
     cancelAnimationFrame(loopRef.current)
@@ -82,6 +89,38 @@ export default function Scan() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partner])
 
+  /**
+   * One frame, decoded whichever way this browser can manage.
+   *
+   * BarcodeDetector reads the video element directly and is much cheaper.
+   * jsQR needs pixels, so the frame goes through a canvas first — at a capped
+   * width, because decoding a full 4K frame sixty times a second turns a phone
+   * into a hand warmer and finds the code no faster.
+   */
+  async function readFrame(detector, decodeFallback) {
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return null
+
+    if (detector) {
+      const codes = await detector.detect(video)
+      return codes.find((c) => /LL-/i.test(c.rawValue))?.rawValue ?? null
+    }
+
+    if (!decodeFallback) return null
+
+    const canvas = canvasRef.current ?? (canvasRef.current = document.createElement('canvas'))
+    const scale = Math.min(1, 640 / video.videoWidth)
+    canvas.width = Math.round(video.videoWidth * scale)
+    canvas.height = Math.round(video.videoHeight * scale)
+
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height)
+
+    const hit = decodeFallback(data, width, height, { inversionAttempts: 'dontInvert' })
+    return hit?.data && /LL-/i.test(hit.data) ? hit.data : null
+  }
+
   async function startCamera() {
     setError(null)
     try {
@@ -92,17 +131,31 @@ export default function Scan() {
       setScanning(true)
       if (videoRef.current) {
         videoRef.current.srcObject = stream
+        // Required on iOS or the video simply never starts.
+        videoRef.current.setAttribute('playsinline', 'true')
         await videoRef.current.play()
       }
 
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
+      let detector = null
+      let decodeFallback = null
+      if ('BarcodeDetector' in window) {
+        try {
+          detector = new window.BarcodeDetector({ formats: ['qr_code'] })
+        } catch {
+          detector = null
+        }
+      }
+      if (!detector) {
+        const mod = await import('jsqr')
+        decodeFallback = mod.default ?? mod
+      }
+
       const tick = async () => {
         if (!streamRef.current || !videoRef.current) return
         try {
-          const codes = await detector.detect(videoRef.current)
-          const hit = codes.find((c) => /LL-/i.test(c.rawValue))
-          if (hit) {
-            check(extractCode(hit.rawValue))
+          const raw = await readFrame(detector, decodeFallback)
+          if (raw) {
+            check(extractCode(raw))
             return
           }
         } catch {
@@ -160,7 +213,7 @@ export default function Scan() {
           </p>
         </div>
 
-        <Button variant="coral" size="lg" full className="mt-5" onClick={reset}>
+        <Button variant="coral" size="lg" full className="mt-5 !h-[60px] !text-[17px]" onClick={reset}>
           Scan another
         </Button>
       </div>
@@ -215,7 +268,14 @@ export default function Scan() {
 
         {result.valid ? (
           <>
-            <Button variant="coral" size="lg" full className="mt-5" onClick={confirm} disabled={busy}>
+            <Button
+              variant="coral"
+              size="lg"
+              full
+              className="mt-5 !h-[60px] !text-[17px]"
+              onClick={confirm}
+              disabled={busy}
+            >
               {busy ? 'Confirming…' : 'Confirm redemption'}
             </Button>
             <p className="mt-3 text-center text-[12.5px] leading-relaxed text-mist">
@@ -237,6 +297,9 @@ export default function Scan() {
   }
 
   /* ── the scanner ──────────────────────────────────────────────────── */
+  //  Sized for one hand behind a counter: the camera is the biggest thing on
+  //  the screen, the code field is thumb-height, and the two together fill a
+  //  phone rather than sitting in a column at the top of one.
   return (
     <>
       <PageHead
@@ -253,6 +316,7 @@ export default function Scan() {
                   ref={videoRef}
                   playsInline
                   muted
+                  autoPlay
                   className="aspect-square w-full object-cover"
                 />
                 <span
@@ -272,9 +336,19 @@ export default function Scan() {
                 </p>
               </div>
             ) : (
-              <Button variant="coral" size="lg" full onClick={startCamera}>
-                Open the camera
-              </Button>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="press focus-ring flex aspect-square w-full flex-col items-center justify-center gap-4 rounded-sheet border-2 border-dashed border-navy/20 bg-cream/60 text-graphite transition hover:border-coral/40 hover:bg-coral-wash/60"
+              >
+                <span className="flex h-20 w-20 items-center justify-center rounded-full bg-coral text-white shadow-[0_10px_22px_-12px_rgba(255,100,104,0.9)]">
+                  <IconScan size={38} />
+                </span>
+                <span className="text-[17px] font-medium text-navy">Open the camera</span>
+                <span className="max-w-[28ch] text-center text-[13px] leading-relaxed text-mist">
+                  Hold the customer's code in the square and it scans itself.
+                </span>
+              </button>
             )}
           </div>
         )}
@@ -294,18 +368,22 @@ export default function Scan() {
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="LL-XXXX-XXXX"
+              /* inputMode text, not numeric: the codes are letters and digits
+                 and a number pad would hide half of them. */
               autoCapitalize="characters"
+              autoComplete="off"
               autoCorrect="off"
               spellCheck={false}
-              className="field !text-[19px] !tracking-[0.12em]"
+              enterKeyHint="go"
+              className="field !h-[60px] !py-0 !text-[21px] !tracking-[0.14em]"
             />
             <button
               type="submit"
               disabled={busy || !code.trim()}
               aria-label="Check code"
-              className="press focus-ring flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-navy text-paper transition disabled:bg-navy/15 disabled:text-mist"
+              className="press focus-ring flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-2xl bg-navy text-paper transition disabled:bg-navy/15 disabled:text-mist"
             >
-              <IconSearch size={20} />
+              <IconSearch size={22} />
             </button>
           </div>
           <p className="mt-2 text-[12.5px] leading-relaxed text-mist">
@@ -322,8 +400,8 @@ export default function Scan() {
 
         {!cameraSupported && (
           <p className="mt-6 rounded-2xl border border-rule bg-cream/60 px-4 py-3 text-[12.5px] leading-relaxed text-graphite">
-            This browser can’t scan QR codes. Typing the code works exactly the same — or open this
-            page in Chrome on the phone you keep behind the counter.
+            No camera on this device. Typing the code works exactly the same — or open this page on
+            the phone you keep behind the counter.
           </p>
         )}
       </div>

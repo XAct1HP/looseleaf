@@ -12,6 +12,7 @@ import * as media from '../../services/live/partnerMedia'
 import { usePartnerAccount } from '../../state/partnerAccount'
 import { PARTNER_CATEGORIES, DATE_TYPE_TAGS, VIBE_TAGS, daysText } from '../../data/partnerCatalog'
 import { PLAN_MIRROR, money } from '../../lib/partnerPlans'
+import { geocode } from '../../lib/geocode'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
@@ -107,6 +108,8 @@ export default function PartnerOnboarding() {
   const current = STEPS[step]
 
   const previewSpot = {
+    id: partnerId ?? 'preview',
+    coverPath: draft.coverPath,
     name: draft.businessName || 'Your place',
     kind: PARTNER_CATEGORIES.find((c) => c.id === draft.category)?.label || 'Date spot',
     note: draft.note || draft.description,
@@ -182,11 +185,22 @@ export default function PartnerOnboarding() {
       }
 
       if (current.id === 'location') {
+        // Best-effort, and never blocking: a null just means the Date Spot
+        // shows an address and a Directions link rather than a map.
+        const coords =
+          (await geocode({
+            addressLine: draft.addressLine.trim(),
+            city: draft.city,
+            region: draft.region,
+            postalCode: draft.postalCode,
+          })) ?? {}
         const row = {
           address_line: draft.addressLine.trim(),
           city: draft.city || null,
           region: draft.region || null,
           postal_code: draft.postalCode || null,
+          latitude: coords.latitude ?? null,
+          longitude: coords.longitude ?? null,
           walk_minutes: draft.walkMinutes ? Number(draft.walkMinutes) : null,
           distance_miles: draft.distanceMiles ? Number(draft.distanceMiles) : null,
           price_level: draft.priceLevel,
@@ -228,6 +242,8 @@ export default function PartnerOnboarding() {
       distance_miles: draft.distanceMiles ? Number(draft.distanceMiles) : null,
       address_line: draft.addressLine || null,
       website: normaliseUrl(draft.website),
+      logo_path: draft.logoPath,
+      cover_path: draft.coverPath,
       phone: draft.phone || null,
       hours: draft.hours,
       logo_path: draft.logoPath,

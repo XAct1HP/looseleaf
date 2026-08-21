@@ -7,6 +7,7 @@ import { SelectChip } from '../../components/ui/Chip'
 import { useRail } from '../../components/nav/AppLayout'
 import { DATE_TYPE_TAGS } from '../../data/partnerCatalog'
 import * as dates from '../../services/dates'
+import { preload } from '../../services/live/partnerMedia'
 
 /**
  * ── Date Spots ──────────────────────────────────────────────────────────────
@@ -34,6 +35,9 @@ export default function DateSpots() {
         if (!live) return
         setSpots(s)
         setOffers(o)
+        // Warm the covers now rather than when each card scrolls into view;
+        // by the time somebody has read the filters, they're in cache.
+        preload(s.map((x) => x.coverPath).filter(Boolean))
       })
       .catch((e) => live && setError(e.message))
       .finally(() => live && setLoading(false))
@@ -107,10 +111,11 @@ export default function DateSpots() {
         </p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2">
-          {shown.map((s) => (
+          {shown.map((s, i) => (
             <li key={s.id}>
               <DateSpotCard
                 spot={s}
+                priority={i < 4}
                 onChoose={() => {
                   setOpenSpot(s)
                   dates.logSpotView(s.id)

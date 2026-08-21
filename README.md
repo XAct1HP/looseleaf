@@ -24,7 +24,7 @@ npm run preview  # serve the build
 Defaults to `VITE_DATA_MODE=demo`: the whole app runs off a bundled fictional
 campus, with no backend and no account. `Join your campus` walks the full
 signup → verification → 8-step onboarding flow (any six digits verify); `Log in`
-drops you straight into Javi's account with likes, matches, and conversations
+drops you straight into John's account with likes, matches, and conversations
 already seeded. Settings → *Reset demo data* puts everything back.
 
 Set `VITE_DATA_MODE=supabase` (plus keys) for real accounts — see

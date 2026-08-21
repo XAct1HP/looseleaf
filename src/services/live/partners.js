@@ -89,6 +89,11 @@ export async function mine() {
     status: r.status,
     reviewNote: r.review_note,
     role: r.role,
+    // Which dashboard pages this person may reach, decided in the database.
+    // The nav is built from this, and so is where they land.
+    pages: r.pages ?? [],
+    // Only owners get the grid; for anybody else the RPC returns null.
+    rolePages: r.role_pages ?? null,
     planId: r.plan_id,
     planName: r.plan_name,
     subStatus: r.sub_status,
@@ -135,6 +140,17 @@ export async function pendingInvites(partnerId) {
     createdAt: r.created_at,
     expiresAt: r.expires_at,
   }))
+}
+
+/** Owner-only. Hands one role a list of extra pages. */
+export async function setRolePages(partnerId, role, pages) {
+  const { data, error } = await supabase.rpc('set_partner_role_pages', {
+    p_partner: partnerId,
+    p_role: role,
+    p_pages: pages,
+  })
+  bail(error)
+  return data
 }
 
 export async function invite(partnerId, email, role = 'staff') {

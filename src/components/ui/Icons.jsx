@@ -222,3 +222,44 @@ export const IconLink = (p) => (
     <path d="M13.5 10.5a3.4 3.4 0 0 0-5-.3l-2.6 2.6a3.4 3.4 0 0 0 4.8 4.8l1.5-1.5" />
   </svg>
 )
+
+/** Scanning a code: a viewfinder with a code inside it. */
+export const IconScan = (p) => (
+  <svg {...base(p)}>
+    <path d="M3.5 8.5v-3a2 2 0 0 1 2-2h3M15.5 3.5h3a2 2 0 0 1 2 2v3M20.5 15.5v3a2 2 0 0 1-2 2h-3M8.5 20.5h-3a2 2 0 0 1-2-2v-3" />
+    <rect x="7.5" y="7.5" width="4" height="4" rx="1" />
+    <path d="M14.5 7.5h2v2M16.5 14.5v2h-2M9.5 16.5h-2v-2" />
+  </svg>
+)
+
+/** A redeemed pass: a ticket stub, torn. */
+export const IconTicket = (p) => (
+  <svg {...base(p)}>
+    <path d="M3.5 8.5V7a1.5 1.5 0 0 1 1.5-1.5h14A1.5 1.5 0 0 1 20.5 7v1.5a2.5 2.5 0 0 0 0 7V17a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 17v-1.5a2.5 2.5 0 0 0 0-7Z" />
+    <path d="M13.5 5.5v2M13.5 11v2M13.5 16.5v2" strokeDasharray="0.1 3.2" />
+  </svg>
+)
+
+/** Where a place is, on a map. */
+export const IconMap = (p) => (
+  <svg {...base(p)}>
+    <path d="M9 4.5 3.5 7v12.5L9 17l6 2.5 5.5-2.5V4.5L15 7 9 4.5Z" />
+    <path d="M9 4.5V17M15 7v12.5" />
+  </svg>
+)
+
+/** A perk, small enough to sit in the corner of a card. */
+export const IconTag = (p) => (
+  <svg {...base(p)}>
+    <path d="M4 11.2V5.5A1.5 1.5 0 0 1 5.5 4h5.7a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8l-5.2 5.2a2 2 0 0 1-2.8 0l-7-7a2 2 0 0 1-.6-1.4Z" />
+    <circle cx="8.6" cy="8.6" r="1.4" />
+  </svg>
+)
+
+/** Directions, i.e. take me there. */
+export const IconDirections = (p) => (
+  <svg {...base(p)}>
+    <path d="m12 2.8 9.2 9.2-9.2 9.2L2.8 12 12 2.8Z" />
+    <path d="M9.5 14v-2.2A1.8 1.8 0 0 1 11.3 10h3.4M13 8.2 15.2 10 13 11.8" />
+  </svg>
+)

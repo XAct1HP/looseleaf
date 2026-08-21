@@ -14,7 +14,7 @@ import { isDemo } from '../../services/backend'
 export default function Login() {
   const { actions } = useStore()
   const navigate = useNavigate()
-  const [email, setEmail] = useState(isDemo ? 'javi@umich.edu' : '')
+  const [email, setEmail] = useState(isDemo ? 'john@umich.edu' : '')
   const [error, setError] = useState('')
   const [sending, setSending] = useState(false)
 
@@ -95,7 +95,7 @@ export default function Login() {
 
       {isDemo && (
         <p className="mt-6 rounded-2xl border border-rule bg-cream/70 px-4 py-3 text-center text-[12.5px] leading-relaxed text-graphite">
-          Demo build — log in with anything to land in Javi’s account.
+          Demo build — log in with anything to land in John’s account.
         </p>
       )}
     </AuthShell>

@@ -4,6 +4,7 @@ import Button from '../../../components/ui/Button'
 import { Field, TextInput, TextArea, TagPicker, DayPicker } from '../../../components/partners/fields'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { can } from '../../../lib/partnerPlans'
+import RoleAccess from '../../../components/partners/RoleAccess'
 import * as partners from '../../../services/partners'
 import { DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
 
@@ -96,13 +97,19 @@ export default function Settings() {
 
   return (
     <>
-      <PageHead title="Settings" subtitle="Who to contact, and when Loose Leaf should consider you." />
+      <PageHead
+        title="Settings"
+        subtitle="Who on your team can reach what, who to contact, and when Loose Leaf should consider you."
+      />
 
       {error && (
         <p className="mb-6 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] text-coral-deep">
           {error}
         </p>
       )}
+
+      {/* who can see what */}
+      <RoleAccess className="mb-6" />
 
       {/* targeting */}
       <section className="rounded-card border border-rule bg-white px-6 py-6">

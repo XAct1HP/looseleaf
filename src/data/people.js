@@ -425,7 +425,7 @@ export const personById = (id) => PEOPLE.find((p) => p.id === id)
 /** The signed-in demo user. */
 export const CURRENT_USER = {
   id: 'me',
-  firstName: 'Javi',
+  firstName: 'John',
   age: 21,
   gender: 'man',
   pronouns: 'he/him',
@@ -435,7 +435,7 @@ export const CURRENT_USER = {
   area: 'Central Campus',
   orgs: ['Solar Car', 'Intramural soccer'],
   intention: 'relationship',
-  email: 'javi@umich.edu',
+  email: 'john@umich.edu',
   // Demo only. In live mode this comes from profiles.is_admin, which is false
   // unless you set it by hand. Flip to false if you'd rather the public demo
   // not show the Backstage section.

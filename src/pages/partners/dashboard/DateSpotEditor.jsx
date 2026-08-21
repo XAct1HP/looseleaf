@@ -12,6 +12,7 @@ import * as partners from '../../../services/partners'
 import * as media from '../../../services/live/partnerMedia'
 import { PARTNER_CATEGORIES, DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
 import { limit } from '../../../lib/partnerPlans'
+import { geocode } from '../../../lib/geocode'
 
 /**
  * Everything about how a business appears, with the card students see sitting
@@ -58,6 +59,11 @@ export default function DateSpotEditor() {
         vibes: s?.vibes ?? [],
         priceLevel: s?.price_level ?? loc?.price_level ?? null,
         addressLine: s?.address_line ?? loc?.address_line ?? '',
+        city: loc?.city ?? '',
+        region: loc?.region ?? '',
+        postalCode: loc?.postal_code ?? '',
+        latitude: loc?.latitude ?? s?.latitude ?? null,
+        longitude: loc?.longitude ?? s?.longitude ?? null,
         walkMinutes: s?.walk_minutes ?? loc?.walk_minutes ?? '',
         distanceMiles: s?.distance_miles ?? loc?.distance_miles ?? '',
         website: s?.website ?? '',
@@ -111,6 +117,8 @@ export default function DateSpotEditor() {
   }
 
   const preview = {
+    id: spot?.id ?? location?.id,
+    coverPath: form.coverPath,
     name: form.name || partner.name,
     kind: PARTNER_CATEGORIES.find((c) => c.id === form.category)?.label ?? 'Date spot',
     note: form.note,
@@ -129,12 +137,35 @@ export default function DateSpotEditor() {
     setBusy(true)
     setError(null)
     try {
+      // Look the address up once, and only when it has actually changed —
+      // it's what puts a map on the Date Spot. Best-effort: a null here just
+      // means the sheet shows an address and a Directions link instead.
+      let coords = { latitude: form.latitude, longitude: form.longitude }
+      const addressChanged =
+        form.addressLine.trim() !== (location.address_line ?? '') ||
+        form.city !== (location.city ?? '') ||
+        form.postalCode !== (location.postal_code ?? '')
+      if (addressChanged || coords.latitude == null) {
+        coords =
+          (await geocode({
+            addressLine: form.addressLine.trim(),
+            city: form.city,
+            region: form.region,
+            postalCode: form.postalCode,
+          })) ?? { latitude: null, longitude: null }
+      }
+
       await partners.updateLocation(location.id, {
         address_line: form.addressLine.trim() || location.address_line,
+        city: form.city || null,
+        region: form.region || null,
+        postal_code: form.postalCode || null,
         walk_minutes: form.walkMinutes ? Number(form.walkMinutes) : null,
         distance_miles: form.distanceMiles ? Number(form.distanceMiles) : null,
         price_level: form.priceLevel,
         phone: form.phone || null,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
       })
       await partners.saveSpot(location.id, {
         name: form.name.trim(),
@@ -146,6 +177,8 @@ export default function DateSpotEditor() {
         walk_minutes: form.walkMinutes ? Number(form.walkMinutes) : null,
         distance_miles: form.distanceMiles ? Number(form.distanceMiles) : null,
         address_line: form.addressLine || null,
+        latitude: coords.latitude,
+        longitude: coords.longitude,
         website: form.website || null,
         phone: form.phone || null,
         hours: form.hours,
@@ -369,9 +402,24 @@ export default function DateSpotEditor() {
           </Group>
 
           <Group title="Where and when">
-            <Field label="Address" htmlFor="s-addr">
+            <Field
+              label="Address"
+              hint="Used for the map and directions on your Date Spot."
+              htmlFor="s-addr"
+            >
               <TextInput id="s-addr" value={form.addressLine} onChange={(v) => set({ addressLine: v })} />
             </Field>
+            <div className="grid gap-5 sm:grid-cols-3">
+              <Field label="City" htmlFor="s-city">
+                <TextInput id="s-city" value={form.city} onChange={(v) => set({ city: v })} />
+              </Field>
+              <Field label="State" htmlFor="s-region">
+                <TextInput id="s-region" value={form.region} onChange={(v) => set({ region: v })} />
+              </Field>
+              <Field label="ZIP" htmlFor="s-zip">
+                <TextInput id="s-zip" value={form.postalCode} onChange={(v) => set({ postalCode: v })} />
+              </Field>
+            </div>
             <div className="grid gap-5 sm:grid-cols-2">
               <Field label="Walk from campus" hint="Minutes." htmlFor="s-walk">
                 <TextInput id="s-walk" inputMode="numeric" value={String(form.walkMinutes ?? '')} onChange={(v) => set({ walkMinutes: v.replace(/\D/g, '') })} />

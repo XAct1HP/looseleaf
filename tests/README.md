@@ -58,6 +58,22 @@ someone holding the id. Staff can look a pass up — the whole point of the role
 can't edit the Date Spot. The last owner can neither demote nor remove
 themselves; with a second owner in place, both work.
 
+**A role reaches exactly the pages it was given.** `partner_my_pages()` returns
+`{scan}` for staff and `{scan,team}` for a manager, and every page outside that
+list is checked twice — once as "the tab isn't there" and once as "the RPC
+raises anyway". Staff read zero rows from `partner_offers`, including their own
+employer's caps. A manager can invite staff and move people between staff and
+manager, but cannot invite an owner, promote themselves to one, or remove one.
+An owner granting `billing` takes effect immediately and revoking it takes
+effect too. `settings` cannot be granted **even by writing it straight into
+`partners.role_pages` by hand** — the assertion does exactly that and then
+checks the manager still can't reach it.
+
+**Students read offers through the view, never the table.** Zero rows from
+`partner_offers`, one from `public_offers`, and no column of the view whose
+name suggests a cap, a count, or an internal status — so a business's
+commercial limits stay the business's.
+
 **Commercial state actually gates visibility.** Paying without approval isn't
 live; approval without paying isn't live; a suspended partner stops being live
 immediately; and a `past_due` subscription drops the spot out of both

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import Logo from '../brand/Logo'
 import Button from '../ui/Button'
+import ForPartners from './ForPartners'
 
 /**
  * The frame around the public partner pages.
@@ -17,10 +18,7 @@ export default function PartnerShell({ children, cta = true }) {
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-5 py-4 sm:px-8">
           <Link to="/partners" className="focus-ring flex items-center gap-2.5 rounded-lg">
             <Logo size="md" />
-            <span className="hidden h-4 w-px bg-rule sm:block" />
-            <span className="hidden text-[13.5px] font-medium text-graphite sm:block">
-              for Partners
-            </span>
+            <ForPartners size="md" />
           </Link>
 
           <nav className="flex items-center gap-2">

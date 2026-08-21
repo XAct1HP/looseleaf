@@ -13,6 +13,11 @@ const stack = []
 /**
  * One overlay primitive: a centered sheet on desktop, a bottom sheet on
  * mobile. Used for notes, reporting, date planning, filters.
+ *
+ * The panel is capped below the viewport and scrolls *inside* itself. Without
+ * that, a tall sheet — a Date Spot with a cover photo, hours and a gallery —
+ * simply ran off the bottom of the screen with no way to reach the button at
+ * the end of it. `dvh` rather than `vh` because mobile browser chrome moves.
  */
 export default function Sheet({ open, onClose, title, subtitle, children, footer, maxWidth = 'max-w-md' }) {
   const token = useRef({})
@@ -53,11 +58,11 @@ export default function Sheet({ open, onClose, title, subtitle, children, footer
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`relative w-full ${maxWidth} animate-pop-in overflow-hidden rounded-t-sheet bg-paper shadow-lift sm:rounded-sheet`}
+        className={`relative flex max-h-[92dvh] w-full ${maxWidth} animate-pop-in flex-col overflow-hidden rounded-t-sheet bg-paper shadow-lift sm:max-h-[88dvh] sm:rounded-sheet`}
       >
-        <div className="mx-auto mt-3 h-1 w-10 rounded-full bg-navy/10 sm:hidden" />
+        <div className="mx-auto mt-3 h-1 w-10 shrink-0 rounded-full bg-navy/10 sm:hidden" />
         {(title || onClose) && (
-          <div className="flex items-start justify-between gap-3 px-6 pb-2 pt-5">
+          <div className="flex shrink-0 items-start justify-between gap-3 px-6 pb-2 pt-5">
             <div>
               {title && <h2 className="font-display text-[21px] font-semibold leading-tight">{title}</h2>}
               {subtitle && <p className="mt-1 text-[13.5px] text-graphite">{subtitle}</p>}
@@ -67,8 +72,10 @@ export default function Sheet({ open, onClose, title, subtitle, children, footer
             </IconButton>
           </div>
         )}
-        <div className="px-6 pb-5">{children}</div>
-        {footer && <div className="border-t border-rule bg-cream/60 px-6 py-4 pb-safe">{footer}</div>}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-5">{children}</div>
+        {footer && (
+          <div className="shrink-0 border-t border-rule bg-cream/60 px-6 py-4 pb-safe">{footer}</div>
+        )}
       </div>
     </div>,
     document.body

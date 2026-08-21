@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { SelectChip } from '../ui/Chip'
 import { IconPlus, IconX } from '../ui/Icons'
 
@@ -134,25 +134,64 @@ export function PricePicker({ value, onChange }) {
 /* ── photos ─────────────────────────────────────────────────────────────── */
 
 /**
- * One image slot. Upload happens immediately so a half-finished form never
- * loses a photo someone waited for.
+ * One image slot.
+ *
+ * The upload starts the moment a file is picked, but the preview does not wait
+ * for it: the browser already has the bytes, so it shows them straight away
+ * from an object URL and swaps to the uploaded copy when that arrives. Without
+ * this, the review step of onboarding showed an empty rectangle where somebody
+ * had just put their best photo of the room — the file existed, it simply
+ * hadn't finished its round trip.
  */
-export function PhotoSlot({ label, path, url, onPick, onClear, aspect = 'aspect-[3/2]', busy }) {
+export function PhotoSlot({ label, url, onPick, onClear, aspect = 'aspect-[3/2]', busy }) {
   const input = useRef(null)
+  const [local, setLocal] = useState(null)
+
+  // Revoke on unmount and whenever it's replaced, or every pick leaks a blob.
+  useEffect(() => () => local && URL.revokeObjectURL(local), [local])
+
+  // Once the real URL lands, let go of the local copy.
+  useEffect(() => {
+    if (url && local) {
+      URL.revokeObjectURL(local)
+      setLocal(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url])
+
+  const shown = url || local
 
   return (
     <div>
-      <p className="label">{label}</p>
+      {label && <p className="label">{label}</p>}
       <div
         className={`relative overflow-hidden rounded-2xl border border-dashed border-navy/20 bg-cream/60 ${aspect}`}
       >
-        {url ? (
+        {shown ? (
           <>
-            <img src={url} alt="" className="h-full w-full object-cover" />
+            <img
+              src={shown}
+              alt=""
+              decoding="async"
+              className={`h-full w-full object-cover transition-opacity ${
+                local && !url ? 'opacity-70' : 'opacity-100'
+              }`}
+            />
+            {busy && (
+              <span className="absolute inset-x-0 bottom-0 bg-navy/70 py-1 text-center text-[11px] font-medium text-paper">
+                Uploading…
+              </span>
+            )}
             <button
               type="button"
-              onClick={onClear}
-              aria-label={`Remove ${label}`}
+              onClick={() => {
+                if (local) {
+                  URL.revokeObjectURL(local)
+                  setLocal(null)
+                }
+                onClear()
+              }}
+              aria-label={`Remove ${label || 'photo'}`}
               className="press absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-graphite shadow-paper hover:text-navy"
             >
               <IconX size={15} />
@@ -173,15 +212,20 @@ export function PhotoSlot({ label, path, url, onPick, onClear, aspect = 'aspect-
       <input
         ref={input}
         type="file"
-        accept="image/*"
+        /* HEIC spelled out as well as image/*: iOS reports an original photo
+           from Files as image/heic, and some Android pickers send an empty
+           type for it, which a bare image/* filter then hides. */
+        accept="image/*,.heic,.heif,image/heic,image/heif"
         className="sr-only"
         onChange={(e) => {
           const file = e.target.files?.[0]
           e.target.value = ''
-          if (file) onPick(file)
+          if (!file) return
+          if (local) URL.revokeObjectURL(local)
+          setLocal(URL.createObjectURL(file))
+          onPick(file)
         }}
       />
-      {path && <p className="sr-only">{path}</p>}
     </div>
   )
 }

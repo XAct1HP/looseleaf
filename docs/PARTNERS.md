@@ -53,6 +53,7 @@ supabase db push
 #   20260820120000_partners.sql            schema, RLS, storage bucket
 #   20260820130000_partner_functions.sql   the callable surface
 #   20260821120000_partner_team.sql        invitations and roles
+#   20260822120000_partner_permissions.sql per-page capabilities, coordinates
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -185,6 +186,83 @@ whose name suggests a person.
 psql "$DATABASE_URL" -f tests/partners_test.sql
 ```
 
+## What a student is allowed to read about an offer
+
+RLS is row-level, and an offer row is not uniformly public. `partner_offers`
+carries the deal *and* the commercial terms behind it — `max_redemptions`,
+`max_redemptions_per_month`, `redeemed_count`, internal notes, status. A policy
+that lets a student see the row lets them see all of that, which is a
+business's private information handed to its customers.
+
+So students never touch the table. They read a view:
+
+```sql
+select * from public_offers;   -- title, summary, days, hours. Nothing else.
+```
+
+`public_offers` hand-writes its select list, filters to `status = 'active'` on
+a partner that is `partner_is_live()` and still entitled to offers, and is the
+only offer surface granted to `authenticated`. The table's own select policy is
+now `partner_can(partner_id, 'offers')` — the people who manage them, and
+nobody else. The suite asserts both halves: a student reads **zero** rows from
+`partner_offers` and exactly one from `public_offers`, and no column of the
+view matches `/cap|max|count|internal|status/`.
+
+Staff fall on the same side of that line as students, which is the point. A
+member of waiting staff scanning passes has no reason to know how many of them
+the business will honour this month.
+
+## Photos, and why they appear immediately
+
+Three separate problems, three fixes, all in `services/live/partnerMedia.js`
+and `components/dates/SpotImage.jsx`:
+
+**HEIC.** An iPhone hands over HEIC whenever a photo is picked from Files
+rather than Photos, and Chrome and Firefox cannot decode it at all — upload one
+and it is a broken image for everyone but the person who uploaded it. Uploads
+detect it by MIME type *and* extension and convert to JPEG through a WebAssembly
+libheif build, which is dynamically imported at the moment somebody picks one,
+so nobody downloads three megabytes to upload a normal JPEG.
+
+**Orientation and size.** Everything is decoded with
+`createImageBitmap(file, { imageOrientation: 'from-image' })` — EXIF rotation
+baked into the pixels, because a `<img>` in a grid will not honour it — then
+drawn down to a target edge (512 for a logo, 1800 for a cover, 1400 for a
+gallery shot) and re-encoded as JPEG at 0.82. A twelve-megapixel phone photo
+lands as a few hundred kilobytes, which is most of the reason the old ones felt
+slow. Logos with real transparency stay PNG; everything else is flattened onto
+the paper colour.
+
+**The wait.** Uploads set `cacheControl: '31536000'` so a cover is fetched once
+ever. The Date Spots page calls `preload()` with every cover as soon as the
+list arrives, so they are in cache before anybody has finished reading the
+filter chips, and the first four cards render `eager` with
+`fetchPriority="high"`. `SpotImage` always paints a box at the final aspect
+ratio, tinted from the spot's own id, so the layout is final on first paint and
+nothing reflows when the bytes land. A spot with no photo keeps that box
+permanently, which beats a broken-image icon.
+
+The upload field shows the *local* file as a preview from the moment it is
+picked — `URL.createObjectURL`, swapped for the stored URL when the upload
+finishes and revoked after. Onboarding used to show an empty frame for as long
+as the upload took, which read as a failure.
+
+## The map
+
+A partner's address is geocoded once, when they save it, through Nominatim —
+no key, no account — and `latitude`/`longitude` are stored on
+`partner_locations` and `date_spots`. The Date Spot sheet embeds it as an
+OpenStreetMap iframe: one lazily-loaded frame, no script, no key. If geocoding
+failed the map is left out and the address carries the section on its own.
+
+**Directions** deliberately leaves Looseleaf, as a `maps/dir/?api=1` link built
+from the *address* rather than the coordinates, so it works whether or not
+geocoding ever succeeded and opens the native app on a phone.
+
+The only location involved anywhere here is the business's. Looseleaf still
+stores nothing about where the person reading the sheet is standing — see
+below.
+
 ## Distance, and why it's from campus
 
 Looseleaf stores no user location — no coordinates, no addresses, no last-seen.
@@ -212,27 +290,55 @@ so any invoice can be reconciled against what they were told.
 
 ## Who can do what
 
-`partner_members` carries a role, and the split is drawn around what each one
-could break rather than around seniority:
+A role is not a rank. `partner_members` carries one, but what a role *reaches*
+is a list of pages the owner controls, held in `partners.role_pages`:
 
-| | Scan a pass | Date Spot, offers, targeting | Billing and the team |
-| --- | --- | --- | --- |
-| **Staff** | ✓ | | |
-| **Manager** | ✓ | ✓ | |
-| **Owner** | ✓ | ✓ | ✓ |
+```json
+{ "manager": ["scan", "team"], "staff": ["scan"] }
+```
 
-Enforced in the database, not the nav: everything editable checks
-`is_partner_admin()` (owner or manager), everything financial checks
-`is_partner_owner()`, and redemption only needs `is_partner_member()` — which
-is the entire reason the staff role exists. The dashboard hides tabs a role
-can't use, but hiding a tab is not the control.
+Those are the defaults every new business starts with. A member of waiting
+staff who signs in sees one screen — the scanner — with no navigation around
+it at all, because there is nowhere else they can go. A manager sees the
+scanner and the team. Everything else is off until an owner turns it on in
+**Settings → What your team can see**, one page at a time, and it can be turned
+off again the same way.
 
-People are added by email from **Team**. An invitation grants nothing on its
-own: `accept_partner_invite()` re-checks the address against the JWT of
-whoever is actually signed in, so forwarding the email passes nothing on. A
-business always keeps at least one owner — the last one can't demote or remove
-themselves until somebody else is promoted, and the button isn't shown rather
-than shown-and-refused.
+Two things are not negotiable and are not in the grid:
+
+* **`scan` cannot be revoked.** It is the whole job. Taking it away would leave
+  somebody signed in to nothing.
+* **`settings` can never be granted.** It is the page that edits the grid, so
+  granting it would let a manager grant themselves the rest. `partner_can()`
+  returns false for it before it ever looks at the column, and
+  `set_partner_role_pages()` filters it out of anything written there — so
+  writing `{"manager": ["settings"]}` straight into the table by hand still
+  gets a manager nothing.
+
+Every check is one function:
+
+```sql
+partner_can(partner_id, 'billing')   -- role → role_pages → yes or no
+```
+
+Owners short-circuit to true. `is_partner_admin(p)` is now defined as
+`partner_can(p, 'spot')`, so the policies that were written against it keep
+meaning what they meant, and the RPCs — `partner_overview`, `partner_funnel`,
+`save_date_spot`, the billing calls — each name the page they need. The
+dashboard hides tabs a role can't use and bounces a typed URL back to the first
+page it can, but neither of those is the control: the control is that the
+database refuses.
+
+People are added by email from **Team**, which managers can now do — they are
+the ones actually hiring at a restaurant. A manager can add and remove staff
+and other managers; they cannot add an owner, promote anyone to owner, or
+remove one, and that is enforced in `invite_partner_member()`,
+`set_partner_member_role()` and `remove_partner_member()` rather than in the
+dropdown. An invitation grants nothing on its own: `accept_partner_invite()`
+re-checks the address against the JWT of whoever is actually signed in, so
+forwarding the email passes nothing on. A business always keeps at least one
+owner — the last one can't demote or remove themselves until somebody else is
+promoted, and the button isn't shown rather than shown-and-refused.
 
 Somebody who was invited never sees the "describe your restaurant" flow; they
 land on an accept screen instead, because they don't own one.
@@ -281,7 +387,9 @@ storage policy calls `is_partner_admin()` on that first path segment.
 | `/partners/join`, `/partners/login` | business owners |
 | `/partners/onboarding` | a partner without a business yet |
 | `/partners/dashboard/…` | partner members |
-| `/partners/dashboard/team` | partner owners add and remove people |
+| `/partners/dashboard/scan` | every partner member, including staff |
+| `/partners/dashboard/team` | owners, and managers, who can't touch owners |
+| `/partners/dashboard/settings` | owners only, and never grantable |
 | `/app/campus/spots` | students — Date Spots |
 | `/app/passes` | students — their Date Passes |
 | `/app/backstage/partners` | Looseleaf staff |

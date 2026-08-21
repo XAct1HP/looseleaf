@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
 import Sheet from '../../../components/ui/Sheet'
@@ -15,9 +16,15 @@ import * as partners from '../../../services/partners'
  * scanning a Date Pass, so the roles are drawn around what each one could
  * break rather than around seniority:
  *
- *   Owner    billing, the team, everything below. Usually one person.
- *   Manager  the Date Spot, the offers, the targeting. Not the card.
- *   Staff    scan a pass and see that it worked. Nothing else.
+ *   Owner    everything, plus this page and the grid in Settings that decides
+ *            what the other two can reach.
+ *   Manager  the scanner and the team. They hire and lose people weekly and
+ *            the owner shouldn't be the bottleneck — but they cannot make an
+ *            owner, who could then remove them.
+ *   Staff    the scanner. That's the job.
+ *
+ * Managers and staff can be handed more from Settings → What your team can
+ * reach; the defaults above are just where everyone starts.
  *
  * Giving a new starter a scanning login should be a thirty-second job on a
  * phone, so the invite form is three fields and no confirmation step.
@@ -27,34 +34,47 @@ const ROLES = [
   {
     id: 'staff',
     label: 'Staff',
-    blurb: 'Scan Date Passes. Can’t change anything.',
+    blurb: 'Scan Date Passes. That’s the whole login.',
   },
   {
     id: 'manager',
     label: 'Manager',
-    blurb: 'Everything except billing and the team.',
+    blurb: 'Scan passes, and add or remove staff.',
   },
   {
     id: 'owner',
     label: 'Owner',
-    blurb: 'Billing and the team too.',
+    blurb: 'Everything, including billing and this page.',
   },
 ]
 
 const roleLabel = (id) => ROLES.find((r) => r.id === id)?.label ?? id
 
 /**
+ * A manager runs the floor, so they hire and lose staff — but they cannot mint
+ * an owner, who could then remove them or change the card on file. The
+ * database enforces this; the picker just doesn't offer what would be refused.
+ */
+const assignableBy = (myRole) => (myRole === 'owner' ? ROLES : ROLES.filter((r) => r.id !== 'owner'))
+
+/**
  * The database refuses to remove the last owner. Hiding the button rather than
  * letting somebody press it and read an error is the difference between a rule
  * and a trap.
  */
-function canRemove(member, isOwner, members) {
-  if (!isOwner && !member.isYou) return false
-  if (member.role !== 'owner') return true
-  return members.filter((m) => m.role === 'owner').length > 1
+function canRemove(member, myRole, members) {
+  if (member.isYou) {
+    // Leaving is always allowed, unless you're the last owner.
+    return member.role !== 'owner' || members.filter((m) => m.role === 'owner').length > 1
+  }
+  if (myRole !== 'owner' && myRole !== 'manager') return false
+  if (member.role === 'owner') {
+    return myRole === 'owner' && members.filter((m) => m.role === 'owner').length > 1
+  }
+  return true
 }
 
-function RoleControl({ member, editable, busy, onChange }) {
+function RoleControl({ member, editable, myRole, busy, onChange }) {
   if (!editable) {
     return (
       <Chip tone={member.role === 'owner' ? 'navy' : 'cream'} className="!px-2.5 !py-1 !text-[11.5px]">
@@ -70,7 +90,7 @@ function RoleControl({ member, editable, busy, onChange }) {
       aria-label={`Role for ${member.name}`}
       className="rounded-xl border border-rule bg-white px-3 py-1.5 text-[13px] text-navy focus:outline-none"
     >
-      {ROLES.map((r) => (
+      {assignableBy(myRole).map((r) => (
         <option key={r.id} value={r.id}>
           {r.label}
         </option>
@@ -109,7 +129,10 @@ export default function Team() {
   const [error, setError] = useState(null)
   const [sent, setSent] = useState(null)
 
-  const isOwner = members.find((m) => m.isYou)?.role === 'owner'
+  const myRole = members.find((m) => m.isYou)?.role ?? partner?.role ?? 'staff'
+  const isOwner = myRole === 'owner'
+  // Managers hire too — the whole point of handing them the team page.
+  const canManage = isOwner || myRole === 'manager'
 
   const load = useCallback(async () => {
     if (!partner) return
@@ -151,7 +174,7 @@ export default function Team() {
         title="Team"
         subtitle="Everyone who can act for this business, and what each of them can reach."
         action={
-          isOwner && (
+          canManage && (
             <Button variant="coral" size="md" onClick={() => setInviting(true)}>
               Add someone
             </Button>
@@ -199,14 +222,15 @@ export default function Team() {
                   <div className="hidden shrink-0 items-center gap-3 sm:flex">
                     <RoleControl
                       member={m}
-                      editable={isOwner && !m.isYou}
+                      editable={canManage && !m.isYou && (isOwner || m.role !== 'owner')}
+                      myRole={myRole}
                       busy={busy === m.id}
                       onChange={(role) => act(m.id, () => partners.setMemberRole(partner.id, m.id, role))}
                     />
                     <RemoveButton
                       member={m}
                       partner={partner}
-                      canRemove={canRemove(m, isOwner, members)}
+                      canRemove={canRemove(m, myRole, members)}
                       busy={busy === m.id}
                       onRemove={() => act(m.id, () => partners.removeMember(partner.id, m.id))}
                     />
@@ -216,14 +240,15 @@ export default function Team() {
                 <div className="mt-3 flex items-center gap-3 pl-[54px] sm:hidden">
                   <RoleControl
                     member={m}
-                    editable={isOwner && !m.isYou}
+                    editable={canManage && !m.isYou && (isOwner || m.role !== 'owner')}
+                    myRole={myRole}
                     busy={busy === m.id}
                     onChange={(role) => act(m.id, () => partners.setMemberRole(partner.id, m.id, role))}
                   />
                   <RemoveButton
                     member={m}
                     partner={partner}
-                    canRemove={canRemove(m, isOwner, members)}
+                    canRemove={canRemove(m, myRole, members)}
                     busy={busy === m.id}
                     onRemove={() => act(m.id, () => partners.removeMember(partner.id, m.id))}
                   />
@@ -254,7 +279,7 @@ export default function Team() {
                       <span className="hidden shrink-0 text-[12px] text-mist sm:inline">
                         expires {new Date(i.expiresAt).toLocaleDateString()}
                       </span>
-                      {isOwner && (
+                      {canManage && (
                         <button
                           type="button"
                           disabled={busy === i.id}
@@ -281,16 +306,30 @@ export default function Team() {
           What a staff login can see.
         </h2>
         <p className="mt-2 max-w-[62ch] text-[13.5px] leading-relaxed text-graphite">
-          A scanner can check a code, confirm a redemption, and see that it worked. Not your
-          billing, not your analytics, and — like every partner login, including yours — nothing at
-          all about the people on the date.
+          A scanner and nothing else: check a code, confirm a redemption, see that it worked. Not
+          your billing, not your analytics, not your offers — and, like every partner login
+          including yours, nothing at all about the people on the date.
         </p>
+        {isOwner && (
+          <p className="mt-3 max-w-[62ch] text-[13px] leading-relaxed text-mist">
+            Want a manager handling the subscription, or staff seeing the day's redemptions? Hand
+            those pages over in{' '}
+            <Link
+              to="/partners/dashboard/settings"
+              className="font-medium text-graphite underline underline-offset-2 hover:text-navy"
+            >
+              Settings
+            </Link>
+            .
+          </p>
+        )}
       </section>
 
       <InviteSheet
         open={inviting}
         partnerName={partner?.name}
         onClose={() => setInviting(false)}
+        myRole={myRole}
         onInvite={async (email, role) => {
           await partners.invite(partner.id, email, role)
           setSent(email)
@@ -302,7 +341,7 @@ export default function Team() {
   )
 }
 
-function InviteSheet({ open, partnerName, onClose, onInvite }) {
+function InviteSheet({ open, partnerName, myRole, onClose, onInvite }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('staff')
   const [busy, setBusy] = useState(false)
@@ -340,7 +379,7 @@ function InviteSheet({ open, partnerName, onClose, onInvite }) {
         <div>
           <span className="label">What can they do?</span>
           <div className="space-y-2">
-            {ROLES.map((r) => (
+            {assignableBy(myRole).map((r) => (
               <button
                 key={r.id}
                 type="button"

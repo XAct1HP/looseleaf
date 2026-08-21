@@ -19,8 +19,9 @@ function bail(error) {
 
 const SPOT_COLUMNS = `
   id, name, kind, note, tags, date_types, vibes, price_level, walk_minutes,
-  distance_miles, address_line, website, phone, hours, cover_path, logo_path,
-  gallery_paths, indoor_outdoor, reservations, min_age, partner_id
+  distance_miles, latitude, longitude, address_line, website, phone, hours,
+  cover_path, logo_path, gallery_paths, indoor_outdoor, reservations, min_age,
+  partner_id
 `
 
 function shapeSpot(row) {
@@ -35,6 +36,8 @@ function shapeSpot(row) {
     priceLevel: row.price_level,
     walkMinutes: row.walk_minutes,
     distanceMiles: row.distance_miles,
+    latitude: row.latitude,
+    longitude: row.longitude,
     addressLine: row.address_line,
     website: row.website,
     phone: row.phone,
@@ -61,15 +64,18 @@ export async function spots() {
 }
 
 /**
- * The live offers attached to the spots on this campus, keyed by partner. Read
- * straight from `partner_offers`, whose select policy only exposes an offer
- * that is active, from a live partner, on a plan that includes offers.
+ * The live offers attached to the spots on this campus, keyed by partner.
+ *
+ * Read from the `public_offers` view rather than the table. The table itself
+ * is private to the people who manage it — row-level security can say "you may
+ * see this offer" but not "you may see this offer except its monthly cap", and
+ * a restaurant's limits are its own business. The view is the hand-written
+ * list of what a student is meant to see.
  */
 export async function offersByPartner() {
   const { data, error } = await supabase
-    .from('partner_offers')
+    .from('public_offers')
     .select('id, partner_id, title, offer_type, percent_off, amount_off_cents, min_spend_cents, free_item, description, terms, days_of_week, start_time, end_time')
-    .eq('status', 'active')
   bail(error)
 
   const map = {}
@@ -140,6 +146,10 @@ export async function recommend({
   })
   bail(error)
 
+  // Deliberately narrower than `spots()`. The recommender returns what a card
+  // needs to be chosen from — a sheet's worth of hours, gallery and
+  // coordinates isn't in its select list, and mapping fields it never sends
+  // would invent a shape that's undefined at runtime.
   return (data ?? []).map((r) => ({
     id: r.spot_id,
     name: r.name,
