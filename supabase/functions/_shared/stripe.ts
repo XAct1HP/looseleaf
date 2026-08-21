@@ -81,16 +81,41 @@ export async function requirePartnerRole(
   return { userId: userData.user.id }
 }
 
-/** A redirect target we minted, not one a caller handed us. */
-export function safeReturnTo(value: unknown, fallback: string) {
-  if (typeof value !== 'string' || !value) return fallback
-  const allowed = (Deno.env.get('PARTNER_SITE_URL') ?? '').replace(/\/$/, '')
+/**
+ * Where Stripe is allowed to send somebody back to.
+ *
+ * An open redirect on a billing flow is worth avoiding, so the origin has to
+ * be one we listed. `PARTNER_SITE_URL` takes a comma-separated list rather
+ * than a single value — otherwise testing a checkout from `localhost:5173`
+ * silently lands the developer on production, which looks exactly like a bug
+ * in the webhook and is not.
+ *
+ *   PARTNER_SITE_URL=https://hellolooseleaf.com,http://localhost:5173
+ *
+ * The first entry is the fallback, so production stays the default.
+ */
+export function allowedOrigins(): string[] {
+  return (Deno.env.get('PARTNER_SITE_URL') ?? '')
+    .split(',')
+    .map((s) => s.trim().replace(/\/+$/, ''))
+    .filter(Boolean)
+}
+
+export function defaultReturnTo(): string {
+  return allowedOrigins()[0] ?? ''
+}
+
+export function safeReturnTo(value: unknown, fallback?: string) {
+  const allowed = allowedOrigins()
+  const home = fallback || defaultReturnTo()
+
+  if (typeof value !== 'string' || !value) return home
   try {
     const url = new URL(value)
-    if (allowed && url.origin !== allowed) return fallback
-    if (!allowed && !['http:', 'https:'].includes(url.protocol)) return fallback
+    if (!['http:', 'https:'].includes(url.protocol)) return home
+    if (allowed.length && !allowed.includes(url.origin)) return home
     return url.toString()
   } catch {
-    return fallback
+    return home
   }
 }

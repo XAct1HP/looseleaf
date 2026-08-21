@@ -3,7 +3,8 @@ import BackstageHeader from './BackstageHeader'
 import StatTile from '../../components/backstage/StatTile'
 import Button from '../../components/ui/Button'
 import { Chip } from '../../components/ui/Chip'
-import { IconPin, IconLink } from '../../components/ui/Icons'
+import { IconPin, IconLink, IconSpark } from '../../components/ui/Icons'
+import { daysText } from '../../data/partnerCatalog'
 import { money } from '../../lib/partnerPlans'
 import * as partners from '../../services/partners'
 
@@ -35,6 +36,7 @@ export default function Partners() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
+  const [openOffers, setOpenOffers] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -168,7 +170,13 @@ export default function Partners() {
 
                   <p className="mt-1.5 text-[13px] text-mist">
                     {p.category} · {p.locations} location{p.locations === 1 ? '' : 's'} ·{' '}
-                    {p.active_offers} active offer{p.active_offers === 1 ? '' : 's'}
+                    <button
+                      type="button"
+                      onClick={() => setOpenOffers(openOffers === p.id ? null : p.id)}
+                      className="focus-ring rounded underline underline-offset-2 hover:text-graphite"
+                    >
+                      {p.active_offers} active offer{p.active_offers === 1 ? '' : 's'}
+                    </button>
                   </p>
 
                   {p.description && (
@@ -218,6 +226,8 @@ export default function Partners() {
                   )}
                 </div>
               </div>
+
+              {openOffers === p.id && <OfferModeration partnerId={p.id} onChange={load} />}
             </li>
           ))}
         </ul>
@@ -248,6 +258,116 @@ export default function Partners() {
       </section>
     </>
   )
+}
+
+/**
+ * A partner's offers, and the one button staff need: stop this one.
+ *
+ * Pausing rather than deleting, deliberately — an offer taken down for review
+ * is a conversation with a business, and deleting their work mid-conversation
+ * makes that conversation much worse. The partner sees it paused in their own
+ * dashboard and can ask why.
+ */
+function OfferModeration({ partnerId, onChange }) {
+  const [offers, setOffers] = useState(null)
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+
+  const load = useCallback(() => {
+    partners
+      .staffOffers(partnerId)
+      .then(setOffers)
+      .catch((e) => setError(e.message))
+  }, [partnerId])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  async function setStatus(offer, status) {
+    setBusy(offer.id)
+    setError(null)
+    try {
+      await partners.staffSetOfferStatus(offer.id, status)
+      load()
+      onChange?.()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  if (offers === null) {
+    return <p className="mt-4 border-t border-rule pt-4 text-[13px] text-mist">Loading offers…</p>
+  }
+
+  return (
+    <div className="mt-4 border-t border-rule pt-4">
+      {error && <p className="mb-3 text-[13px] text-coral-deep">{error}</p>}
+
+      {!offers.length ? (
+        <p className="text-[13.5px] text-mist">No offers on this account.</p>
+      ) : (
+        <ul className="space-y-2">
+          {offers.map((o) => (
+            <li
+              key={o.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-rule bg-cream/40 px-4 py-3"
+            >
+              <IconSpark size={16} className="shrink-0 text-margin" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14.5px] font-medium text-navy">
+                  {o.title}
+                  <span className="ml-2 font-normal text-graphite">{offerSummary(o)}</span>
+                </p>
+                <p className="mt-0.5 text-[12px] text-mist">
+                  {daysText(o.days_of_week)}
+                  {o.terms ? ` · ${o.terms}` : ''}
+                </p>
+              </div>
+
+              <Chip
+                tone={o.status === 'active' ? 'moss' : o.status === 'paused' ? 'coral' : 'cream'}
+                className="!px-2.5 !py-1 !text-[11.5px] capitalize"
+              >
+                {o.status}
+              </Chip>
+
+              {o.status === 'active' ? (
+                <Button size="sm" variant="danger" disabled={busy === o.id} onClick={() => setStatus(o, 'paused')}>
+                  Take it down
+                </Button>
+              ) : o.status === 'paused' ? (
+                <Button size="sm" variant="outline" disabled={busy === o.id} onClick={() => setStatus(o, 'active')}>
+                  Allow again
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** Mirrors the phrasing students and partners see, so all three agree. */
+function offerSummary(o) {
+  const d = (c) => `$${((c ?? 0) / 100).toFixed(0)}`
+  switch (o.offer_type) {
+    case 'percent_off':
+      return `${o.percent_off}% off`
+    case 'amount_off':
+      return `${d(o.amount_off_cents)} off`
+    case 'free_item':
+      return `Free ${o.free_item || 'treat'}`
+    case 'bogo':
+      return 'Buy one, get one'
+    case 'spend_threshold':
+      return `${d(o.amount_off_cents)} off ${d(o.min_spend_cents)}+`
+    default:
+      return o.description || ''
+  }
 }
 
 function statusTone(status) {

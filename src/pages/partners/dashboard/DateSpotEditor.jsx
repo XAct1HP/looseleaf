@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
+import Sheet from '../../../components/ui/Sheet'
 import DateSpotCard from '../../../components/dates/DateSpotCard'
 import {
   Field, TextInput, Select, TagPicker, PricePicker, PhotoSlot, HoursEditor,
 } from '../../../components/partners/fields'
+import { IconPlus, IconBack, IconChevron } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import * as partners from '../../../services/partners'
 import * as media from '../../../services/live/partnerMedia'
@@ -16,59 +18,90 @@ import { limit } from '../../../lib/partnerPlans'
  * beside the form and updating as you type. The preview isn't decoration: the
  * date-type tags are the single biggest thing a partner controls, and seeing
  * the card change is what makes that legible.
+ *
+ * One business, many locations — a chain with three cafes gets three Date
+ * Spots, each with its own address, hours, and walk from campus, because "0.8
+ * miles away" is a per-address fact and a shared one would be a lie about two
+ * of them. The switcher only appears when there is something to switch
+ * between, so a single-site restaurant never sees it.
  */
 export default function DateSpotEditor() {
   const { partner, entitlements, refresh } = usePartnerAccount()
 
-  const [location, setLocation] = useState(null)
+  const [locations, setLocations] = useState([])
+  const [activeId, setActiveId] = useState(null)
   const [spot, setSpot] = useState(null)
   const [form, setForm] = useState(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(null)
   const [saved, setSaved] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [error, setError] = useState(null)
+
+  const location = locations.find((l) => l.id === activeId) ?? null
+  const maxLocations = limit(entitlements, 'max_locations', 1)
+
+  /** Loads one location's card into the form. */
+  const open = useCallback(
+    async (loc) => {
+      if (!loc) return
+      setForm(null)
+      setActiveId(loc.id)
+      const s = await partners.spotForLocation(loc.id).catch(() => null)
+      setSpot(s)
+      setSaved(false)
+      setForm({
+        name: s?.name ?? partner.name,
+        category: partner.category,
+        note: s?.note ?? '',
+        dateTypes: s?.date_types ?? [],
+        vibes: s?.vibes ?? [],
+        priceLevel: s?.price_level ?? loc?.price_level ?? null,
+        addressLine: s?.address_line ?? loc?.address_line ?? '',
+        walkMinutes: s?.walk_minutes ?? loc?.walk_minutes ?? '',
+        distanceMiles: s?.distance_miles ?? loc?.distance_miles ?? '',
+        website: s?.website ?? '',
+        phone: s?.phone ?? loc?.phone ?? '',
+        hours: s?.hours ?? {},
+        logoPath: s?.logo_path ?? null,
+        coverPath: s?.cover_path ?? null,
+        galleryPaths: s?.gallery_paths ?? [],
+        indoorOutdoor: s?.indoor_outdoor ?? '',
+        reservations: s?.reservations ?? '',
+        minAge: s?.min_age ?? '',
+        isPublished: s?.is_published ?? true,
+      })
+    },
+    [partner]
+  )
 
   useEffect(() => {
     if (!partner) return
     let live = true
-    ;(async () => {
-      try {
-        const locs = await partners.locations(partner.id)
-        const loc = locs[0] ?? null
-        const s = loc ? await partners.spotForLocation(loc.id) : null
+    partners
+      .locations(partner.id)
+      .then((locs) => {
         if (!live) return
-        setLocation(loc)
-        setSpot(s)
-        setForm({
-          name: s?.name ?? partner.name,
-          category: partner.category,
-          note: s?.note ?? '',
-          description: '',
-          dateTypes: s?.date_types ?? [],
-          vibes: s?.vibes ?? [],
-          priceLevel: s?.price_level ?? loc?.price_level ?? null,
-          addressLine: s?.address_line ?? loc?.address_line ?? '',
-          walkMinutes: s?.walk_minutes ?? loc?.walk_minutes ?? '',
-          distanceMiles: s?.distance_miles ?? loc?.distance_miles ?? '',
-          website: s?.website ?? '',
-          phone: s?.phone ?? loc?.phone ?? '',
-          hours: s?.hours ?? {},
-          logoPath: s?.logo_path ?? null,
-          coverPath: s?.cover_path ?? null,
-          galleryPaths: s?.gallery_paths ?? [],
-          indoorOutdoor: s?.indoor_outdoor ?? '',
-          reservations: s?.reservations ?? '',
-          minAge: s?.min_age ?? '',
-          isPublished: s?.is_published ?? true,
-        })
-      } catch (e) {
-        if (live) setError(e.message)
-      }
-    })()
+        setLocations(locs)
+        open(locs[0] ?? null)
+      })
+      .catch((e) => live && setError(e.message))
     return () => {
       live = false
     }
-  }, [partner])
+  }, [partner, open])
+
+  async function addLocation(row) {
+    const id = await partners.addLocation(partner.id, {
+      ...row,
+      university_id: location?.university_id ?? (await firstCampusId()),
+      is_primary: locations.length === 0,
+    })
+    const locs = await partners.locations(partner.id)
+    setLocations(locs)
+    setAdding(false)
+    await open(locs.find((l) => l.id === id) ?? locs[0])
+  }
 
   if (!form) return <p className="py-12 text-center text-[14px] text-mist">Loading…</p>
 
@@ -124,10 +157,18 @@ export default function DateSpotEditor() {
         min_age: form.minAge ? Number(form.minAge) : null,
         is_published: form.isPublished,
       })
-      if (form.category !== partner.category || form.name.trim() !== partner.name) {
-        await partners.update(partner.id, { name: form.name.trim(), category: form.category })
+      // With one location, renaming the card renames the business — that's
+      // what a partner means by it. With several, "Lantern Room — Kerrytown"
+      // is a card title and emphatically not the company's new name.
+      const single = locations.length <= 1
+      if (form.category !== partner.category || (single && form.name.trim() !== partner.name)) {
+        await partners.update(partner.id, {
+          ...(single ? { name: form.name.trim() } : {}),
+          category: form.category,
+        })
         await refresh()
       }
+      setLocations(await partners.locations(partner.id))
       setSaved(true)
     } catch (e) {
       setError(e.message)
@@ -167,6 +208,48 @@ export default function DateSpotEditor() {
         <p className="mb-6 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] text-coral-deep">
           {error}
         </p>
+      )}
+
+      {/* Only shown once there is something to switch between. */}
+      {(locations.length > 1 || maxLocations > 1) && (
+        <nav className="hide-scrollbar mb-6 flex gap-2 overflow-x-auto border-b border-rule pb-3">
+          {locations.map((l) => (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => open(l)}
+              className={`press focus-ring shrink-0 rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition ${
+                l.id === activeId
+                  ? 'border-navy bg-navy text-paper'
+                  : 'border-rule bg-white text-graphite hover:border-navy/25'
+              }`}
+            >
+              {l.label || l.address_line}
+              {l.is_primary && locations.length > 1 && (
+                <span className={`ml-1.5 text-[10.5px] ${l.id === activeId ? 'text-paper/60' : 'text-mist'}`}>
+                  main
+                </span>
+              )}
+            </button>
+          ))}
+
+          {locations.length < maxLocations ? (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="press focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border border-dashed border-navy/25 px-3.5 py-1.5 text-[13px] font-medium text-graphite transition hover:border-navy/40 hover:text-navy"
+            >
+              <IconPlus size={14} />
+              Add a location
+            </button>
+          ) : (
+            locations.length > 1 && (
+              <span className="shrink-0 self-center px-2 text-[12px] text-mist">
+                {maxLocations} of {maxLocations} on this plan
+              </span>
+            )
+          )}
+        </nav>
       )}
 
       <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
@@ -227,16 +310,47 @@ export default function DateSpotEditor() {
                 </span>
               </p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {form.galleryPaths.map((p) => (
-                  <PhotoSlot
-                    key={p}
-                    label=""
-                    aspect="aspect-square"
-                    path={p}
-                    url={media.publicUrl(p)}
-                    onPick={() => {}}
-                    onClear={() => set({ galleryPaths: form.galleryPaths.filter((x) => x !== p) })}
-                  />
+                {form.galleryPaths.map((p, i) => (
+                  <div key={p} className="relative">
+                    <PhotoSlot
+                      label=""
+                      aspect="aspect-square"
+                      path={p}
+                      url={media.publicUrl(p)}
+                      onPick={() => {}}
+                      onClear={() => set({ galleryPaths: form.galleryPaths.filter((x) => x !== p) })}
+                    />
+                    {/* Arrows rather than drag-and-drop: this gets used on a
+                        phone behind a counter, where dragging a thumbnail
+                        inside a scrolling page is a fight. */}
+                    {form.galleryPaths.length > 1 && (
+                      <div className="absolute bottom-2 left-2 flex gap-1">
+                        <button
+                          type="button"
+                          disabled={i === 0}
+                          aria-label="Move earlier"
+                          onClick={() => set({ galleryPaths: move(form.galleryPaths, i, i - 1) })}
+                          className="press flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-graphite shadow-paper transition disabled:opacity-30 hover:text-navy"
+                        >
+                          <IconBack size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={i === form.galleryPaths.length - 1}
+                          aria-label="Move later"
+                          onClick={() => set({ galleryPaths: move(form.galleryPaths, i, i + 1) })}
+                          className="press flex h-7 w-7 items-center justify-center rounded-full bg-white/95 text-graphite shadow-paper transition disabled:opacity-30 hover:text-navy"
+                        >
+                          <IconChevron size={13} />
+                        </button>
+                      </div>
+                    )}
+                    {i === 0 && (
+                      <span className="absolute left-2 top-2 rounded-full bg-navy/85 px-2 py-0.5 text-[10px] font-medium text-paper">
+                        First
+                      </span>
+                    )}
+                  </div>
                 ))}
                 {form.galleryPaths.length < galleryMax && (
                   <PhotoSlot
@@ -248,6 +362,9 @@ export default function DateSpotEditor() {
                   />
                 )}
               </div>
+              <p className="mt-2 text-[12.5px] leading-relaxed text-mist">
+                The first photo is the one students see beside your cover.
+              </p>
             </div>
           </Group>
 
@@ -340,8 +457,127 @@ export default function DateSpotEditor() {
           )}
         </aside>
       </div>
+
+      <AddLocationSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        onAdd={addLocation}
+      />
     </>
   )
+}
+
+/**
+ * A second address. Only the street is required — walk and distance can be
+ * filled in later, and a location with neither still shows up, just without a
+ * "9 min walk" on the card.
+ */
+function AddLocationSheet({ open, onClose, onAdd }) {
+  const blank = { label: '', address_line: '', city: '', region: '', postal_code: '', walk_minutes: '', distance_miles: '' }
+  const [row, setRow] = useState(blank)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (open) {
+      setRow(blank)
+      setError(null)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  const set = (patch) => setRow((r) => ({ ...r, ...patch }))
+  const ready = row.address_line.trim().length > 3
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Add a location"
+      subtitle="Each one gets its own Date Spot, with its own hours and its own walk from campus."
+      maxWidth="max-w-lg"
+    >
+      <div className="space-y-5">
+        <Field label="Name this one" hint="How you tell them apart — Kerrytown, Main Street." htmlFor="loc-label">
+          <TextInput id="loc-label" value={row.label} onChange={(v) => set({ label: v })} placeholder="Kerrytown" />
+        </Field>
+        <Field label="Street address" htmlFor="loc-addr">
+          <TextInput id="loc-addr" value={row.address_line} onChange={(v) => set({ address_line: v })} placeholder="410 N Fourth Ave" />
+        </Field>
+        <div className="grid gap-5 sm:grid-cols-3">
+          <Field label="City" htmlFor="loc-city">
+            <TextInput id="loc-city" value={row.city} onChange={(v) => set({ city: v })} />
+          </Field>
+          <Field label="State" htmlFor="loc-region">
+            <TextInput id="loc-region" value={row.region} onChange={(v) => set({ region: v })} />
+          </Field>
+          <Field label="ZIP" htmlFor="loc-zip">
+            <TextInput id="loc-zip" value={row.postal_code} onChange={(v) => set({ postal_code: v })} />
+          </Field>
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="Walk from campus" hint="Minutes." htmlFor="loc-walk">
+            <TextInput id="loc-walk" inputMode="numeric" value={row.walk_minutes} onChange={(v) => set({ walk_minutes: v.replace(/\D/g, '') })} />
+          </Field>
+          <Field label="Distance from campus" hint="Miles." htmlFor="loc-dist">
+            <TextInput id="loc-dist" inputMode="decimal" value={row.distance_miles} onChange={(v) => set({ distance_miles: v.replace(/[^0-9.]/g, '') })} />
+          </Field>
+        </div>
+
+        {error && <p className="text-[13.5px] leading-relaxed text-coral-deep">{error}</p>}
+      </div>
+
+      <Button
+        variant="coral"
+        size="lg"
+        full
+        className="mt-6"
+        disabled={!ready || busy}
+        onClick={async () => {
+          setBusy(true)
+          setError(null)
+          try {
+            await onAdd({
+              label: row.label.trim() || null,
+              address_line: row.address_line.trim(),
+              city: row.city || null,
+              region: row.region || null,
+              postal_code: row.postal_code || null,
+              walk_minutes: row.walk_minutes ? Number(row.walk_minutes) : null,
+              distance_miles: row.distance_miles ? Number(row.distance_miles) : null,
+            })
+          } catch (e) {
+            setError(e.message)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        {busy ? 'Adding…' : 'Add it'}
+      </Button>
+      <p className="mt-3 text-center text-[12px] leading-relaxed text-mist">
+        It starts unpublished, so you can fill in the details before students see it.
+      </p>
+    </Sheet>
+  )
+}
+
+/** Single-campus for now; the column exists because that changes later. */
+async function firstCampusId() {
+  const { supabase } = await import('../../../lib/supabase')
+  const { data, error } = await supabase.from('universities').select('id').order('created_at').limit(1)
+  if (error) throw new Error(error.message)
+  if (!data?.length) throw new Error('No campus is set up yet.')
+  return data[0].id
+}
+
+/** Immutable single-item reorder. */
+function move(list, from, to) {
+  if (to < 0 || to >= list.length) return list
+  const next = [...list]
+  const [item] = next.splice(from, 1)
+  next.splice(to, 0, item)
+  return next
 }
 
 function Group({ title, body, children }) {

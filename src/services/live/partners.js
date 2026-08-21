@@ -105,6 +105,92 @@ export async function update(partnerId, patch) {
   bail(error)
 }
 
+/* ── the team ───────────────────────────────────────────────────────────── */
+
+/**
+ * Names and addresses of the people who can act for this business. Reached
+ * through an RPC because `partner_users` is readable only by the person it
+ * describes — a plain join would come back as a list of uuids.
+ */
+export async function team(partnerId) {
+  const { data, error } = await supabase.rpc('partner_team', { p_partner: partnerId })
+  bail(error)
+  return (data ?? []).map((r) => ({
+    id: r.partner_user_id,
+    name: r.full_name,
+    email: r.email,
+    role: r.role,
+    joinedAt: r.joined_at,
+    isYou: r.is_you,
+  }))
+}
+
+export async function pendingInvites(partnerId) {
+  const { data, error } = await supabase.rpc('partner_pending_invites', { p_partner: partnerId })
+  bail(error)
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    email: r.email,
+    role: r.role,
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+  }))
+}
+
+export async function invite(partnerId, email, role = 'staff') {
+  const { data, error } = await supabase.rpc('invite_partner_member', {
+    p_partner: partnerId,
+    p_email: email,
+    p_role: role,
+  })
+  bail(error)
+  return data
+}
+
+export async function revokeInvite(inviteId) {
+  const { error } = await supabase.rpc('revoke_partner_invite', { p_invite: inviteId })
+  bail(error)
+}
+
+export async function setMemberRole(partnerId, userId, role) {
+  const { error } = await supabase.rpc('set_partner_member_role', {
+    p_partner: partnerId,
+    p_user: userId,
+    p_role: role,
+  })
+  bail(error)
+}
+
+export async function removeMember(partnerId, userId) {
+  const { error } = await supabase.rpc('remove_partner_member', {
+    p_partner: partnerId,
+    p_user: userId,
+  })
+  bail(error)
+}
+
+/** Invitations waiting for whoever is signed in, matched on their own address. */
+export async function myInvites() {
+  const { data, error } = await supabase.rpc('my_partner_invites')
+  bail(error)
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    partnerId: r.partner_id,
+    partnerName: r.partner_name,
+    role: r.role,
+    expiresAt: r.expires_at,
+  }))
+}
+
+export async function acceptInvite(inviteId, fullName = null) {
+  const { data, error } = await supabase.rpc('accept_partner_invite', {
+    p_invite: inviteId,
+    p_full_name: fullName,
+  })
+  bail(error)
+  return data
+}
+
 /* ── locations and the Date Spot ────────────────────────────────────────── */
 
 export async function locations(partnerId) {
@@ -333,6 +419,21 @@ export async function staffSetStatus(partnerId, status, note = null) {
     p_note: note,
   })
   bail(error)
+}
+
+/**
+ * Every offer a business is running, for moderation. Reads the table directly
+ * because the `partner_offers` select policy already has an `is_admin()` arm —
+ * a staff-only RPC would be a second definition of the same permission.
+ */
+export async function staffOffers(partnerId) {
+  const { data, error } = await supabase
+    .from('partner_offers')
+    .select('id, title, offer_type, percent_off, amount_off_cents, min_spend_cents, free_item, description, terms, days_of_week, status, created_at')
+    .eq('partner_id', partnerId)
+    .order('created_at', { ascending: false })
+  bail(error)
+  return data ?? []
 }
 
 export async function staffSetOfferStatus(offerId, status) {

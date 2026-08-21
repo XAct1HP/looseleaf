@@ -51,6 +51,13 @@ second time with "Already used.", records exactly one redemption row, and lands
 one verified date in the funnel. A code from another business reads as unknown
 rather than as "exists but not yours", which would leak.
 
+**Roles mean what they say.** An invitation puts nobody on the team until it is
+accepted, doesn't show up for the wrong address, and can't be accepted by
+someone holding the id. Staff can look a pass up — the whole point of the role
+— but read zero rows from `date_passes` or `profiles`, can't add people, and
+can't edit the Date Spot. The last owner can neither demote nor remove
+themselves; with a second owner in place, both work.
+
 **Commercial state actually gates visibility.** Paying without approval isn't
 live; approval without paying isn't live; a suspended partner stops being live
 immediately; and a `past_due` subscription drops the spot out of both

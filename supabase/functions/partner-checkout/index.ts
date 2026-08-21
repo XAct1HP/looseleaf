@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     )
   }
 
-  const returnTo = safeReturnTo(body.return_to, Deno.env.get('PARTNER_SITE_URL') ?? '')
+  const returnTo = safeReturnTo(body.return_to)
 
   try {
     // Reuse the customer if there is one, so a plan change doesn't strand the

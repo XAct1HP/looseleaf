@@ -61,7 +61,8 @@ src/
                  Matches, Chat, Campus, campus/*, Profile, EditProfile,
                  Settings, Notifications, DatePasses
     partners/    PartnersLanding, PartnerAuth, PartnerOnboarding,
-                 DashboardLayout, dashboard/*
+                 DashboardLayout, dashboard/* (overview, spot, offers, scan,
+                 redemptions, analytics, team, billing, settings)
 supabase/
   migrations/    schema, RLS, and the callable surface
   functions/     Stripe checkout, billing portal, webhook (Deno)

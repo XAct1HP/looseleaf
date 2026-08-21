@@ -144,10 +144,15 @@ begin
   perform assert((select university_id from date_spots where id = v_spot) = v_campus,
                  'the spot inherits the campus of its address');
 
+  -- Runs every day, deliberately. `issue_date_pass` and `redeem_date_pass`
+  -- read the real clock inside the function and can't be handed a timestamp,
+  -- so an offer with a day window would make this file pass Sunday to
+  -- Thursday and fail on a Friday. The day-window behaviour is tested
+  -- separately, against explicit timestamps, in section 6.
   insert into partner_offers (partner_id, title, offer_type, percent_off,
                               days_of_week, status, max_monthly_redemptions, terms)
-  values (v_partner, 'Weeknight Date', 'percent_off', 15,
-          array[0,1,2,3,4], 'active', 100, 'Dine-in only.')
+  values (v_partner, 'Loose Leaf Date', 'percent_off', 15,
+          array[0,1,2,3,4,5,6], 'active', 100, 'Dine-in only.')
   returning id into v_offer;
   perform set_config('test.offer', v_offer::text, false);
 end $$;
@@ -246,14 +251,40 @@ end $$;
 
 -- ─── 6. offer windows ─────────────────────────────────────────────────────
 
+--  Windows are checked against explicit timestamps rather than the real clock,
+--  so this section means the same thing whatever day you run it.
 do $$
-declare v_offer uuid := current_setting('test.offer')::uuid;
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_weeknight uuid;
+  v_evening uuid;
 begin
-  -- Sunday–Thursday offer, asked about on a Friday.
-  perform assert(not offer_is_open(v_offer, timestamptz '2026-08-21 19:00+00'),
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status)
+  values (v_partner, 'Weeknight Date', 'percent_off', 15, array[0,1,2,3,4], 'active')
+  returning id into v_weeknight;
+
+  -- 2026-08-21 is a Friday; 2026-08-19 a Wednesday.
+  perform assert(not offer_is_open(v_weeknight, timestamptz '2026-08-21 19:00+00'),
                  'a Sunday–Thursday offer is closed on a Friday');
-  perform assert(offer_is_open(v_offer, timestamptz '2026-08-19 19:00+00'),
+  perform assert(offer_is_open(v_weeknight, timestamptz '2026-08-19 19:00+00'),
                  'the same offer is open on a Wednesday');
+
+  -- An evening window, and one that crosses midnight.
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, start_time, end_time, status)
+  values (v_partner, 'Late Night', 'percent_off', 10, array[0,1,2,3,4,5,6],
+          time '21:00', time '02:00', 'active')
+  returning id into v_evening;
+
+  perform assert(offer_is_open(v_evening, timestamptz '2026-08-19 22:30+00'),
+                 'a 9pm–2am window is open at half ten');
+  perform assert(offer_is_open(v_evening, timestamptz '2026-08-19 01:00+00'),
+                 'and still open at one in the morning, past midnight');
+  perform assert(not offer_is_open(v_evening, timestamptz '2026-08-19 15:00+00'),
+                 'and closed in the afternoon');
+
+  update partner_offers set status = 'ended' where id in (v_weeknight, v_evening);
   perform assert(days_label(array[0,1,2,3,4]) = 'Sunday–Thursday',
                  'days_label reads like English');
   perform assert(days_label(array[0,1,2,3,4,5,6]) = 'Any day',
@@ -464,6 +495,139 @@ begin
 
   update partner_subscriptions set status = 'active'
    where partner_id = current_setting('test.partner')::uuid;
+end $$;
+
+-- ─── 12. the team ─────────────────────────────────────────────────────────
+--  An invite is an intention, not a capability. Nothing about it grants
+--  access until accept_partner_invite() re-checks the address against the
+--  token of whoever is actually signed in.
+
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_shift uuid; v_invite uuid; ok boolean := false;
+begin
+  insert into auth.users (email) values ('shift@jolly.com') returning id into v_shift;
+  perform set_config('test.shift', v_shift::text, false);
+
+  perform act_as(current_setting('test.biz')::uuid);
+  v_invite := invite_partner_member(v_partner, 'Shift@Jolly.com  ', 'staff');
+  perform set_config('test.invite', v_invite::text, false);
+
+  perform assert((select email from partner_invites where id = v_invite) = 'shift@jolly.com',
+                 'an invited address is normalised before it is stored');
+  perform assert((select count(*) from partner_members where partner_id = v_partner) = 1,
+                 'inviting somebody does not put them on the team');
+
+  begin
+    perform invite_partner_member(v_partner, 'not-an-email', 'staff');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a malformed address is refused');
+end $$;
+
+--  Somebody else holding the invite id gets nothing from it.
+do $$
+declare ok boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  perform assert((select count(*) from my_partner_invites()) = 0,
+                 'an invitation does not show up for the wrong address');
+  begin
+    perform accept_partner_invite(current_setting('test.invite')::uuid);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'and cannot be accepted by the wrong person');
+end $$;
+
+--  The right person accepts.
+do $$
+declare v_partner uuid;
+begin
+  perform act_as(current_setting('test.shift')::uuid);
+  perform assert((select count(*) from my_partner_invites()) = 1,
+                 'the invited address sees exactly one invitation');
+
+  v_partner := accept_partner_invite(current_setting('test.invite')::uuid, 'Dee');
+  perform assert(v_partner = current_setting('test.partner')::uuid,
+                 'accepting returns the business they joined');
+  perform assert(is_partner_member(v_partner), 'and they are now a member');
+  perform assert(not is_partner_admin(v_partner), 'as staff, not as an admin');
+  perform assert((select count(*) from my_partner_invites()) = 0,
+                 'and the invitation is spent');
+end $$;
+
+--  What staff can and cannot do.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  n int; ok boolean := false; r record;
+begin
+  perform act_as(current_setting('test.shift')::uuid);
+
+  -- The whole reason the role exists: scanning still works.
+  select * into r from partner_lookup_pass(v_partner, current_setting('test.code'));
+  perform assert(r.status = 'redeemed', 'staff can look a pass up');
+
+  set local role authenticated;
+  select count(*) into n from date_passes;
+  perform assert(n = 0, 'staff read no date_passes either');
+  select count(*) into n from profiles;
+  perform assert(n = 0, 'and no student profiles');
+  reset role;
+
+  begin
+    perform invite_partner_member(v_partner, 'someone@else.com', 'owner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'staff cannot add people');
+
+  ok := false;
+  begin
+    perform save_date_spot(current_setting('test.loc')::uuid, '{"name":"Hijacked"}'::jsonb);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'staff cannot edit the Date Spot');
+end $$;
+
+--  A business must always have somebody who can pay the bill.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_owner uuid := current_setting('test.biz')::uuid;
+  ok boolean := false;
+begin
+  perform act_as(v_owner);
+
+  begin
+    perform set_partner_member_role(v_partner, v_owner, 'staff');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'the last owner cannot demote themselves');
+
+  ok := false;
+  begin
+    perform remove_partner_member(v_partner, v_owner);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'nor remove themselves');
+
+  -- Promote, and now it is allowed.
+  perform set_partner_member_role(v_partner, current_setting('test.shift')::uuid, 'owner');
+  perform set_partner_member_role(v_partner, v_owner, 'manager');
+  perform assert((select role from partner_members
+                   where partner_id = v_partner and partner_user_id = v_owner) = 'manager',
+                 'with a second owner in place, the first can step down');
+
+  perform assert((select count(*) from partner_team(v_partner)) = 2,
+                 'the team lists both people');
+
+  -- Put it back so later reads see the original shape.
+  perform act_as(current_setting('test.shift')::uuid);
+  perform set_partner_member_role(v_partner, v_owner, 'owner');
+  perform remove_partner_member(v_partner, current_setting('test.shift')::uuid);
+  perform assert((select count(*) from partner_members where partner_id = v_partner) = 1,
+                 'and somebody can always leave on their own');
 end $$;
 
 \echo ''

@@ -29,7 +29,9 @@ export default function FunnelChart({ data }) {
     <figure className="rounded-card border border-rule bg-white px-5 py-6">
       <figcaption className="mb-5 flex items-baseline justify-between gap-3">
         <h3 className="text-[15px] font-semibold text-navy">From seen to sat down</h3>
-        <span className="text-[12.5px] text-mist">Last {data?.days ?? 30} days</span>
+        <span className="text-[12.5px] text-mist">
+          {data?.range_label ?? `Last ${data?.days ?? 30} days`}
+        </span>
       </figcaption>
 
       {empty ? (

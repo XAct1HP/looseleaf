@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: sub.stripe_customer_id,
-      return_url: safeReturnTo(body.return_to, Deno.env.get('PARTNER_SITE_URL') ?? ''),
+      return_url: safeReturnTo(body.return_to),
     })
     return json({ url: session.url })
   } catch (e) {

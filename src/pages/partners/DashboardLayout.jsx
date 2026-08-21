@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { Link, NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import Logo from '../../components/brand/Logo'
 import Button from '../../components/ui/Button'
-import { IconPin, IconSpark, IconCalendar, IconEye, IconLock, IconSettings, IconDiscover } from '../../components/ui/Icons'
+import { IconPin, IconSpark, IconCalendar, IconEye, IconLock, IconSettings, IconDiscover, IconPeople } from '../../components/ui/Icons'
 import { usePartnerAccount } from '../../state/partnerAccount'
 import { can } from '../../lib/partnerPlans'
 import * as partners from '../../services/partners'
@@ -28,6 +28,7 @@ const NAV = [
   { to: '/partners/dashboard/scan', label: 'Scan a pass', Icon: IconCalendar, needs: 'redemption' },
   { to: '/partners/dashboard/redemptions', label: 'Redemptions', Icon: IconCalendar, needs: 'redemption' },
   { to: '/partners/dashboard/analytics', label: 'Analytics', Icon: IconEye },
+  { to: '/partners/dashboard/team', label: 'Team', Icon: IconPeople },
   { to: '/partners/dashboard/billing', label: 'Billing', Icon: IconLock },
   { to: '/partners/dashboard/settings', label: 'Settings', Icon: IconSettings },
 ]

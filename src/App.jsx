@@ -51,6 +51,7 @@ const PartnerOffers = lazy(() => import('./pages/partners/dashboard/Offers'))
 const PartnerScan = lazy(() => import('./pages/partners/dashboard/Scan'))
 const PartnerRedemptions = lazy(() => import('./pages/partners/dashboard/Redemptions'))
 const PartnerAnalytics = lazy(() => import('./pages/partners/dashboard/Analytics'))
+const PartnerTeam = lazy(() => import('./pages/partners/dashboard/Team'))
 const PartnerBilling = lazy(() => import('./pages/partners/dashboard/Billing'))
 const PartnerSettings = lazy(() => import('./pages/partners/dashboard/Settings'))
 
@@ -123,6 +124,7 @@ function PartnerRoutes() {
         <Route path="scan" element={<PartnerScan />} />
         <Route path="redemptions" element={<PartnerRedemptions />} />
         <Route path="analytics" element={<PartnerAnalytics />} />
+        <Route path="team" element={<PartnerTeam />} />
         <Route path="billing" element={<PartnerBilling />} />
         <Route path="settings" element={<PartnerSettings />} />
       </Route>

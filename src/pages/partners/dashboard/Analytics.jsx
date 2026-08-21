@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { PageHead } from '../DashboardLayout'
 import FunnelChart from '../../../components/partners/FunnelChart'
 import StatTile from '../../../components/backstage/StatTile'
+import Button from '../../../components/ui/Button'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { level } from '../../../lib/partnerPlans'
 import * as partners from '../../../services/partners'
@@ -11,6 +12,12 @@ const RANGES = [
   { days: 30, label: '30 days' },
   { days: 90, label: '90 days' },
 ]
+
+const iso = (d) => d.toISOString().slice(0, 10)
+const pretty = (isoDay) =>
+  new Date(`${isoDay}T12:00:00`).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+const daysBetween = (from, to) =>
+  Math.max(1, Math.round((new Date(to) - new Date(from)) / 86_400_000) + 1)
 
 const SERIES = [
   ['spot_views', 'Date Spot views'],
@@ -37,6 +44,13 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // partner_funnel() only counts backwards from now, so a custom range is
+  // served by fetching far enough back to contain it and trimming the ends
+  // here. One window definition in the database rather than two that could
+  // quietly disagree about what "the last 30 days" means.
+  const [custom, setCustom] = useState(null) // { from, to } as ISO dates
+  const [picking, setPicking] = useState(false)
+
   useEffect(() => {
     if (!partner) return
     let live = true
@@ -55,8 +69,34 @@ export default function Analytics() {
 
   const series = useMemo(() => {
     const rows = data?.by_day ?? []
-    return fillDays(rows, days).map((r) => ({ day: r.day, value: Number(r[metric] ?? 0) }))
-  }, [data, days, metric])
+    const filled = fillDays(rows, days)
+    const windowed = custom
+      ? filled.filter((r) => r.day >= custom.from && r.day <= custom.to)
+      : filled
+    return windowed.map((r) => ({ day: r.day, value: Number(r[metric] ?? 0) }))
+  }, [data, days, metric, custom])
+
+  // With a custom range the totals have to be re-derived from the days inside
+  // it — the figures the RPC returned are for the whole fetched window.
+  const shown = useMemo(() => {
+    if (!custom || !data?.by_day) return data
+    const rows = data.by_day.filter((r) => r.day >= custom.from && r.day <= custom.to)
+    const sum = (k) => rows.reduce((a, r) => a + Number(r[k] ?? 0), 0)
+    const unlocks = sum('offer_unlocks')
+    const recs = sum('recommendations')
+    const dates = sum('verified_dates')
+    return {
+      ...data,
+      days: daysBetween(custom.from, custom.to),
+      range_label: `${pretty(custom.from)} – ${pretty(custom.to)}`,
+      spot_views: sum('spot_views'),
+      recommendations: recs,
+      offer_unlocks: unlocks,
+      verified_dates: dates,
+      unlock_to_date: unlocks ? Math.round((1000 * dates) / unlocks) / 10 : null,
+      rec_to_unlock: recs ? Math.round((1000 * unlocks) / recs) / 10 : null,
+    }
+  }, [data, custom])
 
   return (
     <>
@@ -69,17 +109,43 @@ export default function Analytics() {
               <button
                 key={r.days}
                 type="button"
-                onClick={() => setDays(r.days)}
+                onClick={() => {
+                  setCustom(null)
+                  setPicking(false)
+                  setDays(r.days)
+                }}
                 className={`focus-ring rounded-xl px-3 py-1.5 text-[13px] font-medium transition ${
-                  days === r.days ? 'bg-navy text-paper' : 'text-graphite hover:text-navy'
+                  !custom && days === r.days ? 'bg-navy text-paper' : 'text-graphite hover:text-navy'
                 }`}
               >
                 {r.label}
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setPicking((v) => !v)}
+              className={`focus-ring rounded-xl px-3 py-1.5 text-[13px] font-medium transition ${
+                custom ? 'bg-navy text-paper' : 'text-graphite hover:text-navy'
+              }`}
+            >
+              {custom ? `${pretty(custom.from)} – ${pretty(custom.to)}` : 'Custom'}
+            </button>
           </div>
         }
       />
+
+      {picking && (
+        <RangePicker
+          value={custom}
+          onCancel={() => setPicking(false)}
+          onApply={(from, to) => {
+            // Fetch a window wide enough to contain the range, then trim.
+            setDays(Math.min(400, daysBetween(from, iso(new Date()))))
+            setCustom({ from, to })
+            setPicking(false)
+          }}
+        />
+      )}
 
       {error && (
         <p className="mb-6 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] text-coral-deep">
@@ -90,18 +156,18 @@ export default function Analytics() {
       <div className="grid gap-3 sm:grid-cols-2">
         <StatTile
           label="Unlock → date"
-          value={data?.unlock_to_date != null ? `${data.unlock_to_date}%` : null}
+          value={shown?.unlock_to_date != null ? `${shown.unlock_to_date}%` : null}
           hint="Of the passes taken out, this many were actually used"
         />
         <StatTile
           label="Suggested → unlocked"
-          value={data?.rec_to_unlock != null ? `${data.rec_to_unlock}%` : null}
+          value={shown?.rec_to_unlock != null ? `${shown.rec_to_unlock}%` : null}
           hint="How often a suggestion turns into a pass"
         />
       </div>
 
       <div className="mt-4">
-        <FunnelChart data={data} />
+        <FunnelChart data={shown} />
       </div>
 
       {depth === 'basic' ? (
@@ -253,6 +319,59 @@ function DayChart({ data, title, loading, height = 168 }) {
         </div>
       </div>
     </figure>
+  )
+}
+
+/**
+ * Two dates and an Apply. Deliberately not a calendar widget: the native date
+ * input is already good on a phone, and this is a page a restaurant owner
+ * opens once a month.
+ */
+function RangePicker({ value, onApply, onCancel }) {
+  const today = iso(new Date())
+  const [from, setFrom] = useState(value?.from ?? iso(new Date(Date.now() - 29 * 86_400_000)))
+  const [to, setTo] = useState(value?.to ?? today)
+
+  const valid = from <= to && to <= today
+
+  return (
+    <div className="mb-6 flex flex-wrap items-end gap-4 rounded-card border border-rule bg-cream/60 px-5 py-4">
+      <div>
+        <label className="label" htmlFor="an-from">From</label>
+        <input
+          id="an-from"
+          type="date"
+          value={from}
+          max={today}
+          onChange={(e) => setFrom(e.target.value)}
+          className="field !py-2.5"
+        />
+      </div>
+      <div>
+        <label className="label" htmlFor="an-to">To</label>
+        <input
+          id="an-to"
+          type="date"
+          value={to}
+          max={today}
+          onChange={(e) => setTo(e.target.value)}
+          className="field !py-2.5"
+        />
+      </div>
+      <div className="flex gap-2 pb-0.5">
+        <Button variant="coral" size="md" disabled={!valid} onClick={() => onApply(from, to)}>
+          Apply
+        </Button>
+        <Button variant="ghost" size="md" onClick={onCancel}>
+          Cancel
+        </Button>
+      </div>
+      {!valid && (
+        <p className="w-full text-[12.5px] text-coral-deep">
+          The end date needs to be after the start, and not in the future.
+        </p>
+      )}
+    </div>
   )
 }
 

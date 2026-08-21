@@ -21,9 +21,20 @@ credential.
 | --- | --- | --- |
 | Supabase → Edge Functions | `STRIPE_SECRET_KEY` | `sk_live_…` / `sk_test_…` |
 | Supabase → Edge Functions | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the endpoint |
-| Supabase → Edge Functions | `PARTNER_SITE_URL` | `https://hellolooseleaf.com` |
+| Supabase → Edge Functions | `PARTNER_SITE_URL` | comma-separated allow-list of return origins |
 | Supabase → Edge Functions | `REPORT_USAGE_TOKEN` | only if you ever meter verified dates |
 | Postgres | `partner_plans.stripe_price_id` | one recurring price per plan |
+
+`PARTNER_SITE_URL` is a **list**, first entry wins as the fallback:
+
+```
+PARTNER_SITE_URL=https://hellolooseleaf.com,http://localhost:5173
+```
+
+Stripe is only allowed to send a partner back to an origin on that list, which
+stops the billing flow being an open redirect. Add your dev origin, or a
+checkout test from `localhost` lands you on production and looks exactly like a
+webhook bug.
 
 **There is no Stripe key in the front end.** Not even a publishable one.
 Checkout and every change afterwards happen on Stripe-hosted pages, so the
@@ -39,8 +50,9 @@ browser only ever receives a redirect URL. If you find yourself adding
 ```bash
 supabase db push
 # or, by hand, in this order:
-#   20260820120000_partners.sql        schema, RLS, storage bucket
+#   20260820120000_partners.sql            schema, RLS, storage bucket
 #   20260820130000_partner_functions.sql   the callable surface
+#   20260821120000_partner_team.sql        invitations and roles
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -198,6 +210,44 @@ daily only when you actually mean to start charging; the counts it reports come
 from `date_pass_redemptions`, the same table the partner's own dashboard shows,
 so any invoice can be reconciled against what they were told.
 
+## Who can do what
+
+`partner_members` carries a role, and the split is drawn around what each one
+could break rather than around seniority:
+
+| | Scan a pass | Date Spot, offers, targeting | Billing and the team |
+| --- | --- | --- | --- |
+| **Staff** | ✓ | | |
+| **Manager** | ✓ | ✓ | |
+| **Owner** | ✓ | ✓ | ✓ |
+
+Enforced in the database, not the nav: everything editable checks
+`is_partner_admin()` (owner or manager), everything financial checks
+`is_partner_owner()`, and redemption only needs `is_partner_member()` — which
+is the entire reason the staff role exists. The dashboard hides tabs a role
+can't use, but hiding a tab is not the control.
+
+People are added by email from **Team**. An invitation grants nothing on its
+own: `accept_partner_invite()` re-checks the address against the JWT of
+whoever is actually signed in, so forwarding the email passes nothing on. A
+business always keeps at least one owner — the last one can't demote or remove
+themselves until somebody else is promoted, and the button isn't shown rather
+than shown-and-refused.
+
+Somebody who was invited never sees the "describe your restaurant" flow; they
+land on an accept screen instead, because they don't own one.
+
+## More than one location
+
+One business, many `partner_locations`, each publishing its own `date_spots`
+row with its own address, hours, and walk from campus — "0.8 miles away" is a
+per-address fact, and sharing one across three cafes would be a lie about two
+of them. How many is `max_locations` on the plan.
+
+With a single location, renaming the Date Spot renames the business, because
+that is what a partner means by it. With several, the card title is just a card
+title.
+
 ## Moderation
 
 New businesses land as `pending` and are invisible to students. `partner_is_live()`
@@ -208,6 +258,12 @@ verbatim on their dashboard.
 
 Suspending a partner takes effect immediately — their Date Spot drops out of
 discovery and recommendations on the next query.
+
+Individual offers can be taken down without touching the business: expand the
+offer count on a partner's row in Backstage. It **pauses** rather than deletes,
+because an offer pulled for review is the start of a conversation with a
+business, and deleting their work mid-conversation makes that conversation
+much worse. They see it paused in their own dashboard and can ask why.
 
 ## Storage
 
@@ -225,6 +281,7 @@ storage policy calls `is_partner_admin()` on that first path segment.
 | `/partners/join`, `/partners/login` | business owners |
 | `/partners/onboarding` | a partner without a business yet |
 | `/partners/dashboard/…` | partner members |
+| `/partners/dashboard/team` | partner owners add and remove people |
 | `/app/campus/spots` | students — Date Spots |
 | `/app/passes` | students — their Date Passes |
 | `/app/backstage/partners` | Looseleaf staff |

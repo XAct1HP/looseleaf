@@ -78,11 +78,23 @@ export default function PartnerOnboarding() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [uploading, setUploading] = useState(null)
+  const [invites, setInvites] = useState(null)
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
 
   useEffect(() => {
     partners.plans().then(setPlans).catch(() => {})
+  }, [])
+
+  // Somebody who was *invited* to an existing business must not be marched
+  // through "describe your restaurant" — they don't own one. Checked before
+  // the form renders, so they never see a step they'd have to back out of.
+  useEffect(() => {
+    if (!partners.partnersEnabled) return
+    partners
+      .myInvites()
+      .then(setInvites)
+      .catch(() => setInvites([]))
   }, [])
 
   // Someone who already has a business shouldn't be filling this in again.
@@ -123,6 +135,27 @@ export default function PartnerOnboarding() {
   // After the hooks, never before — an early return above them changes the
   // hook order between renders.
   if (!partners.partnersEnabled) return <PartnerOffline />
+
+  if (invites === null) {
+    return (
+      <PartnerShell cta={false}>
+        <p className="py-24 text-center text-[14px] text-mist">Loading…</p>
+      </PartnerShell>
+    )
+  }
+
+  if (invites.length > 0 && !partnerId) {
+    return (
+      <InviteWelcome
+        invites={invites}
+        onAccepted={async () => {
+          await refresh()
+          navigate('/partners/dashboard', { replace: true })
+        }}
+        onDecline={() => setInvites([])}
+      />
+    )
+  }
 
   async function next() {
     if (busy) return
@@ -482,6 +515,93 @@ export default function PartnerOnboarding() {
 }
 
 /* ── pieces ─────────────────────────────────────────────────────────────── */
+
+/**
+ * What somebody sees when their boss added them rather than when they signed
+ * up. Accepting is one tap; the only field is their name, because the rest of
+ * the business already exists and none of it is theirs to fill in.
+ */
+function InviteWelcome({ invites, onAccepted, onDecline }) {
+  const [name, setName] = useState(readStashedName())
+  const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
+
+  const roleWords = {
+    owner: 'run the account, including billing',
+    manager: 'edit the Date Spot and the offers',
+    staff: 'scan Date Passes at the till',
+  }
+
+  return (
+    <PartnerShell cta={false}>
+      <main className="mx-auto max-w-[560px] px-5 pb-24 pt-12 sm:px-8">
+        <h1 className="font-display text-[30px] font-semibold leading-tight tracking-[-0.02em]">
+          {invites.length === 1
+            ? `${invites[0].partnerName} added you.`
+            : 'You’ve been added to a few places.'}
+        </h1>
+        <p className="mt-4 text-[15.5px] leading-relaxed text-graphite">
+          Accept and you’ll be able to {roleWords[invites[0].role] ?? 'help run this business'} on
+          Loose Leaf. You don’t need to set anything up.
+        </p>
+
+        <div className="mt-7">
+          <Field label="What should we call you?" htmlFor="inv-name">
+            <TextInput id="inv-name" value={name} onChange={setName} placeholder="Dee" />
+          </Field>
+        </div>
+
+        <ul className="mt-6 space-y-3">
+          {invites.map((i) => (
+            <li
+              key={i.id}
+              className="flex flex-wrap items-center gap-4 rounded-card border border-rule bg-white px-5 py-4"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="text-[16px] font-medium text-navy">{i.partnerName}</p>
+                <p className="mt-0.5 text-[13px] text-mist">
+                  as {i.role} · {roleWords[i.role]}
+                </p>
+              </div>
+              <Button
+                variant="coral"
+                size="md"
+                disabled={busy === i.id}
+                onClick={async () => {
+                  setBusy(i.id)
+                  setError(null)
+                  try {
+                    await partners.acceptInvite(i.id, name.trim() || null)
+                    await onAccepted()
+                  } catch (e) {
+                    setError(e.message)
+                    setBusy(null)
+                  }
+                }}
+              >
+                {busy === i.id ? 'Joining…' : 'Accept'}
+              </Button>
+            </li>
+          ))}
+        </ul>
+
+        {error && (
+          <p className="mt-5 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] leading-relaxed text-coral-deep">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={onDecline}
+          className="focus-ring mt-8 rounded-lg text-[13.5px] font-medium text-graphite underline underline-offset-4 hover:text-navy"
+        >
+          I’m here to list my own business instead
+        </button>
+      </main>
+    </PartnerShell>
+  )
+}
 
 function Section({ title, body, children }) {
   return (
