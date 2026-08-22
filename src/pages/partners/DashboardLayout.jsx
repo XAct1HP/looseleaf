@@ -21,12 +21,26 @@ import { PartnerOffline } from './PartnerAuth'
  *
  * Two filters decide what's in the nav, and they answer different questions:
  *
- *   `needs`  what the *business* bought. A Date Spot plan has no Scan tab
- *            because that plan has no Date Passes.
  *   `page`   what *this person* may reach. Decided by partner_can() in the
  *            database, so a hidden tab is a locked door and not a curtain —
  *            typing the URL gets you a redirect, and the RPC behind it would
  *            refuse anyway.
+ *   `needs`  what the *business* bought. A Date Spot plan has no Redemptions
+ *            tab because that plan issues no Date Passes.
+ *
+ * Those two must not be allowed to multiply into nothing, which is the bug
+ * this shell used to have: `scan` is the only page a staff member has, `scan`
+ * required the Date Passes entitlement, and so on any plan below the top one a
+ * member of waiting staff signed in to a screen saying there was nothing here
+ * for them. What the business hasn't bought yet is not the same fact as what
+ * this person is allowed to do, and it must never be *reported* as the second
+ * one. So:
+ *
+ *   · `scan` carries no `needs` at all. Somebody granted the scanner always
+ *     has the scanner; the page itself says so if there are no passes to scan.
+ *   · the entitlement filter may hide pages but may never hide the last one.
+ *     If it empties the list, the permission list stands and the pages explain
+ *     themselves.
  *
  * When somebody can reach exactly one page, the nav is noise. A staff login
  * gets the scanner and nothing to navigate — see ScannerOnlyShell.
@@ -36,7 +50,7 @@ const NAV = [
   { page: 'overview', to: '/partners/dashboard', label: 'Overview', Icon: IconDiscover, end: true },
   { page: 'spot', to: '/partners/dashboard/spot', label: 'Date Spot', Icon: IconPin },
   { page: 'offers', to: '/partners/dashboard/offers', label: 'Offers', Icon: IconSpark, needs: 'offers' },
-  { page: 'scan', to: '/partners/dashboard/scan', label: 'Scan a pass', Icon: IconScan, needs: 'redemption' },
+  { page: 'scan', to: '/partners/dashboard/scan', label: 'Scan a pass', Icon: IconScan },
   { page: 'redemptions', to: '/partners/dashboard/redemptions', label: 'Redemptions', Icon: IconTicket, needs: 'redemption' },
   { page: 'analytics', to: '/partners/dashboard/analytics', label: 'Analytics', Icon: IconEye },
   { page: 'team', to: '/partners/dashboard/team', label: 'Team', Icon: IconPeople },
@@ -55,14 +69,17 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
+  // "Signed out" and "signed in with no business" are different answers and
+  // lead different places. Only the second one is an invitation to onboard.
   useEffect(() => {
     if (status === 'ready' && list.length === 0) navigate('/partners/onboarding', { replace: true })
   }, [status, list.length, navigate])
 
-  const items = partner
-    ? NAV.filter((n) => (partner.pages ?? []).includes(n.page))
-        .filter((n) => !n.needs || can(entitlements, n.needs))
-    : []
+  // What they may reach, then what the plan actually turns on — and never
+  // both at once to the point of nothing. See the note above NAV.
+  const allowed = partner ? NAV.filter((n) => (partner.pages ?? []).includes(n.page)) : []
+  const bought = allowed.filter((n) => !n.needs || can(entitlements, n.needs))
+  const items = bought.length ? bought : allowed
 
   const home = items[0]?.to ?? '/partners/dashboard/scan'
   const allowedHere = items.some((n) => n.page === pageForPath(pathname))
@@ -77,6 +94,7 @@ export default function DashboardLayout() {
 
   if (!partners.partnersEnabled) return <PartnerOffline />
   if (status === 'loading') return <Booting />
+  if (status === 'anon') return <Navigate to="/partners/login" replace />
   if (status === 'error') return <Navigate to="/partners/login" replace />
   if (!partner) return <Booting />
 
@@ -224,11 +242,12 @@ function NoAccess({ partner }) {
     <div className="flex min-h-screen flex-col items-center justify-center bg-paper px-6 text-center">
       <Logo size="md" />
       <h1 className="mt-8 font-display text-[24px] font-semibold leading-tight">
-        Nothing here for you yet.
+        We can’t open your dashboard.
       </h1>
       <p className="mt-3 max-w-[42ch] text-[15px] leading-relaxed text-graphite">
-        Your account at {partner.name} doesn’t have access to any part of the dashboard right now.
-        Ask whoever runs the account to give you a page in Settings.
+        Something is wrong with how your account at {partner.name} is set up — every member should
+        at least be able to scan a pass. Whoever runs the account can put it right in Settings; if
+        it looks fine to them, this is our bug and not yours.
       </p>
       <div className="mt-7">
         <LogOut />

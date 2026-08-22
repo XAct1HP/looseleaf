@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import * as partners from '../services/partners'
+import * as auth from '../services/live/auth'
 
 /**
  * ── Which business am I acting for? ─────────────────────────────────────────
@@ -10,9 +11,22 @@ import * as partners from '../services/partners'
  * selector, and the member store never grows a branch for businesses.
  *
  * Everything here comes from `my_partners()`, which returns one row per
- * business this person can act for, with the plan's entitlements already
- * resolved. Components ask `can(entitlements, 'date_passes')` rather than
- * comparing plan ids.
+ * business this person can act for, with the plan's entitlements and the pages
+ * their role reaches already resolved.
+ *
+ * ── Why this listens to the session ──────────────────────────────────────────
+ *
+ * The provider wraps the *whole* `/partners` subtree, log-in page included, so
+ * it mounts while nobody is signed in and asks a question — "which businesses
+ * are mine?" — whose only possible answer is "none". Signing in happens inside
+ * that same subtree, so React never remounts it, and the answer stayed "none"
+ * for the rest of the session.
+ *
+ * That is what sent a restaurant owner who already had a business to "describe
+ * your restaurant". So the emptiness has to be *told apart*: `anon` means
+ * nobody asked, `ready` means somebody asked and genuinely has none. Only the
+ * second one is an invitation to onboard, and the answer is re-fetched the
+ * moment the session changes rather than once at mount.
  */
 
 const PartnerContext = createContext(null)
@@ -28,29 +42,61 @@ export function PartnerAccountProvider({ children }) {
       return null
     }
   })
-  const [status, setStatus] = useState('loading') // loading | ready | error | offline
+  // loading · anon · ready · error · offline
+  const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
+
+  // Auth events can arrive out of order (a token refresh landing after a sign
+  // out, say). Only the newest answer is allowed to write.
+  const runId = useRef(0)
 
   const refresh = useCallback(async () => {
     if (!partners.partnersEnabled) {
       setStatus('offline')
       return []
     }
+    const mine = (runId.current += 1)
+    const write = (fn) => {
+      if (runId.current === mine) fn()
+    }
+
+    const session = await auth.getSession()
+    if (!session) {
+      write(() => {
+        setList([])
+        setError(null)
+        setStatus('anon')
+      })
+      return []
+    }
+
     try {
       const rows = await partners.mine()
-      setList(rows)
-      setStatus('ready')
-      setError(null)
+      write(() => {
+        setList(rows)
+        setError(null)
+        setStatus('ready')
+      })
       return rows
     } catch (e) {
-      setError(e.message)
-      setStatus('error')
+      write(() => {
+        setError(e.message)
+        setStatus('error')
+      })
       return []
     }
   }, [])
 
   useEffect(() => {
+    if (!partners.partnersEnabled) {
+      setStatus('offline')
+      return undefined
+    }
     refresh()
+    // Signing in, signing out, and a token refresh all change the answer.
+    return auth.onAuthChange(() => {
+      refresh()
+    })
   }, [refresh])
 
   const select = useCallback((id) => {

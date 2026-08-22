@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import PartnerShell from '../../components/partners/PartnerShell'
 import PlanCards from '../../components/partners/PlanCards'
 import DateSpotCard from '../../components/dates/DateSpotCard'
@@ -66,7 +66,7 @@ const emptyDraft = {
 export default function PartnerOnboarding() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const { refresh, partner: existing } = usePartnerAccount()
+  const { refresh, partner: existing, status } = usePartnerAccount()
 
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState(() => ({
@@ -90,13 +90,15 @@ export default function PartnerOnboarding() {
   // Somebody who was *invited* to an existing business must not be marched
   // through "describe your restaurant" — they don't own one. Checked before
   // the form renders, so they never see a step they'd have to back out of.
+  // Waits for the session, because asking "what am I invited to" as nobody
+  // returns nothing and would send an invitee into the wrong flow.
   useEffect(() => {
-    if (!partners.partnersEnabled) return
+    if (!partners.partnersEnabled || status === 'loading' || status === 'anon') return
     partners
       .myInvites()
       .then(setInvites)
       .catch(() => setInvites([]))
-  }, [])
+  }, [status])
 
   // Someone who already has a business shouldn't be filling this in again.
   useEffect(() => {
@@ -139,7 +141,13 @@ export default function PartnerOnboarding() {
   // hook order between renders.
   if (!partners.partnersEnabled) return <PartnerOffline />
 
-  if (invites === null) {
+  // Nobody describes a restaurant while signed out. This is also the guard
+  // that stops a signed-in owner being sent here by a stale answer — by the
+  // time `status` is 'ready', `existing` is real and the effect above has
+  // already redirected.
+  if (status === 'anon') return <Navigate to="/partners/login" replace />
+
+  if (status === 'loading' || invites === null) {
     return (
       <PartnerShell cta={false}>
         <p className="py-24 text-center text-[14px] text-mist">Loading…</p>

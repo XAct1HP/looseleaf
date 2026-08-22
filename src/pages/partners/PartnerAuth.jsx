@@ -6,6 +6,7 @@ import { Star } from '../../components/brand/Doodles'
 import { IconMail, IconBack } from '../../components/ui/Icons'
 import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
+import { usePartnerAccount } from '../../state/partnerAccount'
 import { OTP_LENGTH, OTP_MIN_LENGTH } from '../../lib/supabase'
 
 /**
@@ -21,6 +22,7 @@ import { OTP_LENGTH, OTP_MIN_LENGTH } from '../../lib/supabase'
 export default function PartnerAuth() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
+  const { refresh } = usePartnerAccount()
   const joining = pathname.endsWith('/join')
 
   const [step, setStep] = useState('email')
@@ -65,7 +67,10 @@ export default function PartnerAuth() {
     setError(null)
     try {
       await auth.verifyCode(email, code)
-      const mine = await partners.mine()
+      // Through the provider rather than around it: this both decides where to
+      // send them and leaves the context holding the same answer, so the
+      // dashboard doesn't boot from a list fetched while nobody was signed in.
+      const mine = await refresh()
       navigate(mine.length ? '/partners/dashboard' : '/partners/onboarding', { replace: true })
     } catch (err) {
       setError(err.message)

@@ -69,6 +69,12 @@ effect too. `settings` cannot be granted **even by writing it straight into
 `partners.role_pages` by hand** — the assertion does exactly that and then
 checks the manager still can't reach it.
 
+**Scanning cannot be taken away.** `set_partner_role_pages()` puts `scan` back
+into whatever it is handed, including an empty array. Writing
+`{"manager": [], "staff": []}` straight into `partners.role_pages` still leaves
+both roles reaching exactly `{scan}` and nothing else — and a student reaches
+nothing at all, so the rule doesn't hand the scanner to strangers.
+
 **Students read offers through the view, never the table.** Zero rows from
 `partner_offers`, one from `public_offers`, and no column of the view whose
 name suggests a cap, a count, or an internal status — so a business's

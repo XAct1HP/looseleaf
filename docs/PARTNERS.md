@@ -54,6 +54,7 @@ supabase db push
 #   20260820130000_partner_functions.sql   the callable surface
 #   20260821120000_partner_team.sql        invitations and roles
 #   20260822120000_partner_permissions.sql per-page capabilities, coordinates
+#   20260823120000_partner_scan_always.sql scanning is membership, not a grant
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -304,16 +305,54 @@ scanner and the team. Everything else is off until an owner turns it on in
 **Settings → What your team can see**, one page at a time, and it can be turned
 off again the same way.
 
-Two things are not negotiable and are not in the grid:
+Two things are not negotiable, and both are decided before `partner_can()`
+looks at the column at all:
 
-* **`scan` cannot be revoked.** It is the whole job. Taking it away would leave
-  somebody signed in to nothing.
+* **`scan` cannot be revoked.** It is not really a grant — it is what
+  membership *means*. `partner_can(p, 'scan')` is true for anybody with a
+  `partner_members` row, `set_partner_role_pages()` adds it back to whatever it
+  is handed, and emptying `role_pages` by hand still leaves a member with the
+  scanner. There is no such thing as a partner member who may not scan.
 * **`settings` can never be granted.** It is the page that edits the grid, so
   granting it would let a manager grant themselves the rest. `partner_can()`
-  returns false for it before it ever looks at the column, and
-  `set_partner_role_pages()` filters it out of anything written there — so
-  writing `{"manager": ["settings"]}` straight into the table by hand still
-  gets a manager nothing.
+  returns false for it, and `set_partner_role_pages()` filters it out of
+  anything written there — so writing `{"manager": ["settings"]}` straight into
+  the table by hand still gets a manager nothing.
+
+## Where a sign-in lands
+
+One decision, from one fact — the pages this person reaches:
+
+| Signing in as | Lands on |
+| --- | --- |
+| nobody (no session) | `/partners/login` |
+| someone with a pending invitation | the accept screen |
+| someone with no business and no invitation | `/partners/onboarding` |
+| **staff** | the scanner, in a shell with no navigation |
+| **manager** | their first granted page — the scanner by default |
+| **owner** | Overview |
+
+Two rules make that reliable, and both were bugs first:
+
+**The session is a subscription, not a snapshot.** `PartnerAccountProvider`
+wraps the whole `/partners` subtree, log-in page included, so it mounts while
+nobody is signed in and its first answer to "which businesses are mine?" is
+necessarily *none*. Signing in happens inside that same subtree and never
+remounts it. So the provider listens for auth changes and re-asks, and it
+distinguishes `anon` (**nobody asked**) from `ready` with an empty list
+(**somebody asked and genuinely has none**). Only the second is an invitation
+to onboard. Conflating them sent owners who already had a restaurant to
+"describe your restaurant".
+
+**A plan limit is never reported as a permission.** The nav is filtered twice —
+by what the person may reach, then by what the plan turned on — and the second
+filter may hide pages but may never hide the last one. `scan` carries no plan
+requirement at all. Before this, `scan` required the Date Passes entitlement,
+which only the top tier has, so a staff member at a business on any lower plan
+signed in to "Nothing here for you yet" — a sentence about the *account* phrased
+as a fact about *them*. Now the scanner opens and says the account isn't issuing
+passes yet, and the Team page says the same thing before an owner invites
+somebody into it.
 
 Every check is one function:
 

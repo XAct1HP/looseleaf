@@ -4,6 +4,7 @@ import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
 import { IconCheck, IconX, IconSearch, IconScan } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
+import { can } from '../../../lib/partnerPlans'
 import * as partners from '../../../services/partners'
 
 /**
@@ -29,7 +30,8 @@ import * as partners from '../../../services/partners'
  * screen is a viewfinder and a button.
  */
 export default function Scan() {
-  const { partner } = usePartnerAccount()
+  const { partner, entitlements } = usePartnerAccount()
+  const hasPasses = can(entitlements, 'redemption')
   const [params, setParams] = useSearchParams()
 
   const [code, setCode] = useState('')
@@ -308,6 +310,19 @@ export default function Scan() {
       />
 
       <div className="mx-auto max-w-[440px]">
+        {/* A plan below Date Partner issues no passes, so there is nothing for
+            this scanner to find. Saying so is the honest version — the old
+            behaviour was to remove the page, which for a member of staff meant
+            signing in to a screen that said they had no access, as though the
+            problem were them. */}
+        {!hasPasses && (
+          <p className="mb-5 rounded-2xl border border-[#F2E6D6] bg-cream px-4 py-3.5 text-[13px] leading-relaxed text-graphite">
+            <span className="font-medium text-navy">{partner?.name} isn’t issuing Date Passes yet.</span>{' '}
+            The scanner works, but there won’t be any codes to scan until the account moves to a plan
+            that includes them. Nothing to do here in the meantime.
+          </p>
+        )}
+
         {cameraSupported && (
           <div className="mb-5">
             {scanning ? (

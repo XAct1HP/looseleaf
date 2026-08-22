@@ -855,5 +855,73 @@ begin
   perform assert(bad is null, 'the public offer view exposes no commercial limits');
 end $$;
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  14 · Scanning is a property of membership, not a grant
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+--  Everything below exists because a member of staff signed in and was told
+--  they had no access to anything. Two separate mistakes made that possible:
+--  the grid could be written without `scan`, and the client removed the tab
+--  when the plan didn't include Date Passes. The second is a client concern,
+--  but the first is enforced here.
+
+--  An owner cannot strip the scanner from a role, even by asking for exactly
+--  that.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid; v_pages jsonb;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+
+  v_pages := set_partner_role_pages(v_partner, 'staff', array['analytics']);
+  perform assert(v_pages -> 'staff' ? 'scan',
+                 'set_partner_role_pages puts the scanner back');
+
+  v_pages := set_partner_role_pages(v_partner, 'staff', array[]::text[]);
+  perform assert(v_pages -> 'staff' ? 'scan',
+                 'even asked for nothing at all');
+end $$;
+
+--  And writing the column by hand doesn't get round it either.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  update partners
+     set role_pages = '{"manager": [], "staff": []}'::jsonb
+   where id = v_partner;
+
+  perform act_as(current_setting('test.shift')::uuid);
+  perform assert(partner_can(v_partner, 'scan'),
+                 'a member with an empty grid can still scan');
+  perform assert(partner_my_pages(v_partner) = array['scan'],
+                 'and the scanner is exactly what they reach');
+  perform assert(not partner_can(v_partner, 'overview'),
+                 'nothing else leaked in with it');
+
+  perform act_as(current_setting('test.mgr')::uuid);
+  perform assert(partner_my_pages(v_partner) = array['scan'],
+                 'the same holds for a manager stripped to nothing');
+end $$;
+
+--  Nobody outside the business gets it from this rule.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  perform assert(not partner_can(v_partner, 'scan'),
+                 'a student still cannot scan for somebody else''s business');
+  perform assert(partner_my_pages(v_partner) = '{}'::text[],
+                 'and reaches no pages at all');
+end $$;
+
+--  Put the defaults back for anything that runs after this.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  perform set_partner_role_pages(v_partner, 'manager', array['scan','team']);
+  perform set_partner_role_pages(v_partner, 'staff', array['scan']);
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'
