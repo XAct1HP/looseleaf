@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StepShell from './StepShell'
 import { SelectChip, Chip } from '../../components/ui/Chip'
@@ -467,6 +467,14 @@ function Interests({ draft, set }) {
 /* ------------------------------------------------------------- step 8 -- */
 
 function Review({ draft }) {
+  // If the photo can't be shown for any reason, this falls back to the
+  // illustration. A broken-image icon on the last screen of onboarding reads
+  // as "your photo didn't save", which isn't even true — the upload happens
+  // when you press Finish.
+  const [imageFailed, setImageFailed] = useState(false)
+  const first = draft.photos[0]
+  const src = first?.previewUrl ?? first?.url ?? null
+
   return (
     <div className="relative text-center">
       <Star className="absolute left-4 -top-2 animate-twinkle text-coral" size={16} />
@@ -474,14 +482,15 @@ function Review({ draft }) {
 
       <div className="mx-auto w-[190px] rotate-[-3deg] rounded-card border border-rule bg-white p-3 shadow-lift">
         <div className="aspect-[4/5] overflow-hidden rounded-xl">
-          {draft.photos[0]?.previewUrl || draft.photos[0]?.url ? (
+          {src && !imageFailed ? (
             <img
-              src={draft.photos[0].previewUrl ?? draft.photos[0].url}
+              src={src}
               alt=""
               className="h-full w-full object-cover"
+              onError={() => setImageFailed(true)}
             />
           ) : (
-            <Portrait id="me-0" scene={draft.photos[0]?.scene ?? 'portrait'} rounded="rounded-xl" />
+            <Portrait id="me-0" scene={first?.scene ?? 'portrait'} rounded="rounded-xl" />
           )}
         </div>
         <p className="mt-3 font-display text-[18px] font-semibold">{draft.firstName || 'You'}</p>
@@ -536,6 +545,27 @@ export default function Onboarding() {
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
   const next = () => setStep((s) => Math.min(TOTAL, s + 1))
   const back = () => (step === 1 ? navigate('/verify') : setStep((s) => s - 1))
+
+  /**
+   * The blob URLs behind the photo previews belong to the *draft*, which
+   * outlives the photos step, so they are released here and nowhere else.
+   *
+   * They used to be released by PhotoSlot when it unmounted — which is the
+   * moment you press Continue. By the time you reached "here's how you look"
+   * the URL on the card had already been revoked, so it rendered a broken
+   * image every single time, for every format. A slot is the wrong owner for
+   * something the draft still points at.
+   */
+  const photosRef = useRef(draft.photos)
+  photosRef.current = draft.photos
+  useEffect(
+    () => () => {
+      for (const p of photosRef.current ?? []) {
+        if (p?.previewUrl) URL.revokeObjectURL(p.previewUrl)
+      }
+    },
+    []
+  )
 
   const finish = async () => {
     setSaveError('')

@@ -207,7 +207,10 @@ export async function saveOnboarding(userId, email, draft, { onProgress } = {}) 
 }
 
 /**
- * @param photos array of { file? , path?, scene? } in display order
+ * @param photos array of { file?, prepared?, path?, scene? } in display order.
+ *               `prepared` is the already-resized, already-converted result
+ *               the picker produced to draw its preview; passing it through
+ *               means the image is decoded once per photo, not twice.
  */
 export async function savePhotos(userId, photos) {
   const rows = []
@@ -218,7 +221,7 @@ export async function savePhotos(userId, photos) {
 
     let path = photo.path ?? null
     if (photo.file) {
-      path = await uploadPhoto(userId, photo.file, position)
+      path = await uploadPhoto(userId, photo.file, position, photo.prepared ?? null)
     }
     rows.push({ profile_id: userId, position, storage_path: path, scene: photo.scene ?? null })
   }

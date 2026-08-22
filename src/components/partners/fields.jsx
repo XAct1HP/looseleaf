@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SelectChip } from '../ui/Chip'
 import { IconPlus, IconX } from '../ui/Icons'
+import { displayableUrl } from '../../lib/imagePipeline'
 
 /** A labelled input, with room for the hint that stops a support email. */
 export function Field({ label, hint, error, children, required, htmlFor }) {
@@ -217,13 +218,22 @@ export function PhotoSlot({ label, url, onPick, onClear, aspect = 'aspect-[3/2]'
            type for it, which a bare image/* filter then hides. */
         accept="image/*,.heic,.heif,image/heic,image/heif"
         className="sr-only"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0]
           e.target.value = ''
           if (!file) return
           if (local) URL.revokeObjectURL(local)
-          setLocal(URL.createObjectURL(file))
+          setLocal(null)
+          // Upload first, so a slow HEIC conversion for the *preview* never
+          // delays the thing that actually matters.
           onPick(file)
+          // …and a HEIC has to be converted before it can be previewed at all;
+          // a raw one in an <img> is a broken icon everywhere but Safari.
+          try {
+            setLocal(await displayableUrl(file))
+          } catch {
+            /* the uploaded copy will arrive and stand in for it */
+          }
         }}
       />
     </div>

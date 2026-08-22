@@ -61,6 +61,24 @@ async function fromHeic(file) {
   })
 }
 
+/**
+ * A blob URL the browser can definitely display, for showing somebody the
+ * photo they just picked before it has gone anywhere.
+ *
+ * For a JPEG or PNG this is just an object URL and costs nothing. For a HEIC
+ * it is a conversion first, because `URL.createObjectURL(heicFile)` in an
+ * `<img>` is a broken-image icon in every browser except Safari — which is
+ * exactly what an iPhone photo picked from Files used to produce, on the very
+ * screen that says "here's how you look".
+ *
+ * Caller owns the URL and must revoke it.
+ */
+export async function displayableUrl(file) {
+  if (!file) return null
+  if (!isHeic(file)) return URL.createObjectURL(file)
+  return URL.createObjectURL(await fromHeic(file))
+}
+
 /** Decoded with orientation applied, not ignored. */
 async function decode(file) {
   if (typeof createImageBitmap === 'function') {

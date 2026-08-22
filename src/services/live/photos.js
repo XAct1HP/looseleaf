@@ -54,11 +54,17 @@ export function validateImage(file) {
  * Storage policy keys off the first path segment, so everything a user owns
  * sits under their own id and nobody can write into anyone else's folder.
  */
-export async function uploadPhoto(userId, file, position) {
+/**
+ * @param prepared  the result of `derive()`, if the picker already ran it —
+ *                  which it does, so it can show a preview of something the
+ *                  browser can actually decode. Re-deriving here would decode
+ *                  and re-encode a second time for nothing.
+ */
+export async function uploadPhoto(userId, file, position, prepared = null) {
   const problem = validateImage(file)
   if (problem) throw new Error(problem)
 
-  const { full, sm, type } = await derive(file, 'photo')
+  const { full, sm, type } = prepared ?? (await derive(file, 'photo'))
   const path = `${userId}/${position}-${Date.now().toString(36)}.${extFor(type)}`
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, full, {
