@@ -3,6 +3,7 @@ import Logo from '../components/brand/Logo'
 import Button from '../components/ui/Button'
 import Portrait from '../components/brand/Portrait'
 import UniversityBadge from '../components/common/UniversityBadge'
+import TopMenu from '../components/nav/TopMenu'
 import { Underline, Star, HandHeart, Squiggle } from '../components/brand/Doodles'
 import { IconEye, IconCap, IconPeople, IconCoffee, IconLock, IconPin } from '../components/ui/Icons'
 
@@ -79,16 +80,19 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-paper">
       {/* ── nav ─────────────────────────────────────────────────── */}
-      <header className="mx-auto flex max-w-[1180px] items-center justify-between px-5 py-5 sm:px-8">
+      {/* "For businesses" belongs up here, not only in the Date Spots section
+          halfway down the page — a restaurant owner who has been told about
+          Loose Leaf arrives at the top and shouldn't have to scroll past a
+          product built for students to find the one built for them. */}
+      <header className="relative mx-auto flex max-w-[1180px] items-center justify-between px-5 py-5 sm:px-8">
         <Logo size="md" />
-        <nav className="flex items-center gap-2">
-          <Button to="/login" variant="ghost" size="sm">
-            Log in
-          </Button>
-          <Button to="/join" variant="primary" size="sm">
-            Join your campus
-          </Button>
-        </nav>
+        <TopMenu
+          items={[
+            { to: '/partners', label: 'For businesses' },
+            { to: '/login', label: 'Log in' },
+            { to: '/join', label: 'Join your campus', variant: 'primary' },
+          ]}
+        />
       </header>
 
       {/* ── hero ────────────────────────────────────────────────── */}

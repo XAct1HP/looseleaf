@@ -15,8 +15,12 @@ export default function ForPartners({ size = 'sm', className = '' }) {
   const nudge = NUDGE[size] ?? NUDGE.sm
   const text = size === 'md' ? 'text-[13.5px]' : 'text-[13px]'
 
+  // Shown at every width now. It used to be hidden on a phone because two
+  // buttons and a wordmark could not share 390px; with those buttons behind a
+  // menu there is room, and a restaurant owner on a phone should be able to
+  // tell at a glance which of the two Loose Leafs they are looking at.
   return (
-    <span className={`hidden items-center gap-2.5 sm:flex ${nudge} ${className}`}>
+    <span className={`flex items-center gap-2.5 ${nudge} ${className}`}>
       <span className="h-4 w-px bg-rule" />
       <span className={`${text} font-medium leading-none text-graphite`}>for Partners</span>
     </span>

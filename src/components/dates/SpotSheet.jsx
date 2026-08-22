@@ -96,10 +96,13 @@ export default function SpotSheet({ spot, onClose, conversationId = null, surfac
           {/* Full-bleed cover: the sheet's own padding is undone so the photo
               reaches the edges, the way it does on the card. */}
           <div className="-mx-6 mb-5">
+            {/* Full size here and only here: this is the one place the photo
+                is big enough on screen to be worth the extra bytes. */}
             <SpotImage
               path={spot.coverPath}
               className="aspect-[16/9] w-full"
               seed={spot.id ?? spot.name}
+              size="full"
               priority
             />
           </div>

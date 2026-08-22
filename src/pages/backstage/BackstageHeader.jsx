@@ -4,7 +4,7 @@ import { IconBack } from '../../components/ui/Icons'
 const TABS = [
   { to: '/app/backstage', label: 'Overview', end: true },
   { to: '/app/backstage/reports', label: 'Reports' },
-  { to: '/app/backstage/events', label: 'Event queue' },
+  { to: '/app/backstage/events', label: 'Events' },
   { to: '/app/backstage/partners', label: 'Partners' },
 ]
 

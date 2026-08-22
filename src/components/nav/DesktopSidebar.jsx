@@ -60,7 +60,7 @@ function BackstageSection() {
         <li>
           <NavLink to="/app/backstage/events" className={smallLinkClass}>
             <IconCalendar size={19} className="text-mist" />
-            <span className="flex-1">Event queue</span>
+            <span className="flex-1">Events</span>
             <Badge n={counts.events} />
           </NavLink>
         </li>

@@ -40,3 +40,14 @@ export async function reviewEvent(id, reviewerId, decision, note) {
   if (isDemo) return (await demo()).staffReviewEvent(id, decision, note)
   return liveEvents.reviewEvent(id, reviewerId, decision, note)
 }
+
+/** Everything currently on Campus, so it can be taken back off. */
+export async function publishedEvents() {
+  if (isDemo) return (await demo()).staffPublishedEvents()
+  return liveEvents.publishedEvents()
+}
+
+export async function removeEvent(id) {
+  if (isDemo) return (await demo()).staffRemoveEvent(id)
+  return liveEvents.removeEvent(id)
+}

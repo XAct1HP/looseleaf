@@ -55,6 +55,7 @@ supabase db push
 #   20260821120000_partner_team.sql        invitations and roles
 #   20260822120000_partner_permissions.sql per-page capabilities, coordinates
 #   20260823120000_partner_scan_always.sql scanning is membership, not a grant
+#   20260823130000_campus_stats.sql        real headcounts for the Campus page
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -215,8 +216,20 @@ the business will honour this month.
 
 ## Photos, and why they appear immediately
 
-Three separate problems, three fixes, all in `services/live/partnerMedia.js`
-and `components/dates/SpotImage.jsx`:
+One pipeline — `src/lib/imagePipeline.js` — shared by business photos and
+student photos, because the problem was identical and only the bucket differed.
+Student photos were, until this was written, uploaded **completely raw**: an
+eight-megabyte 4032px photograph off a phone went into the bucket as-is and was
+then downloaded in full to fill a card 400px wide, cached for an hour, with
+HEIC on the allowed list and never converted.
+
+The reason this is done in the browser and not bought from a CDN: resizing once
+at the moment somebody picks the file makes every later view about a hundredth
+the size, permanently, for nothing. Supabase's own image transformations are
+Pro-plan-and-up and billed per origin image; they would be worth it only if we
+needed many arbitrary sizes from one original, which we don't.
+
+Four problems, four fixes:
 
 **HEIC.** An iPhone hands over HEIC whenever a photo is picked from Files
 rather than Photos, and Chrome and Firefox cannot decode it at all — upload one
@@ -234,8 +247,20 @@ lands as a few hundred kilobytes, which is most of the reason the old ones felt
 slow. Logos with real transparency stay PNG; everything else is flattened onto
 the paper colour.
 
+**Two sizes, one decode.** Every photo is written twice — the full file and a
+small one at `name@sm.webp` — and cards, decks and lists ask for the small one.
+The variant is addressed by *filename convention*, so no column, RPC or
+migration had to learn about it, and a photo uploaded before any of this simply
+has no small file: the 404 falls back to the full path rather than leaving a
+hole. Output is **WebP** where the browser can encode it (25–35% smaller than
+JPEG at the same quality) and JPEG where it can't — the type that actually came
+back decides the extension, so nothing is ever mislabelled.
+
 **The wait.** Uploads set `cacheControl: '31536000'` so a cover is fetched once
-ever. The Date Spots page calls `preload()` with every cover as soon as the
+ever. Student photos are signed for a day rather than an hour and the links are
+remembered for the session: a signed URL is unique per signature, so re-signing
+on every render guaranteed a CDN miss every time and put a round trip in front
+of the first paint. The Date Spots page calls `preload()` with every cover as soon as the
 list arrives, so they are in cache before anybody has finished reading the
 filter chips, and the first four cards render `eager` with
 `fetchPriority="high"`. `SpotImage` always paints a box at the final aspect
@@ -247,6 +272,24 @@ The upload field shows the *local* file as a preview from the moment it is
 picked — `URL.createObjectURL`, swapped for the stored URL when the upload
 finishes and revoked after. Onboarding used to show an empty frame for as long
 as the upload took, which read as a failure.
+
+## Scanning, and the camera
+
+`BarcodeDetector` where it exists — Chrome and Android — and a jsQR canvas path
+everywhere else, because iOS Safari has no BarcodeDetector and the phone behind
+a restaurant counter is very often an iPhone. The decoder is imported only when
+the camera actually opens.
+
+The camera used to attach its stream in the same breath as `setScanning(true)`,
+which never worked: the `<video>` element only exists once that state has
+rendered, so `videoRef.current` was still null one line later and the stream was
+silently dropped. Staff got a lit camera light above a black rectangle. Getting
+permission and attaching the stream are now separate — permission in the click
+handler, attachment in an effect, which by definition runs after the element is
+on the page. `getUserMedia` asks for `facingMode: { ideal: 'environment' }` and
+retries unconstrained on `OverconstrainedError`, and each failure name gets its
+own sentence: a blocked permission and a missing camera need different
+responses from the person holding the phone.
 
 ## The map
 

@@ -80,6 +80,19 @@ export const IconX = (p) => (
   </svg>
 )
 
+/** Three ruled lines — the same motif as the paper, which is a happy accident. */
+export const IconMenu = (p) => (
+  <svg {...base(p)}>
+    <path d="M4 7h16M4 12h16M4 17h16" />
+  </svg>
+)
+
+export const IconTrash = (p) => (
+  <svg {...base(p)}>
+    <path d="M4 7h16M10 4h4M9 7v12M15 7v12M6 7l1 13h10l1-13" />
+  </svg>
+)
+
 export const IconCheck = (p) => (
   <svg {...base(p)}>
     <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />

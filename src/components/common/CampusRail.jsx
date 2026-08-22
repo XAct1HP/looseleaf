@@ -1,11 +1,26 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import RailCard from './RailCard'
 import { UNIVERSITY, CAMPUS_EVENTS } from '../../data/catalog'
 import { IconVerified, IconMoon, IconChevron } from '../ui/Icons'
 import { useStore } from '../../state/store'
+import { isDemo } from '../../lib/supabase'
+import * as campus from '../../services/live/campus'
 
 export default function CampusRail() {
   const { state } = useStore()
+
+  // The same rule as the Campus page: a real count, or no count at all. See
+  // the note on WORTH_STATING there.
+  const [members, setMembers] = useState(isDemo ? UNIVERSITY.activeStudents : null)
+  useEffect(() => {
+    if (isDemo) return undefined
+    let live = true
+    campus.stats().then((s) => live && setMembers(s?.members ?? null))
+    return () => {
+      live = false
+    }
+  }, [])
 
   return (
     <>
@@ -17,7 +32,9 @@ export default function CampusRail() {
           <div>
             <p className="text-[15px] font-semibold leading-tight text-[#22406E]">{UNIVERSITY.short}</p>
             <p className="mt-1 text-[13px] text-[#4A6A99]">
-              {UNIVERSITY.activeStudents.toLocaleString()} active students
+              {members != null && members >= 10
+                ? `${members.toLocaleString()} active students`
+                : 'Verified campus email required'}
             </p>
           </div>
         </div>

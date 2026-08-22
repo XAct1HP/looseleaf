@@ -36,9 +36,13 @@ export default function SignupsChart({ data = [], height = 168 }) {
   const peakIndex = counts.lastIndexOf(peak)
   const total = counts.reduce((a, b) => a + b, 0)
 
-  // Clean tick values rather than the raw max.
+  // Clean tick values rather than the raw max, and always one step of headroom
+  // above the busiest day. Without it a peak that happens to land exactly on a
+  // tick — which is *every* peak on a quiet week, where the busiest day is one
+  // signup — draws a bar the full height of the plot with its label jammed
+  // against the top edge. The axis should end above the data, not on it.
   const step = peak <= 4 ? 1 : peak <= 10 ? 2 : peak <= 25 ? 5 : 10
-  const top = Math.ceil(peak / step) * step
+  const top = (Math.floor(peak / step) + 1) * step
   const ticks = Array.from({ length: top / step + 1 }, (_, i) => i * step).reverse()
 
   return (
@@ -102,8 +106,13 @@ export default function SignupsChart({ data = [], height = 168 }) {
                       opacity: hover === null || active ? 1 : 0.45,
                     }}
                   />
-                  {i === peakIndex && (
-                    <span className="pointer-events-none absolute -top-1 left-1/2 -translate-x-1/2 text-[11px] font-semibold tabular-nums text-navy">
+                  {/* Sits in the headroom above the bar rather than on top of
+                      it, and only when there is something to label. */}
+                  {i === peakIndex && d.count > 0 && (
+                    <span
+                      className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[11px] font-semibold tabular-nums leading-none text-navy"
+                      style={{ bottom: `calc(${h}% + 6px)` }}
+                    >
                       {d.count}
                     </span>
                   )}

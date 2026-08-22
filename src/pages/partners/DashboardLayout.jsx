@@ -212,8 +212,13 @@ function ScannerOnlyShell({ partner }) {
           style={{ paddingTop: 'calc(var(--safe-top) + 0.65rem)' }}
         >
           <Logo size="sm" />
-          <div className="ml-auto flex items-center gap-2">
-            <span className="hidden truncate text-[13px] font-medium text-graphite sm:block">
+          {/* The name and the button are given the same box height and type
+              size rather than being left to `items-center` — centring two
+              boxes of different heights lines up the boxes, not the words in
+              them, which is why the business name used to sit a couple of
+              pixels above "Log out". */}
+          <div className="ml-auto flex items-center gap-1">
+            <span className="hidden max-w-[26ch] truncate px-2 py-2 text-[13.5px] font-medium leading-[20px] text-graphite sm:block">
               {partner.name}
             </span>
             <LogOut />
@@ -265,7 +270,7 @@ function LogOut() {
         await auth.signOut()
         navigate('/partners', { replace: true })
       }}
-      className="focus-ring rounded-xl px-3 py-2 text-[13.5px] font-medium text-graphite hover:text-navy"
+      className="focus-ring rounded-xl px-3 py-2 text-[13.5px] font-medium leading-[20px] text-graphite hover:text-navy"
     >
       Log out
     </button>

@@ -80,7 +80,7 @@ export default function PhotoSlot({ index, photo, hint, onPick, onChoose, onRemo
         <input
           ref={inputRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp,image/heic"
+          accept="image/*,.heic,.heif,image/heic,image/heif"
           className="sr-only"
           onChange={handleFile}
           aria-label={`Photo ${index + 1}`}

@@ -49,11 +49,14 @@ export default function ProfileCard({
     onLike?.(payload)
   }
 
+  // The first photo is what somebody is looking at the instant this card
+  // appears, so it loads eagerly and ahead of everything else on the page.
   const photoAt = (i, extra = {}) =>
     photos[i] ? (
       <ProfilePhoto
         person={person}
         index={i}
+        priority={i === 0}
         onLike={onLike ? () => askLike({ type: 'photo', index: i }, 'this photo') : undefined}
         {...extra}
       />

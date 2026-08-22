@@ -4,9 +4,19 @@ import Button from '../../components/ui/Button'
 import Sheet from '../../components/ui/Sheet'
 import EmptyState from '../../components/common/EmptyState'
 import { Chip } from '../../components/ui/Chip'
-import { IconCheck, IconX } from '../../components/ui/Icons'
+import { IconCheck, IconX, IconTrash } from '../../components/ui/Icons'
 import { useStore } from '../../state/store'
 import * as staff from '../../services/staff'
+
+/** A heading with a count, so the two halves of the page read as one list. */
+function SectionLabel({ children, count, className = '' }) {
+  return (
+    <div className={`mb-3 flex items-baseline gap-2 ${className}`}>
+      <h2 className="font-display text-[17px] font-semibold text-navy">{children}</h2>
+      <span className="text-[13px] tabular-nums text-mist">{count}</span>
+    </div>
+  )
+}
 
 const ago = (at) => {
   const ms = Date.now() - new Date(at).getTime()
@@ -19,14 +29,21 @@ const ago = (at) => {
 export default function EventQueue() {
   const { state, actions } = useStore()
   const [events, setEvents] = useState([])
+  const [live, setLive] = useState([])
   const [loading, setLoading] = useState(true)
   const [declining, setDeclining] = useState(null)
+  const [removing, setRemoving] = useState(null)
   const [note, setNote] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setEvents(await staff.pendingEvents())
+      const [pending, published] = await Promise.all([
+        staff.pendingEvents(),
+        staff.publishedEvents(),
+      ])
+      setEvents(pending)
+      setLive(published)
     } catch (e) {
       actions.showToast(e.message)
     } finally {
@@ -60,20 +77,33 @@ export default function EventQueue() {
     }
   }
 
+  const remove = async () => {
+    try {
+      await staff.removeEvent(removing.id)
+      actions.showToast('Taken off Campus.')
+      setRemoving(null)
+      load()
+    } catch (e) {
+      actions.showToast(e.message)
+    }
+  }
+
   return (
     <>
       <BackstageHeader
-        title="Event queue"
-        subtitle="Students suggest events; nothing appears on Campus until you publish it."
+        title="Events"
+        subtitle="Students suggest events; nothing appears on Campus until you publish it — and anything published can be taken back down."
       />
+
+      <SectionLabel count={events.length}>Waiting for review</SectionLabel>
 
       {loading ? (
         <p className="py-10 text-center text-[14px] text-mist">Loading…</p>
       ) : events.length === 0 ? (
         <EmptyState
           art="plane"
-          title="Queue is empty."
-          body="Nothing waiting to be reviewed. Suggestions show up here the moment a student sends one."
+          title="Nothing waiting."
+          body="Suggestions show up here the moment a student sends one."
         />
       ) : (
         <ul className="space-y-3">
@@ -120,6 +150,68 @@ export default function EventQueue() {
           ))}
         </ul>
       )}
+
+      {!loading && (
+        <>
+          <SectionLabel count={live.length} className="mt-9">
+            On Campus now
+          </SectionLabel>
+
+          {live.length === 0 ? (
+            <p className="rounded-card border border-rule bg-cream/50 px-5 py-8 text-center text-[14px] leading-relaxed text-graphite">
+              Nothing published yet. Anything you publish above shows up here, and can be taken down
+              again from here.
+            </p>
+          ) : (
+            <ul className="space-y-2.5">
+              {live.map((e) => (
+                <li
+                  key={e.id}
+                  className="flex items-center gap-4 rounded-card border border-rule bg-white px-5 py-4"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cream text-[19px]">
+                    <span aria-hidden="true">{e.emoji}</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-display text-[16.5px] font-semibold leading-tight">
+                      {e.title}
+                    </p>
+                    <p className="mt-0.5 truncate text-[13px] text-graphite">
+                      {e.when}
+                      {e.venue ? ` \u00b7 ${e.venue}` : ''}
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setRemoving(e)}>
+                    <IconTrash size={15} />
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+
+      <Sheet
+        open={!!removing}
+        onClose={() => setRemoving(null)}
+        title="Take this off Campus?"
+        subtitle="It disappears from the Events page immediately, along with everyone's interest in it. This can't be undone \u2014 a student would have to suggest it again."
+      >
+        <p className="rounded-2xl border border-rule bg-cream/60 px-4 py-3.5 text-[14px] leading-relaxed text-navy">
+          {removing?.emoji} {removing?.title}
+        </p>
+        <Button variant="primary" size="lg" full className="mt-5" onClick={remove}>
+          Remove it
+        </Button>
+        <button
+          type="button"
+          onClick={() => setRemoving(null)}
+          className="focus-ring mt-3 w-full rounded-xl py-2.5 text-[14px] font-medium text-graphite hover:text-navy"
+        >
+          Keep it up
+        </button>
+      </Sheet>
 
       <Sheet
         open={!!declining}

@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { publicUrl } from '../../services/live/partnerMedia'
 
 /**
  * ── A photo of a place, with nothing to watch while it arrives ──────────────
  *
- * Three things stop a Date Spot list from popping and reflowing as it loads:
+ * Four things stop a Date Spot list from popping and reflowing as it loads:
  *
  *   The box exists before the photo does. The aspect ratio comes from the
  *   caller, so the layout is final on first paint and nothing moves when the
@@ -18,8 +18,12 @@ import { publicUrl } from '../../services/live/partnerMedia'
  *   rest are lazy, so a long list doesn't fight itself for bandwidth on campus
  *   wifi.
  *
- * A place with no photo at all keeps the pattern permanently, which is a great
- * deal better than a broken-image icon.
+ *   And a card asks for a card-sized file. `size="sm"` fetches the small
+ *   derivative written at upload — a few tens of kilobytes rather than a few
+ *   hundred. Photos uploaded before that existed have no small variant, so a
+ *   404 quietly falls back to the full path instead of leaving a hole; a place
+ *   with no photo at all keeps the pattern permanently, which is a great deal
+ *   better than a broken-image icon.
  */
 
 /** Deterministic hue per spot, kept inside Looseleaf's warm range. */
@@ -37,10 +41,17 @@ export default function SpotImage({
   seed = '',
   priority = false,
   rounded = '',
+  size = 'sm',
 }) {
-  const url = publicUrl(path)
-  const [loaded, setLoaded] = useState(false)
-  const [failed, setFailed] = useState(false)
+  // 'retry' falls back to the full-size file; 'gone' means neither exists.
+  const [state, setState] = useState('idle')
+
+  useEffect(() => {
+    setState('idle')
+  }, [path])
+
+  const wanted = state === 'retry' ? 'full' : size
+  const url = state === 'gone' ? null : publicUrl(path, wanted)
 
   return (
     <div
@@ -53,17 +64,18 @@ export default function SpotImage({
         aria-hidden="true"
       />
 
-      {url && !failed && (
+      {url && (
         <img
+          key={wanted}
           src={url}
           alt={alt}
           loading={priority ? 'eager' : 'lazy'}
           decoding="async"
           fetchPriority={priority ? 'high' : 'auto'}
-          onLoad={() => setLoaded(true)}
-          onError={() => setFailed(true)}
+          onLoad={() => setState('loaded')}
+          onError={() => setState(wanted === 'full' ? 'gone' : 'retry')}
           className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-200 ${
-            loaded ? 'opacity-100' : 'opacity-0'
+            state === 'loaded' ? 'opacity-100' : 'opacity-0'
           }`}
         />
       )}

@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase'
+import { forgetSignedUrls } from './photos'
 
 /**
  * Email-code auth, matching the six-box screen the product already had.
@@ -76,5 +77,8 @@ export function onAuthChange(handler) {
 }
 
 export async function signOut() {
+  // Photo links are signed for a day and remembered for the session; none of
+  // them should outlive the session that asked for them.
+  forgetSignedUrls()
   await supabase.auth.signOut()
 }

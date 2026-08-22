@@ -84,7 +84,10 @@ export async function loadMe(userId) {
   if (!data) return null
 
   const photoRows = [...(data.profile_photos ?? [])].sort((a, b) => a.position - b.position)
-  const urls = await signUrls(photoRows.map((p) => p.storage_path))
+  // Both sizes, in one signing round trip: the page shows the big one and
+  // every list that mentions this person shows the small one.
+  const paths = photoRows.map((p) => p.storage_path)
+  const [urls, thumbs] = await Promise.all([signUrls(paths), signUrls(paths, 'sm')])
 
   const prefs = data.profile_preferences ?? {}
 
@@ -109,6 +112,7 @@ export async function loadMe(userId) {
       position: p.position,
       path: p.storage_path,
       url: p.storage_path ? urls[p.storage_path] : null,
+      thumbUrl: p.storage_path ? thumbs[p.storage_path] : null,
       scene: p.scene,
     })),
     prompts: [...(data.profile_prompts ?? [])]

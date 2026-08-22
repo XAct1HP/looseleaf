@@ -45,6 +45,7 @@ export default function Scan() {
   const canvasRef = useRef(null)
   const streamRef = useRef(null)
   const loopRef = useRef(null)
+  const checkRef = useRef(null)
 
   // A camera is all that's required; the decoding is our problem, not the
   // browser's.
@@ -79,6 +80,10 @@ export default function Scan() {
     },
     [busy, partner, stopCamera]
   )
+
+  // The frame loop calls this through a ref, so a new `check` never restarts
+  // the camera.
+  checkRef.current = check
 
   // A pass QR encodes a link to this page with the code on it, so a member of
   // staff can point a phone camera at it without opening the dashboard first.
@@ -123,19 +128,68 @@ export default function Scan() {
     return hit?.data && /LL-/i.test(hit.data) ? hit.data : null
   }
 
+  /**
+   * Ask for the camera. That is *all* this does.
+   *
+   * It used to attach the stream here too, and that was the bug: the `<video>`
+   * element only exists once `scanning` is true, and setting state does not
+   * mount anything synchronously — so `videoRef.current` was still null one
+   * line later, the stream was silently never attached, and staff got a lit
+   * camera light above a black rectangle. Attaching belongs in an effect,
+   * which by definition runs after the element is on the page.
+   */
   async function startCamera() {
     setError(null)
+
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+      setError('The camera only works over a secure (https) connection. You can type the code instead.')
+      return
+    }
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-      })
+      let stream
+      try {
+        // `ideal`, not `exact`: a laptop with only a front camera should still
+        // open rather than throw.
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
+        })
+      } catch (e) {
+        if (e?.name !== 'OverconstrainedError') throw e
+        stream = await navigator.mediaDevices.getUserMedia({ video: true })
+      }
       streamRef.current = stream
       setScanning(true)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        // Required on iOS or the video simply never starts.
-        videoRef.current.setAttribute('playsinline', 'true')
-        await videoRef.current.play()
+    } catch (e) {
+      setError(cameraProblem(e))
+      setScanning(false)
+    }
+  }
+
+  /**
+   * Attach the stream and decode frames — once the element it goes into is
+   * actually on the page.
+   */
+  useEffect(() => {
+    if (!scanning) return undefined
+    const video = videoRef.current
+    const stream = streamRef.current
+    if (!video || !stream) return undefined
+
+    let cancelled = false
+
+    video.srcObject = stream
+    // Both are required on iOS or the video never starts, and setting them as
+    // attributes as well as properties covers older WebKit.
+    video.setAttribute('playsinline', 'true')
+    video.setAttribute('muted', 'true')
+    video.muted = true
+
+    const run = async () => {
+      try {
+        await video.play()
+      } catch {
+        /* an autoplay refusal doesn't stop us reading frames */
       }
 
       let detector = null
@@ -151,13 +205,14 @@ export default function Scan() {
         const mod = await import('jsqr')
         decodeFallback = mod.default ?? mod
       }
+      if (cancelled) return
 
       const tick = async () => {
-        if (!streamRef.current || !videoRef.current) return
+        if (cancelled || !streamRef.current) return
         try {
           const raw = await readFrame(detector, decodeFallback)
           if (raw) {
-            check(extractCode(raw))
+            checkRef.current(extractCode(raw))
             return
           }
         } catch {
@@ -166,11 +221,18 @@ export default function Scan() {
         loopRef.current = requestAnimationFrame(tick)
       }
       loopRef.current = requestAnimationFrame(tick)
-    } catch {
-      setError('Couldn’t open the camera. You can type the code instead.')
-      setScanning(false)
     }
-  }
+
+    run()
+
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(loopRef.current)
+    }
+    // `check` is read through a ref on purpose: it changes whenever `busy`
+    // does, and depending on it here would tear the camera down mid-scan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanning])
 
   async function confirm() {
     if (busy || !result?.valid) return
@@ -422,6 +484,27 @@ export default function Scan() {
       </div>
     </>
   )
+}
+
+/**
+ * Why the camera didn't open, in words somebody behind a counter can act on.
+ * "Permission denied" and "there is no camera" need completely different
+ * responses, and one message for both leaves people tapping the same button.
+ */
+function cameraProblem(e) {
+  switch (e?.name) {
+    case 'NotAllowedError':
+    case 'SecurityError':
+      return 'Camera access was blocked. Allow it for this site in your browser settings, or type the code instead.'
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return 'No camera on this device. Typing the code works exactly the same.'
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return 'Another app is using the camera. Close it and try again, or type the code instead.'
+    default:
+      return 'Couldn’t open the camera. You can type the code instead.'
+  }
 }
 
 /** A pass QR encodes a URL; the code is the last path segment. */

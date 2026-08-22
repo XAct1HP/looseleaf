@@ -1,9 +1,17 @@
+import { useEffect, useState } from 'react'
 import Portrait from '../brand/Portrait'
 import LikeButton from './LikeButton'
 
 /**
  * One photo slot. Falls back to an illustrated stand-in when there's no
  * uploaded image (which, in the demo, is always).
+ *
+ * `size="sm"` asks for the thumbnail written at upload — which is what a list,
+ * a match card or a deck should use, and is roughly a tenth of the bytes. A
+ * photo uploaded before thumbnails existed doesn't have one, so a failure
+ * falls back to the full file rather than leaving a hole. `priority` is for the
+ * one photo somebody is actually looking at: it loads eagerly and jumps the
+ * queue, while everything else stays lazy.
  */
 export default function ProfilePhoto({
   person,
@@ -13,18 +21,35 @@ export default function ProfilePhoto({
   liked = false,
   aspect = 'aspect-[4/5]',
   caption,
+  size = 'full',
+  priority = false,
   className = '',
 }) {
   const photo = person.photos?.[index]
   const scene = photo?.scene ?? 'portrait'
+
   // A real uploaded photo wins; the illustration is the fallback for slots
-  // that don't have one.
-  const image = src ?? photo?.url ?? photo?.previewUrl ?? null
+  // that don't have one. A local preview (mid-upload) always wins outright.
+  const full = src ?? photo?.url ?? photo?.previewUrl ?? null
+  const small = size === 'sm' ? (photo?.thumbUrl ?? null) : null
+
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [small, full])
+
+  const image = (!failed && small) || full
 
   return (
     <figure className={`group relative overflow-hidden rounded-card bg-cream shadow-paper ${aspect} ${className}`}>
       {image ? (
-        <img src={image} alt="" className="h-full w-full object-cover" loading="lazy" />
+        <img
+          src={image}
+          alt=""
+          className="h-full w-full object-cover"
+          loading={priority ? 'eager' : 'lazy'}
+          decoding="async"
+          fetchPriority={priority ? 'high' : 'auto'}
+          onError={() => setFailed(true)}
+        />
       ) : (
         <Portrait id={`${person.id}-${index}`} scene={scene} rounded="rounded-card" />
       )}

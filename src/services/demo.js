@@ -412,6 +412,15 @@ export function staffReviewEvent(id, decision) {
   demoPending = demoPending.map((e) => (e.id === id ? { ...e, status: decision } : e))
 }
 
+/** What students can actually see on Campus right now. */
+export function staffPublishedEvents() {
+  return demoPending.filter((e) => e.status === 'approved')
+}
+
+export function staffRemoveEvent(id) {
+  demoPending = demoPending.filter((e) => e.id !== id)
+}
+
 /* ─────────────────────────────────────────────────────────── mutuals ─────
  *
  * The demo campus, searched the same way the real one is: exact first name

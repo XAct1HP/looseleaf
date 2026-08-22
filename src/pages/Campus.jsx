@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PageHeader from '../components/common/PageHeader'
 import RailCard from '../components/common/RailCard'
@@ -7,6 +8,11 @@ import { CAMPUS_EVENTS, UNIVERSITY } from '../data/catalog'
 import { PersonAvatar } from '../components/brand/Portrait'
 import { IconMoon, IconPeople, IconCalendar, IconSpark, IconPin, IconChevron } from '../components/ui/Icons'
 import { PEOPLE } from '../data/people'
+import { isDemo } from '../lib/supabase'
+import * as campus from '../services/live/campus'
+
+/** What the fictional campus claims. Invented, and honest about being so. */
+const DEMO_COUNTS = { members: UNIVERSITY.activeStudents, tonight: 87 }
 
 const CARDS = [
   {
@@ -54,9 +60,32 @@ const TONES = {
   moss: 'border-moss/25 bg-moss-soft text-[#3F7454]',
 }
 
+/**
+ * A headcount is only worth printing when it means something. Below this it
+ * says more about how new the campus is than about whether tonight is worth
+ * opening, and a precise small number ("4 people") is close enough to naming
+ * them. Under the floor we say the true thing without the figure.
+ */
+const WORTH_STATING = 10
+
 export default function Campus() {
   const { state } = useStore()
   const tonightPeople = PEOPLE.filter((p) => p.tonight).slice(0, 5)
+
+  // Real counts in live mode; the demo campus keeps its invented ones, which
+  // is the one place they're honest, because everything there is invented.
+  const [counts, setCounts] = useState(isDemo ? DEMO_COUNTS : null)
+  useEffect(() => {
+    if (isDemo) return undefined
+    let live = true
+    campus.stats().then((s) => live && setCounts(s))
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const tonightCount = counts?.tonight ?? null
+  const memberCount = counts?.members ?? null
 
   useRail(
     <>
@@ -95,7 +124,9 @@ export default function Campus() {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-display text-[19px] font-semibold leading-tight">
-            87 people are open to plans tonight
+            {tonightCount != null && tonightCount >= WORTH_STATING
+              ? `${tonightCount.toLocaleString()} people are open to plans tonight`
+              : 'See who’s open to plans tonight'}
           </span>
           <span className="mt-1 block text-[13.5px] text-paper/70">
             {state.tonight.active ? 'You’re one of them.' : 'You’re not on the list yet.'}
@@ -124,8 +155,11 @@ export default function Campus() {
       <section className="mt-8 rounded-card border border-rule bg-cream/60 px-6 py-5">
         <h3 className="font-display text-[17px] font-semibold">{UNIVERSITY.name}</h3>
         <p className="mt-1.5 text-[14px] leading-relaxed text-graphite">
-          {UNIVERSITY.activeStudents.toLocaleString()} students are on Looseleaf here. Campus features are open to
-          everyone — there’s no version of this you can pay to get more of.
+          {memberCount != null && memberCount >= WORTH_STATING
+            ? `${memberCount.toLocaleString()} students are on Looseleaf here. `
+            : 'Looseleaf is new here. '}
+          Campus features are open to everyone — there’s no version of this you can pay to get more
+          of.
         </p>
       </section>
     </>

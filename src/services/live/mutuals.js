@@ -16,7 +16,8 @@ const fail = (error) => {
 
 /** Rows from the RPCs share a shape; give them photo URLs and camelCase. */
 async function decorate(rows = []) {
-  const urls = await signUrls(rows.map((r) => r.storage_path))
+  // Every one of these is a thumbnail on screen, so ask for the thumbnail file.
+  const urls = await signUrls(rows.map((r) => r.storage_path), 'sm')
   return rows.map((r) => ({
     id: r.id,
     connectionId: r.connection_id,

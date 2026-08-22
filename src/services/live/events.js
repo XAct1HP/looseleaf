@@ -80,6 +80,32 @@ export async function pendingEvents() {
   return (data ?? []).map(shape)
 }
 
+/**
+ * What is on Campus right now, newest first — the other half of the same page.
+ * Publishing needs to look reversible: a screen that only ever shows what
+ * hasn't been decided yet quietly implies a decision can't be undone.
+ */
+export async function publishedEvents() {
+  const { data, error } = await supabase
+    .from('campus_events')
+    .select(SELECT)
+    .eq('status', 'approved')
+    .order('submitted_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return (data ?? []).map(shape)
+}
+
+/**
+ * Take one off Campus. No new privilege is being handed out here — the delete
+ * policy already read `is_admin() or (created_by = auth.uid() and status =
+ * 'pending')`. The button simply didn't exist.
+ */
+export async function removeEvent(id) {
+  const { error } = await supabase.from('campus_events').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
 export async function reviewEvent(id, reviewerId, decision, note) {
   const { error } = await supabase
     .from('campus_events')
