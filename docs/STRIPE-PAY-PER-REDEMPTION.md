@@ -133,7 +133,20 @@ database rather than from Stripe, so a late meter event delays the invoice
 line and never the enforcement, but a partner watching their outstanding
 balance would rather see it move.
 
-With `pg_cron` and `pg_net`:
+### Where this runs
+
+**Supabase dashboard → SQL Editor → new query → Run.** It is a one-time
+statement: `cron.schedule` registers the job inside Postgres, and it fires from
+then on without anything else running anywhere. You are not putting this in the
+repo, in a shell, or in a deploy script.
+
+Two prerequisites, both one-off:
+
+1. **Database → Extensions**, enable **`pg_cron`** and **`pg_net`**. Without
+   them the statement fails with `schema "cron" does not exist`.
+2. Replace `<project-ref>` (the string in your Supabase URL) and
+   `<METER_WORKER_TOKEN>` (the actual secret) before running. They are
+   placeholders, not variables Postgres will fill in.
 
 ```sql
 select cron.schedule(
@@ -151,11 +164,85 @@ select cron.schedule(
 );
 ```
 
+### Or use the Cron UI instead, which is better
+
+**Integrations → Cron → Jobs → Create job.** Same pg_cron underneath, but you
+pick "Edge Function" as the job type from a form, and each job gets a
+**History** view. That history is the thing worth having: it is how you find
+out the worker has been failing for a week without querying
+`cron.job_run_details` by hand. Job names are case-sensitive and cannot be
+edited after creation.
+
+To change the schedule later, re-run `cron.schedule` with the same job name —
+it overwrites. To stop it, `select cron.unschedule('meter-date-pass-redemptions');`
+or delete it from the Jobs list.
+
+### The token ends up in plaintext
+
+Whichever route you take, the secret is stored as literal text in the
+`cron.job` table, readable by anything with database access. Acceptable in a
+sandbox. For live, put it in Vault and read it back at run time instead:
+
+```sql
+-- once
+select vault.create_secret('<METER_WORKER_TOKEN>', 'meter_worker_token');
+
+-- then schedule against the vault, not the literal
+select cron.schedule(
+  'meter-date-pass-redemptions',
+  '*/15 * * * *',
+  $$
+  select net.http_post(
+    url     := 'https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions',
+    headers := jsonb_build_object(
+                 'Content-Type',  'application/json',
+                 'x-worker-token',
+                 (select decrypted_secret from vault.decrypted_secrets
+                   where name = 'meter_worker_token')),
+    body    := '{}'::jsonb
+  );
+  $$
+);
+```
+
+### If you would rather not use pg_cron at all
+
+Nothing about this depends on it. The worker is an HTTP endpoint that takes a
+header, so any scheduler works — a GitHub Actions cron, a Vercel cron job,
+even cron-job.org:
+
+```bash
+curl -X POST https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions \
+     -H 'x-worker-token: <METER_WORKER_TOKEN>'
+```
+
+The tradeoff is that a scheduler living outside Supabase is one more thing that
+can quietly stop without anyone noticing. Whatever you pick, alert on it.
+
+### Checking it is actually working
+
+```sql
+-- the job exists and is active
+select jobname, schedule, active from cron.job;
+
+-- the last few runs, and whether they succeeded
+select status, return_message, start_time
+from cron.job_run_details
+where jobid = (select jobid from cron.job where jobname = 'meter-date-pass-redemptions')
+order by start_time desc limit 10;
+
+-- nothing should sit here for long
+select count(*), min(redeemed_at)
+from date_pass_redemptions where bill_status = 'pending';
+```
+
 Stripe refuses meter events older than 35 days. `redemptions_awaiting_meter()`
 stops offering anything older than 30, so a redemption that has failed to
 report for a month stops being retried and needs looking at rather than
-silently going round forever. Worth an alert if that query ever returns rows
-older than a week.
+silently going round forever. That last query is the one to alert on: **if the
+oldest `pending` row is more than a day old, the worker is not running**, and
+every hour it stays that way is revenue that eventually cannot be billed at
+all.
 
 ## 6 · Update the webhook endpoint
 
