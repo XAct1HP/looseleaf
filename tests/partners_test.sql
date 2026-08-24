@@ -108,20 +108,28 @@ declare
 begin
   perform act_as(current_setting('test.biz')::uuid);
 
-  -- Nothing paid yet: no entitlements, not live.
-  perform assert(partner_entitlements(v_partner) = '{}'::jsonb,
-                 'an unpaid partner has no entitlements');
+  -- Free to join. Capability no longer depends on paying anything: a business
+  -- that has entered no card at all still has the whole feature set. What it
+  -- does not have is credit, which is a separate question asked further down.
+  perform assert(partner_has(v_partner, 'date_passes'),
+                 'the free tier includes Date Passes before any money changes hands');
+  perform assert(partner_has(v_partner, 'offers'), 'and offers');
   perform assert(not partner_is_live(v_partner), 'an unapproved partner is not live');
 
-  insert into partner_subscriptions (partner_id, plan_id, status, current_period_end)
-  values (v_partner, 'date-partner', 'active', now() + interval '30 days');
+  -- A card on file. In production the webhook writes these three columns and
+  -- nothing else may; here the test writes what the webhook would.
+  insert into partner_subscriptions (partner_id, plan_id, status, stripe_customer_id,
+                                     stripe_subscription_id,
+                                     payment_method_brand, payment_method_last4, payment_method_at)
+  values (v_partner, 'free', 'active', 'cus_test_partner', 'sub_test_partner',
+          'visa', '4242', now());
 
   perform assert(not partner_is_live(v_partner),
-                 'paying is not enough — a partner still needs approval');
+                 'a card is not enough either — a partner still needs approval');
 
   update partners set status = 'active' where id = v_partner;
-  perform assert(partner_is_live(v_partner), 'approved and paid = live');
-  perform assert(partner_has(v_partner, 'date_passes'), 'the top plan includes Date Passes');
+  perform assert(partner_is_live(v_partner),
+                 'approval alone makes a partner live: being listed is free');
 
   insert into partner_locations (partner_id, university_id, address_line, walk_minutes,
                                  distance_miles, price_level, is_primary)
@@ -453,8 +461,14 @@ begin
   perform assert(n = 2, 'staff see every partner');
 
   rev := staff_partner_revenue();
-  perform assert((rev ->> 'mrr_cents')::int = 39800,
-                 'staff see MRR summed from the plans actually subscribed');
+  perform assert((rev ->> 'fee_cents')::int = 150,
+                 'staff see the platform redemption fee');
+  perform assert((rev -> 'this_month' ->> 'redemptions')::int = 1,
+                 'and this month''s redemption count');
+  perform assert((rev -> 'this_month' ->> 'cents')::int = 150,
+                 'priced at the fee stamped on the row, not recomputed');
+  perform assert((rev ->> 'outstanding_cents')::int = 150,
+                 'a redemption nobody has paid for yet reads as outstanding');
 
   perform staff_set_partner_status(current_setting('test.partner')::uuid, 'suspended', 'Test');
   perform assert(not partner_is_live(current_setting('test.partner')::uuid),
@@ -473,28 +487,259 @@ begin
   perform assert(ok, 'a student cannot approve a business');
 end $$;
 
--- ─── 11. a lapsed subscription pulls the spot from discovery ──────────────
+-- ─── 11. the credit ceiling ───────────────────────────────────────────────
+--  A free tier still needs a limit, or a business can take the foot traffic
+--  and let the card fail. The limit has to behave in one specific way:
+--  crossing it stops the offer being *handed out* well before it stops a pass
+--  already in somebody's hand being honoured. A student must never be turned
+--  away at a counter because the restaurant is behind on an invoice.
 
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  s record;
+begin
+  select * into s from partner_credit_state(v_partner);
+  perform assert(s.tier_id = 'new', 'a new business starts on the bottom rung');
+  perform assert(s.limit_cents = 2500, 'and is extended the new-partner ceiling');
+  perform assert(s.has_card, 'the card written in section 3 is seen');
+  perform assert(s.fee_cents = 150, 'the fee is the platform fee');
+  perform assert(s.can_issue and s.can_redeem, 'with room left, the business can trade');
+  perform assert(s.unbilled_cents = 150,
+                 'the one redemption from section 7 is outstanding, at the fee it was stamped with');
+end $$;
+
+--  No card is a different problem from no room, and has to say so — the
+--  person reading it has to know whether to add a card or pay a bill.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  s record;
+begin
+  update partner_subscriptions set payment_method_at = null where partner_id = v_partner;
+
+  select * into s from partner_credit_state(v_partner);
+  perform assert(not s.can_issue and not s.can_redeem, 'no card, no Date Passes');
+  perform assert(s.reason = 'no_card', 'and the reason names that problem, not the ceiling');
+
+  update partner_subscriptions set payment_method_at = now() where partner_id = v_partner;
+end $$;
+
+--  Up against the ceiling: the offer stops being offered, issued passes keep
+--  working. Filler redemptions stand in for a busy fortnight.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_offer   uuid := current_setting('test.offer')::uuid;
+  v_pass    uuid;
+  s record; n int;
+begin
+  insert into date_passes (code, offer_id, partner_id, issued_to, expires_at, status)
+  values ('LL-FILLER1', v_offer, v_partner, current_setting('test.ada')::uuid,
+          now() + interval '7 days', 'redeemed')
+  returning id into v_pass;
+
+  insert into date_pass_redemptions
+    (pass_id, partner_id, offer_id, redeemed_at, fee_cents, bill_status)
+  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 16);
+
+  select * into s from partner_credit_state(v_partner);
+  perform assert(s.unbilled_cents = 2550,
+                 'outstanding is the sum of every redemption not yet paid for');
+  perform assert(not s.can_issue, 'over the ceiling, the offer stops being handed out');
+  perform assert(s.can_redeem, 'but a pass already issued is still honoured');
+  perform assert(s.reason = 'at_limit', 'and the two states are told apart');
+  perform assert(s.remaining_cents = 0, 'with no headroom left');
+end $$;
+
+--  The student-facing consequence, which is the whole point: it quietly stops
+--  being offered rather than failing in front of somebody.
+do $$
+declare n int; v_offer uuid := current_setting('test.offer')::uuid; ok boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+
+  set local role authenticated;
+  select count(*) into n from public_offers where id = v_offer;
+  reset role;
+  perform assert(n = 0, 'an offer over the ceiling is not shown to students at all');
+
+  begin
+    perform issue_date_pass(v_offer, null, 'planner');
+  exception when others then
+    ok := sqlerrm like '%isn''t running right now%';
+  end;
+  perform assert(ok,
+    'and unlocking it is refused in the same words as an offer that ran out — '
+    'a student is never told about a business''s billing');
+end $$;
+
+--  Past the grace band on top of the ceiling, the counter finally refuses —
+--  and refuses in a sentence, not an exception, because somebody is reading
+--  it off a phone with a customer in front of them.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_offer   uuid := current_setting('test.offer')::uuid;
+  v_pass    uuid;
+  s record; r record;
+begin
+  select id into v_pass from date_passes where code = 'LL-FILLER1';
+
+  insert into date_pass_redemptions
+    (pass_id, partner_id, offer_id, redeemed_at, fee_cents, bill_status)
+  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 8);
+
+  select * into s from partner_credit_state(v_partner);
+  perform assert(not s.can_redeem, 'past the grace band, redemption stops as well');
+  perform assert(s.reason = 'over_limit', 'named separately from merely being at the limit');
+
+  perform act_as(current_setting('test.biz')::uuid);
+  select * into r from redeem_date_pass(v_partner, 'LL-ANYTHING', null);
+  perform assert(not r.ok, 'the scanner refuses');
+  perform assert(r.reason like '%invoice%',
+                 'with something a person behind a counter can actually act on');
+end $$;
+
+--  The Date Spot stays up through all of it. Being listed is free, so
+--  withholding it is not leverage Loose Leaf actually has — and pulling it
+--  would punish the students who were looking for somewhere to go.
 do $$
 declare n int;
 begin
-  update partner_subscriptions set status = 'past_due'
-   where partner_id = current_setting('test.partner')::uuid;
-
   perform act_as(current_setting('test.ada')::uuid);
+
   select count(*) into n
   from recommend_date_spots('dinner', '{}', null, null, now(), null, 'planner', 10)
   where spot_id = current_setting('test.spot')::uuid;
-
-  perform assert(n = 0, 'a partner whose payment failed drops out of recommendations');
+  perform assert(n = 1, 'a partner over its credit limit stays in recommendations');
 
   set local role authenticated;
   select count(*) into n from date_spots where id = current_setting('test.spot')::uuid;
-  perform assert(n = 0, 'and out of the spots directory');
   reset role;
+  perform assert(n = 1, 'and in the spots directory');
+end $$;
 
-  update partner_subscriptions set status = 'active'
-   where partner_id = current_setting('test.partner')::uuid;
+-- ─── 11b. the ladder moves on its own ─────────────────────────────────────
+--  A business that has paid three invoices is a different credit risk from
+--  one that has paid none, and nobody at Loose Leaf should have to notice.
+
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_tier text;
+begin
+  update date_pass_redemptions set stripe_invoice_id = 'in_test_1'
+   where partner_id = v_partner and bill_status = 'invoiced';
+
+  -- Stripe raises a $0 invoice at subscription start and for any quiet month.
+  -- Being open and selling nothing must not buy credit.
+  perform record_partner_invoice_paid(v_partner, 'in_test_0', 0);
+  perform assert((select tier_id from partner_credit where partner_id = v_partner) = 'new',
+                 'a $0 invoice does not move a partner up the ladder');
+  perform assert((select paid_invoice_count from partner_credit where partner_id = v_partner) = 0,
+                 'nor count as an invoice paid');
+
+  v_tier := record_partner_invoice_paid(v_partner, 'in_test_1', 3600);
+  perform assert(v_tier = 'known', 'one paid invoice moves a partner up a rung');
+  perform assert(partner_credit_limit_cents(v_partner) = 7500,
+                 'and the ceiling rises with it, with no intervention');
+  perform assert(partner_unbilled_cents(v_partner) = 150,
+                 'settled redemptions stop counting as exposure');
+
+  update partner_credit
+     set paid_invoice_count = 3, paid_cents_total = 20000, last_failure_at = null
+   where partner_id = v_partner;
+  perform assert(refresh_partner_credit(v_partner) = 'trusted',
+                 'three invoices and $150 lifetime reaches Trusted');
+  perform assert(partner_credit_limit_cents(v_partner) = 20000, 'worth $200 of credit');
+end $$;
+
+--  And falls on its own too. Every rung above the first requires a clean
+--  record, so one failure is a demotion — but not a suspension, because a
+--  card expiring should not switch a restaurant off overnight.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  perform record_partner_invoice_failed(v_partner, 'in_test_2', 1, false);
+  perform assert((select tier_id from partner_credit where partner_id = v_partner) = 'new',
+                 'one failed invoice drops a partner to the bottom rung');
+  perform assert((select suspended_at from partner_credit where partner_id = v_partner) is null,
+                 'but does not suspend them');
+
+  perform record_partner_invoice_failed(v_partner, 'in_test_2', 2, false);
+  perform record_partner_invoice_failed(v_partner, 'in_test_2', 3, false);
+  perform assert((select suspended_at from partner_credit where partner_id = v_partner) is not null,
+                 'three in a row does');
+  perform assert(not partner_can_redeem(v_partner), 'and a suspension stops the scanner');
+
+  perform record_partner_invoice_paid(v_partner, 'in_test_3', 500);
+  perform assert((select suspended_at from partner_credit where partner_id = v_partner) is null,
+                 'paying lifts it again without anyone intervening');
+  perform assert(partner_can_redeem(v_partner), 'and the scanner comes back');
+end $$;
+
+--  A staff suspension is a different thing from an unpaid one, and paying an
+--  invoice must not quietly undo a human decision.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_set_partner_credit(v_partner, null, null, true, 'Under review');
+  perform assert(not partner_can_issue(v_partner), 'staff can stop a business trading');
+
+  perform record_partner_invoice_paid(v_partner, 'in_test_4', 150);
+  perform assert((select suspended_at from partner_credit where partner_id = v_partner) is not null,
+                 'and paying an invoice does not undo that decision');
+
+  perform staff_set_partner_credit(v_partner, null, null, false, null);
+  perform assert(partner_can_issue(v_partner), 'only a human lifts a human suspension');
+
+  -- A staff override beats the ladder in both directions.
+  perform staff_set_partner_credit(v_partner, 100000, null, null, null);
+  perform assert(partner_credit_limit_cents(v_partner) = 100000, 'an override raises the ceiling');
+  perform staff_set_partner_credit(v_partner, -1, null, null, null);
+  perform assert(partner_credit_limit_cents(v_partner) < 100000, 'and -1 hands it back to the ladder');
+end $$;
+
+--  A student cannot read, let alone move, any of this.
+do $$
+declare n int; ok boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+
+  set local role authenticated;
+  select count(*) into n from partner_credit;
+  reset role;
+  perform assert(n = 0, 'a student reads no credit rows');
+
+  begin
+    perform staff_set_partner_credit(current_setting('test.partner')::uuid, 999999, null, null, null);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'and cannot raise anybody''s credit limit');
+
+  ok := false;
+  begin
+    perform partner_billing_summary(current_setting('test.partner')::uuid);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'or read a business''s billing summary');
+end $$;
+
+--  Put the ledger back where the later sections expect it.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  delete from date_pass_redemptions
+   where partner_id = v_partner
+     and pass_id = (select id from date_passes where code = 'LL-FILLER1');
+  delete from date_passes where code = 'LL-FILLER1';
+  update partner_credit
+     set consecutive_failures = 0, last_failure_at = null, suspended_at = null,
+         suspend_reason = null, limit_override_cents = null
+   where partner_id = v_partner;
+  perform refresh_partner_credit(v_partner);
 end $$;
 
 -- ─── 12. the team ─────────────────────────────────────────────────────────

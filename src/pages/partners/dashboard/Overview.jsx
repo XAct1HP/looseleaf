@@ -5,7 +5,7 @@ import StatTile from '../../../components/backstage/StatTile'
 import Button from '../../../components/ui/Button'
 import { IconSpark, IconCalendar } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { can } from '../../../lib/partnerPlans'
+import { can } from '../../../lib/partnerBilling'
 import * as partners from '../../../services/partners'
 
 /**
@@ -66,7 +66,7 @@ export default function Overview() {
           <p className="mt-3 max-w-[42ch] text-[13.5px] leading-relaxed text-graphite">
             {hasPasses
               ? 'Verified — each one is a Date Pass your staff scanned at the table.'
-              : 'Verified dates need Date Passes, which come with the Date Partner plan.'}
+              : 'Verified dates start once you have an offer running with a Date Pass on it.'}
           </p>
         </div>
       </div>
@@ -96,12 +96,7 @@ export default function Overview() {
           )}
         </div>
 
-        {!can(entitlements, 'offers') ? (
-          <Upsell
-            title="Offers come with Featured Partner."
-            body="An exclusive perk is what turns a suggestion into a visit. Move up a tier and you can run one, capped to the nights you want."
-          />
-        ) : !data?.active_offers?.length ? (
+        {!data?.active_offers?.length ? (
           <div className="rounded-card border border-dashed border-navy/20 bg-white px-6 py-8 text-center">
             <IconSpark size={22} className="mx-auto text-mist" />
             <p className="mt-3 text-[15px] font-medium text-navy">No offer running.</p>
@@ -187,17 +182,7 @@ export default function Overview() {
   )
 }
 
-function Upsell({ title, body }) {
-  return (
-    <div className="rounded-card border border-notebook/40 bg-notebook-soft/60 px-6 py-6">
-      <p className="font-display text-[18px] font-semibold leading-tight text-navy">{title}</p>
-      <p className="mt-2 max-w-[52ch] text-[14px] leading-relaxed text-graphite">{body}</p>
-      <Button to="/partners/dashboard/billing" variant="outline" size="md" className="mt-5">
-        See plans
-      </Button>
-    </div>
-  )
-}
+
 
 function dayLabel(iso) {
   const d = new Date(`${iso}T12:00:00`)

@@ -7,7 +7,7 @@ import {
   IconSettings, IconDiscover, IconPeople,
 } from '../../components/ui/Icons'
 import { usePartnerAccount } from '../../state/partnerAccount'
-import { can } from '../../lib/partnerPlans'
+import { can } from '../../lib/partnerBilling'
 import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
 import ForPartners from '../../components/partners/ForPartners'
@@ -25,8 +25,10 @@ import { PartnerOffline } from './PartnerAuth'
  *            database, so a hidden tab is a locked door and not a curtain —
  *            typing the URL gets you a redirect, and the RPC behind it would
  *            refuse anyway.
- *   `needs`  what the *business* bought. A Date Spot plan has no Redemptions
- *            tab because that plan issues no Date Passes.
+ *   `needs`  what the *business* has switched on. Since pay-per-redemption
+ *            every entitlement is true for everybody, so this filter is
+ *            currently inert — kept because it is the seam that would turn a
+ *            feature off for a class of partner without a deploy.
  *
  * Those two must not be allowed to multiply into nothing, which is the bug
  * this shell used to have: `scan` is the only page a staff member has, `scan`
@@ -238,7 +240,7 @@ function ScannerOnlyShell({ partner }) {
 }
 
 /**
- * A plan can take the scanner away — Date Passes start at the top tier — and
+ * Nothing takes the scanner away any more, but the rule below still holds —
  * that can leave a staff login with nowhere to go. Better to say so than to
  * bounce them around an empty dashboard.
  */
@@ -317,8 +319,12 @@ export function StatusPill({ partner, className = '' }) {
  */
 function StatusBanner({ partner }) {
   const canBill = (partner.pages ?? []).includes('billing')
-  const billingBroken = ['past_due', 'unpaid', 'incomplete'].includes(partner.subStatus)
-  const noPlan = !partner.subStatus
+  const billingBroken = ['past_due', 'unpaid'].includes(partner.subStatus)
+  // No Stripe customer at all means nobody has ever added a card. That is a
+  // perfectly normal state to sit in for weeks — a business can be listed,
+  // photographed and recommended without one — so this reads as a next step
+  // rather than as something being wrong.
+  const noCard = !partner.subStatus || partner.subStatus === 'incomplete'
 
   if (partner.status === 'rejected') {
     return (
@@ -342,24 +348,31 @@ function StatusBanner({ partner }) {
       </Note>
     )
   }
+  // Under pay-per-redemption a failed payment does *not* pull the listing.
+  // The Date Spot was free; what stops is Date Passes. Saying "you're hidden
+  // from students" here when they aren't would be a lie that costs Loose Leaf
+  // nothing and costs the partner a panic.
   if (billingBroken && canBill) {
     return (
-      <Note tone="coral" title="Your payment didn’t go through." action={{ to: '/partners/dashboard/billing', label: 'Fix billing' }}>
-        Your Date Spot is hidden from students until this is sorted. Nothing else has been lost.
+      <Note
+        tone="coral"
+        title="Your payment didn’t go through."
+        action={{ to: '/partners/dashboard/billing', label: 'Fix billing' }}
+      >
+        Date Passes are paused until it clears. Your Date Spot is still live and students can
+        still find you — nothing else has been lost.
       </Note>
     )
   }
-  if (noPlan && canBill) {
+  if (noCard && canBill) {
     return (
-      <Note tone="blue" title="One thing left: pick a plan." action={{ to: '/partners/dashboard/billing', label: 'Choose a plan' }}>
-        Your profile is saved. Students will see it once billing is set up and we’ve approved you.
-      </Note>
-    )
-  }
-  if (partner.cancelAtEnd && canBill) {
-    return (
-      <Note tone="blue" title="Set to cancel." action={{ to: '/partners/dashboard/billing', label: 'Manage billing' }}>
-        You’ll stay live until the end of the current period.
+      <Note
+        tone="blue"
+        title="Add a card when you’re ready to run an offer."
+        action={{ to: '/partners/dashboard/billing', label: 'Add a card' }}
+      >
+        Nothing is charged for having one, and nothing at all until somebody actually redeems a
+        Date Pass. Everything else here works without it.
       </Note>
     )
   }

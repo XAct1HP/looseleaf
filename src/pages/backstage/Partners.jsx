@@ -5,7 +5,7 @@ import Button from '../../components/ui/Button'
 import { Chip } from '../../components/ui/Chip'
 import { IconPin, IconLink, IconSpark } from '../../components/ui/Icons'
 import { daysText } from '../../data/partnerCatalog'
-import { money } from '../../lib/partnerPlans'
+import { money } from '../../lib/partnerBilling'
 import * as partners from '../../services/partners'
 
 /**
@@ -105,19 +105,21 @@ export default function Partners() {
       {revenue && (
         <div className="mb-7 grid gap-3 sm:grid-cols-3">
           <StatTile
-            label="Monthly recurring"
-            value={money(revenue.mrr_cents)}
-            hint="From live subscriptions only"
+            label="Earned this month"
+            value={money(revenue.this_month?.cents ?? 0)}
+            hint={`${revenue.this_month?.redemptions ?? 0} redemptions at ${money(
+              revenue.fee_cents ?? 150
+            )}`}
           />
           <StatTile
-            label="Live partners"
-            value={revenue.partners_by_status?.active ?? 0}
-            hint="Approved and paying"
+            label="Outstanding"
+            value={money(revenue.outstanding_cents ?? 0)}
+            hint="Redeemed, not yet collected"
           />
           <StatTile
-            label="Verified dates this month"
-            value={revenue.verified_dates_this_month ?? 0}
-            hint="Across every partner"
+            label="At risk"
+            value={money(revenue.at_risk_cents ?? 0)}
+            hint={`${revenue.suspended ?? 0} suspended · ${revenue.without_card ?? 0} with no card`}
           />
         </div>
       )}
@@ -163,7 +165,7 @@ export default function Partners() {
                         tone={['active', 'trialing'].includes(p.sub_status) ? 'moss' : 'cream'}
                         className="!px-2.5 !py-1 !text-[11.5px]"
                       >
-                        {p.plan_id ?? 'no plan'} · {p.sub_status}
+                        {p.sub_status === 'active' ? 'card on file' : p.sub_status}
                       </Chip>
                     )}
                   </div>

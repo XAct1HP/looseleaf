@@ -7,7 +7,7 @@ import { Chip } from '../../../components/ui/Chip'
 import { Field, TextInput } from '../../../components/partners/fields'
 import { IconPeople, IconMail } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { can } from '../../../lib/partnerPlans'
+import { can } from '../../../lib/partnerBilling'
 import * as partners from '../../../services/partners'
 
 /**
@@ -408,14 +408,14 @@ function InviteSheet({ open, partnerName, myRole, hasPasses, onClose, onInvite }
           </div>
         </div>
 
-        {/* Said before they send it, not discovered by the person they sent it
-            to. Staff exist to scan Date Passes; on a plan that issues none,
-            there is genuinely nothing for them to do yet. */}
+        {/* Said before they send it, not discovered by the person they sent
+            it to. Staff exist to scan Date Passes; with no offer running yet
+            there is genuinely nothing for them to do. */}
         {role === 'staff' && !hasPasses && (
           <p className="rounded-2xl border border-[#F2E6D6] bg-cream px-4 py-3.5 text-[12.5px] leading-relaxed text-graphite">
-            Heads up — this account doesn’t issue Date Passes yet, so there’ll be nothing for them
-            to scan. They can still sign in and the scanner will be waiting whenever the plan
-            changes.
+            Heads up — this account isn’t issuing Date Passes yet, so there’ll be nothing for them
+            to scan. They can still sign in, and the scanner will be waiting the moment an offer
+            goes live.
           </p>
         )}
 

@@ -11,7 +11,7 @@ import { usePartnerAccount } from '../../../state/partnerAccount'
 import * as partners from '../../../services/partners'
 import * as media from '../../../services/live/partnerMedia'
 import { PARTNER_CATEGORIES, DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
-import { limit } from '../../../lib/partnerPlans'
+import { limit } from '../../../lib/partnerBilling'
 import { geocode } from '../../../lib/geocode'
 
 /**
@@ -278,7 +278,7 @@ export default function DateSpotEditor() {
           ) : (
             locations.length > 1 && (
               <span className="shrink-0 self-center px-2 text-[12px] text-mist">
-                {maxLocations} of {maxLocations} on this plan
+                {maxLocations} of {maxLocations} locations
               </span>
             )
           )}

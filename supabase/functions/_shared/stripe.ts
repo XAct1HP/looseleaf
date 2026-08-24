@@ -1,4 +1,4 @@
-// Shared setup for the three billing functions.
+// Shared setup for the billing functions.
 //
 // Everything secret lives in the function environment. Nothing in this folder
 // is ever bundled into the browser — that's the whole reason these exist, since
@@ -7,6 +7,7 @@
 // Required secrets (supabase secrets set --env-file supabase/functions/.env):
 //   STRIPE_SECRET_KEY      sk_live_… or sk_test_…
 //   STRIPE_WEBHOOK_SECRET  whsec_…  (from the webhook endpoint, not the CLI)
+//   METER_WORKER_TOKEN     any long random string; guards partner-meter-redemptions
 //
 // Supplied automatically by the platform:
 //   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
@@ -14,7 +15,9 @@
 import Stripe from 'https://esm.sh/stripe@14.25.0?target=denonext'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0'
 
-export const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') ?? '', {
+const SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') ?? ''
+
+export const stripe = new Stripe(SECRET_KEY, {
   apiVersion: '2024-06-20',
   // Deno has no Node http stack; Stripe needs to be told to use fetch.
   httpClient: Stripe.createFetchHttpClient(),
@@ -54,17 +57,65 @@ export function json(body: unknown, status = 200) {
 }
 
 /**
+ * ── Reporting a redemption to Stripe ────────────────────────────────────────
+ *
+ * Deliberately a raw fetch rather than an SDK call. The SDK pinned here
+ * predates `stripe.billing.meterEvents`, and the meter endpoint is a stable
+ * v1 route that takes four form fields — bumping the whole SDK (and with it
+ * the pinned API version that the webhook's event shapes depend on) to gain
+ * one method would be a much larger change than this function is worth.
+ *
+ * `identifier` is Stripe's own deduplication key for meter events, and it is
+ * derived from the redemption's row id — so the same scan reported twice is
+ * one billable unit, whatever happens to this worker mid-run.
+ */
+export async function meterEvent(opts: {
+  eventName: string
+  customerId: string
+  value: number
+  identifier: string
+  at?: Date
+}): Promise<void> {
+  const form = new URLSearchParams()
+  form.set('event_name', opts.eventName)
+  form.set('identifier', opts.identifier)
+  form.set('payload[stripe_customer_id]', opts.customerId)
+  form.set('payload[value]', String(opts.value))
+  if (opts.at) form.set('timestamp', String(Math.floor(opts.at.getTime() / 1000)))
+
+  const res = await fetch('https://api.stripe.com/v1/billing/meter_events', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      // Stripe treats a repeat of the same identifier as the same event, so
+      // this is belt and braces — but a network timeout on the first attempt
+      // is exactly the case where both matter.
+      'Idempotency-Key': `meter-${opts.identifier}`,
+    },
+    body: form,
+  })
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '')
+    throw new Error(`meter_events ${res.status}: ${detail.slice(0, 300)}`)
+  }
+}
+
+/**
  * Confirms the caller may act for this business, using *their* token so the
  * answer comes from the same policies the app runs under. Returns the user id.
  *
- * `p_role` picks the bar: 'owner' for anything that touches money, 'member'
- * for reads. A function that skipped this would let anyone with an anon key
- * start a checkout against somebody else's business.
+ * `need` is either a role — 'owner' for anything that changes who owns the
+ * money, 'admin' for anything that changes the Date Spot — or the name of a
+ * dashboard page, which is checked with `partner_can()`. Billing is a page:
+ * an owner who hands it to their manager expects that manager to be able to
+ * fix a declined card without being made an owner to do it.
  */
-export async function requirePartnerRole(
+export async function requirePartner(
   req: Request,
   partnerId: string,
-  role: 'owner' | 'admin' = 'owner'
+  need: 'owner' | 'admin' | string = 'owner'
 ): Promise<{ userId: string } | Response> {
   const authHeader = req.headers.get('Authorization') ?? ''
   if (!authHeader) return json({ error: 'Not signed in.' }, 401)
@@ -73,13 +124,22 @@ export async function requirePartnerRole(
   const { data: userData, error: userError } = await supabase.auth.getUser()
   if (userError || !userData?.user) return json({ error: 'Not signed in.' }, 401)
 
-  const fn = role === 'owner' ? 'is_partner_owner' : 'is_partner_admin'
-  const { data, error } = await supabase.rpc(fn, { p_partner: partnerId })
+  const call =
+    need === 'owner'
+      ? supabase.rpc('is_partner_owner', { p_partner: partnerId })
+      : need === 'admin'
+        ? supabase.rpc('is_partner_admin', { p_partner: partnerId })
+        : supabase.rpc('partner_can', { p_partner: partnerId, p_page: need })
+
+  const { data, error } = await call
   if (error) return json({ error: error.message }, 400)
   if (!data) return json({ error: 'Not authorised for this business.' }, 403)
 
   return { userId: userData.user.id }
 }
+
+/** Kept under the old name so nothing that still calls it has to change. */
+export const requirePartnerRole = requirePartner
 
 /**
  * Where Stripe is allowed to send somebody back to.
@@ -118,4 +178,14 @@ export function safeReturnTo(value: unknown, fallback?: string) {
   } catch {
     return home
   }
+}
+
+/** The one place that reads how billing is configured. */
+export async function billingConfig(db: ReturnType<typeof serviceClient>) {
+  const { data } = await db
+    .from('platform_billing')
+    .select('redemption_fee_cents, currency, stripe_meter_event_name, stripe_metered_price_id')
+    .eq('id', true)
+    .maybeSingle()
+  return data
 }

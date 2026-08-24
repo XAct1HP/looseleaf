@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import PartnerShell from '../../components/partners/PartnerShell'
-import PlanCards from '../../components/partners/PlanCards'
+import Pricing from '../../components/partners/Pricing'
 import DateSpotCard from '../../components/dates/DateSpotCard'
 import QrCode from '../../components/dates/QrCode'
 import Button from '../../components/ui/Button'
@@ -9,7 +9,7 @@ import { passUrl } from '../../lib/site'
 import { Underline, Star, Squiggle, CoffeeDoodle, BinderHoles } from '../../components/brand/Doodles'
 import { IconPin, IconSpark, IconCalendar, IconLock, IconShield, IconEye } from '../../components/ui/Icons'
 import * as partners from '../../services/partners'
-import { PLAN_MIRROR } from '../../lib/partnerPlans'
+import { FREE_TIER, money } from '../../lib/partnerBilling'
 
 /* ── the example card in the hero ───────────────────────────────────────── */
 //  Invented on purpose. Putting a real restaurant's name next to a discount it
@@ -92,27 +92,38 @@ const FAQ = [
   },
   {
     q: 'Do I have to run a discount?',
-    a: 'No. The Date Spot plan is just a profile — you appear where students are browsing for somewhere to go, with your hours and your photos and no offer attached. Offers start at the Featured tier.',
+    a: 'No, and it costs you nothing not to. Your Date Spot profile — hours, photos, the lot — is free whether or not there is an offer attached. An offer is simply the only thing we ever charge for, so a profile on its own is a perfectly good way to use Loose Leaf.',
   },
   {
     q: 'What do you need from me to start?',
-    a: 'Your business details, a few photos, and a card. We review new partners by hand before they go live to students, which usually takes a day or two.',
+    a: 'Your business details and a few photos. No card, no plan to choose. We review new partners by hand before they go live to students, which usually takes a day or two. A card is only needed later, when you decide to turn an offer on.',
   },
   {
-    q: 'Can I cancel?',
-    a: 'Any time, from your dashboard, through Stripe. Your Date Spot stops being shown at the end of the period you have paid for.',
+    q: 'When exactly am I charged?',
+    a: 'When a couple hands over a Date Pass and one of your staff scans it. Not when someone views your profile, not when we suggest you, not when a pass is unlocked — only when somebody walks in and you confirm it. Redemptions add up through the month and Stripe sends one invoice at the end of it.',
+  },
+  {
+    q: 'What stops a surprise bill?',
+    a: 'Two things. Every offer carries daily and monthly caps you set, so you decide the most redemptions you will ever hand out. And your dashboard shows the running total live — the same list your invoice is built from, line for line.',
+  },
+  {
+    q: 'Can I stop?',
+    a: 'Any time, from your dashboard, through Stripe. There is nothing to cancel in the usual sense — there is no subscription and no notice period. Pause your offers and the charges stop that day. Your Date Spot can stay up for as long as you like; it never cost anything.',
   },
 ]
 
 export default function PartnersLanding() {
-  const [plans, setPlans] = useState(PLAN_MIRROR)
+  const [pricing, setPricing] = useState({
+    feeCents: FREE_TIER.redemption_fee_cents,
+    tiers: [],
+  })
   const [open, setOpen] = useState(null)
 
   useEffect(() => {
     let live = true
     partners
-      .plans()
-      .then((p) => live && p.length && setPlans(p))
+      .pricing()
+      .then((p) => live && setPricing(p))
       .catch(() => {})
     return () => {
       live = false
@@ -326,20 +337,22 @@ export default function PartnersLanding() {
       {/* ── pricing ───────────────────────────────────────────────────── */}
       <section id="pricing" className="mx-auto max-w-[1180px] scroll-mt-20 px-5 py-16 sm:px-8 lg:py-24">
         <h2 className="font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] sm:text-[40px]">
-          Pick where you want to show up.
+          Free until somebody walks in.
         </h2>
-        <p className="mt-4 max-w-[54ch] text-[16px] leading-relaxed text-graphite">
-          Every plan includes your Date Spot profile. What changes is how far into the experience
-          you reach — from being findable, to being suggested, to being the plan.
+        <p className="mt-4 max-w-[56ch] text-[16px] leading-relaxed text-graphite">
+          There are no plans and no monthly fee. Everything is switched on for every partner, and
+          the only thing that costs you anything is a Date Pass one of your own staff scanned —
+          which is to say, a couple who actually turned up.
         </p>
 
         <div className="mt-12">
-          <PlanCards plans={plans} />
+          <Pricing feeCents={pricing.feeCents} tiers={pricing.tiers} />
         </div>
 
-        <p className="mt-8 max-w-[60ch] text-[13.5px] leading-relaxed text-mist">
-          Billed monthly through Stripe. Cancel from your dashboard whenever you like — your Date
-          Spot stays live until the end of the period you have paid for.
+        <p className="mt-8 max-w-[64ch] text-[13.5px] leading-relaxed text-mist">
+          Billed once a month through Stripe, in arrears, for the redemptions that happened. A
+          month with none is an invoice for {money(0)} — we do not send it and you are not
+          charged. You add a card when you turn on your first offer, not when you sign up.
         </p>
       </section>
 

@@ -1,10 +1,14 @@
 /**
- * Hands a partner to Stripe's own billing portal — cards, invoices,
- * cancellation, plan changes. Every one of those is something we'd otherwise
+ * Hands a partner to Stripe's own billing portal — cards, invoices, receipts,
+ * and closing the account. Every one of those is something we'd otherwise
  * have to build, get wrong, and then be responsible for.
+ *
+ * Configure the portal to offer *no plan switching*: there is one plan, it is
+ * free, and a "change plan" button that leads nowhere is worse than no button.
+ * See docs/STRIPE-PAY-PER-REDEMPTION.md.
  */
 
-import { stripe, serviceClient, requirePartnerRole, safeReturnTo, json, CORS } from '../_shared/stripe.ts'
+import { stripe, serviceClient, requirePartner, safeReturnTo, json, CORS } from '../_shared/stripe.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -20,7 +24,9 @@ Deno.serve(async (req) => {
   const partnerId = String(body.partner_id ?? '')
   if (!partnerId) return json({ error: 'partner_id is required.' }, 400)
 
-  const auth = await requirePartnerRole(req, partnerId, 'owner')
+  // Billing is a page the owner grants, not a rank — the same bar as adding
+  // the card in the first place.
+  const auth = await requirePartner(req, partnerId, 'billing')
   if (auth instanceof Response) return auth
 
   const db = serviceClient()
@@ -31,7 +37,7 @@ Deno.serve(async (req) => {
     .maybeSingle()
 
   if (!sub?.stripe_customer_id) {
-    return json({ error: 'No billing set up for this business yet.' }, 409)
+    return json({ error: 'No card on file for this business yet.' }, 409)
   }
 
   try {

@@ -1,6 +1,6 @@
 import { isDemo, isSupabaseConfigured } from '../lib/supabase'
 import * as live from './live/partners'
-import { PLAN_MIRROR } from '../lib/partnerPlans'
+import { PLAN_MIRROR, FREE_TIER } from '../lib/partnerBilling'
 import { DEMO_TAXONOMY } from '../data/partnerCatalog'
 
 /**
@@ -36,6 +36,22 @@ export async function plans() {
     // A public pricing page should never be a blank rectangle because the
     // database is having a moment.
     return PLAN_MIRROR
+  }
+}
+
+/**
+ * The fee and the credit ladder. Safe with no backend for the same reason
+ * `plans()` is: the marketing page has to be able to state the price on a
+ * cold load, and a pricing section that renders a blank rectangle because the
+ * database is having a moment is worse than one showing the number we set.
+ */
+export async function pricing() {
+  const fallback = { feeCents: FREE_TIER.redemption_fee_cents, currency: 'usd', tiers: [] }
+  if (!partnersEnabled) return fallback
+  try {
+    return await live.pricing()
+  } catch {
+    return fallback
   }
 }
 
@@ -89,11 +105,15 @@ export const targeting = gated(live.targeting)
 export const saveTargeting = gated(live.saveTargeting)
 
 export const subscription = gated(live.subscription)
-export const checkoutUrl = gated(live.checkoutUrl)
+export const billingSetupUrl = gated(live.billingSetupUrl)
 export const billingPortalUrl = gated(live.billingPortalUrl)
+export const billingSummary = gated(live.billingSummary)
+export const billableRedemptions = gated(live.billableRedemptions)
 
 export const staffQueue = gated(live.staffQueue)
 export const staffSetStatus = gated(live.staffSetStatus)
 export const staffOffers = gated(live.staffOffers)
 export const staffSetOfferStatus = gated(live.staffSetOfferStatus)
 export const staffRevenue = gated(live.staffRevenue)
+export const staffCredit = gated(live.staffCredit)
+export const staffSetCredit = gated(live.staffSetCredit)

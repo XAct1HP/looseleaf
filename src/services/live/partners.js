@@ -20,11 +20,33 @@ function bail(error) {
 export async function plans() {
   const { data, error } = await supabase
     .from('partner_plans')
-    .select('id, name, blurb, monthly_cents, per_verified_date_cents, entitlements, sort')
+    .select('id, name, blurb, monthly_cents, entitlements, sort')
     .eq('is_public', true)
     .order('sort')
   bail(error)
   return data ?? []
+}
+
+/**
+ * What a redemption costs and how far a partner can run between invoices.
+ * Both are public on purpose — a restaurant deciding whether to join should
+ * be able to read the terms before signing up for anything, and neither table
+ * carries a word about any specific business.
+ */
+export async function pricing() {
+  const [settings, tiers] = await Promise.all([
+    supabase.from('platform_billing').select('redemption_fee_cents, currency').maybeSingle(),
+    supabase
+      .from('partner_credit_tiers')
+      .select('id, name, sort, limit_cents, grace_cents, min_paid_invoices, min_paid_cents, blurb')
+      .order('sort'),
+  ])
+  bail(settings.error || tiers.error)
+  return {
+    feeCents: settings.data?.redemption_fee_cents ?? 150,
+    currency: settings.data?.currency ?? 'usd',
+    tiers: tiers.data ?? [],
+  }
 }
 
 export async function taxonomy() {
@@ -396,11 +418,11 @@ export async function subscription(partnerId) {
 }
 
 /**
- * Checkout and the billing portal both run in a Supabase Edge Function,
+ * Card capture and the billing portal both run in a Supabase Edge Function,
  * because the Stripe secret key must never reach a browser and this app has no
  * other server. The function returns a URL; we hand the person to Stripe and
  * wait for the webhook to tell us what actually happened. Coming back from
- * Stripe with `?checkout=success` is a hint to refetch, never proof of payment.
+ * Stripe with `?billing=ok` is a hint to refetch, never proof a card landed.
  */
 async function billingFn(name, body) {
   const { data, error } = await supabase.functions.invoke(name, { body })
@@ -412,12 +434,44 @@ async function billingFn(name, body) {
   return data.url
 }
 
-export async function checkoutUrl(partnerId, planId, returnTo) {
-  return billingFn('partner-checkout', { partner_id: partnerId, plan_id: planId, return_to: returnTo })
+/**
+ * Adding a card. There is no plan to pick, so this takes no plan id — it
+ * hands back a Stripe Checkout URL whose only job is to capture a payment
+ * method and open the $0 metered subscription that invoices are raised
+ * against. Nothing is charged at this step.
+ */
+export async function billingSetupUrl(partnerId, returnTo) {
+  return billingFn('partner-billing-setup', { partner_id: partnerId, return_to: returnTo })
 }
 
 export async function billingPortalUrl(partnerId, returnTo) {
   return billingFn('partner-portal', { partner_id: partnerId, return_to: returnTo })
+}
+
+/**
+ * Everything the Billing page shows, in one round trip: the fee, the credit
+ * ceiling, what is outstanding, and whether Date Passes can be handed out.
+ *
+ * Worth being clear about what this is *not* for. Nothing in the client
+ * decides whether a redemption may go ahead — `redeem_date_pass()` re-asks
+ * the same question inside the transaction. These values exist to explain
+ * the situation to a person, never to gate it.
+ */
+export async function billingSummary(partnerId) {
+  const { data, error } = await supabase.rpc('partner_billing_summary', { p_partner: partnerId })
+  bail(error)
+  return data ?? null
+}
+
+/** The line items an invoice is built from, newest first. */
+export async function billableRedemptions(partnerId, count = 50, since = null) {
+  const { data, error } = await supabase.rpc('partner_billable_redemptions', {
+    p_partner: partnerId,
+    p_since: since,
+    p_limit: count,
+  })
+  bail(error)
+  return data ?? []
 }
 
 /* ── staff ──────────────────────────────────────────────────────────────── */
@@ -464,4 +518,22 @@ export async function staffRevenue() {
   const { data, error } = await supabase.rpc('staff_partner_revenue')
   bail(error)
   return data ?? {}
+}
+
+/** Every business's credit position, for deciding who gets a longer leash. */
+export async function staffCredit() {
+  const { data, error } = await supabase.rpc('staff_partner_credit')
+  bail(error)
+  return data ?? []
+}
+
+export async function staffSetCredit(partnerId, { limitCents, rateCents, suspended, note } = {}) {
+  const { error } = await supabase.rpc('staff_set_partner_credit', {
+    p_partner: partnerId,
+    p_limit_override: limitCents ?? null,
+    p_rate_override: rateCents ?? null,
+    p_suspended: suspended ?? null,
+    p_note: note ?? null,
+  })
+  bail(error)
 }

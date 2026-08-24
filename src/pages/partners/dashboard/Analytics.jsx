@@ -4,7 +4,7 @@ import FunnelChart from '../../../components/partners/FunnelChart'
 import StatTile from '../../../components/backstage/StatTile'
 import Button from '../../../components/ui/Button'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { level } from '../../../lib/partnerPlans'
+import { level } from '../../../lib/partnerBilling'
 import * as partners from '../../../services/partners'
 
 const RANGES = [
@@ -172,8 +172,8 @@ export default function Analytics() {
 
       {depth === 'basic' ? (
         <p className="mt-4 rounded-card border border-notebook/40 bg-notebook-soft/60 px-5 py-4 text-[13.5px] leading-relaxed text-graphite">
-          Day-by-day breakdowns and verified-date reporting come with the higher plans. The totals
-          above are the whole picture on this one.
+          Day-by-day breakdowns arrive once there is enough traffic to draw a line through. The
+          totals above are the whole picture until then.
         </p>
       ) : (
         <section className="mt-4">

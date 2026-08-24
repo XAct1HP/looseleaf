@@ -4,7 +4,6 @@ import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
 import { IconCheck, IconX, IconSearch, IconScan } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { can } from '../../../lib/partnerPlans'
 import * as partners from '../../../services/partners'
 
 /**
@@ -30,8 +29,26 @@ import * as partners from '../../../services/partners'
  * screen is a viewfinder and a button.
  */
 export default function Scan() {
-  const { partner, entitlements } = usePartnerAccount()
-  const hasPasses = can(entitlements, 'redemption')
+  const { partner } = usePartnerAccount()
+  // Why this is allowed to fail silently: `partner_billing_summary()` refuses
+  // anybody without the billing page, which is most staff — and correctly so,
+  // since a waiter has no business reading their employer's payment history.
+  // So the banner is a courtesy for whoever *can* see it, and a staff member
+  // learns the same thing the honest way, from the sentence `redeem_date_pass`
+  // hands back when they scan.
+  const [billing, setBilling] = useState(null)
+
+  useEffect(() => {
+    if (!partner) return undefined
+    let live = true
+    partners
+      .billingSummary(partner.id)
+      .then((b) => live && setBilling(b))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [partner])
   const [params, setParams] = useSearchParams()
 
   const [code, setCode] = useState('')
@@ -372,16 +389,34 @@ export default function Scan() {
       />
 
       <div className="mx-auto max-w-[440px]">
-        {/* A plan below Date Partner issues no passes, so there is nothing for
-            this scanner to find. Saying so is the honest version — the old
-            behaviour was to remove the page, which for a member of staff meant
-            signing in to a screen that said they had no access, as though the
-            problem were them. */}
-        {!hasPasses && (
+        {/* Saying so up front is the honest version — the old behaviour was to
+            remove the page, which for a member of staff meant signing in to a
+            screen that said they had no access, as though the problem were
+            them. The scanner itself always works; what varies is whether
+            there is anything out there to scan. */}
+        {billing && !billing.has_card && (
           <p className="mb-5 rounded-2xl border border-[#F2E6D6] bg-cream px-4 py-3.5 text-[13px] leading-relaxed text-graphite">
-            <span className="font-medium text-navy">{partner?.name} isn’t issuing Date Passes yet.</span>{' '}
-            The scanner works, but there won’t be any codes to scan until the account moves to a plan
-            that includes them. Nothing to do here in the meantime.
+            <span className="font-medium text-navy">
+              {partner?.name} isn’t issuing Date Passes yet.
+            </span>{' '}
+            The scanner works, but there won’t be any codes to scan until a card is added under
+            Billing. Nothing is charged until somebody actually redeems one.
+          </p>
+        )}
+
+        {billing?.has_card && !billing.can_redeem && (
+          <p className="mb-5 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3.5 text-[13px] leading-relaxed text-coral-deep">
+            <span className="font-medium">Date Passes are paused on this account.</span>{' '}
+            Scans will be refused until the outstanding Loose Leaf invoice is settled under
+            Billing. Your Date Spot is unaffected and students can still find you.
+          </p>
+        )}
+
+        {billing?.has_card && billing.can_redeem && !billing.can_issue && (
+          <p className="mb-5 rounded-2xl border border-[#C9821F]/30 bg-[#FBF3E4] px-4 py-3.5 text-[13px] leading-relaxed text-graphite">
+            <span className="font-medium text-navy">No new passes are going out right now.</span>{' '}
+            Anything already in a customer’s hand still scans normally — keep honouring them.
+            New ones resume when this month’s invoice is paid.
           </p>
         )}
 

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import PartnerShell from '../../components/partners/PartnerShell'
-import PlanCards from '../../components/partners/PlanCards'
 import DateSpotCard from '../../components/dates/DateSpotCard'
 import Button from '../../components/ui/Button'
 import { Field, TextInput, TextArea, Select, TagPicker, PricePicker, PhotoSlot, HoursEditor, DayPicker, MoneyInput } from '../../components/partners/fields'
@@ -11,18 +10,23 @@ import * as partners from '../../services/partners'
 import * as media from '../../services/live/partnerMedia'
 import { usePartnerAccount } from '../../state/partnerAccount'
 import { PARTNER_CATEGORIES, DATE_TYPE_TAGS, VIBE_TAGS, daysText } from '../../data/partnerCatalog'
-import { PLAN_MIRROR, money } from '../../lib/partnerPlans'
+import { fee } from '../../lib/partnerBilling'
 import { geocode } from '../../lib/geocode'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
  * ── Getting a business onto Loose Leaf ──────────────────────────────────────
  *
- * Eight steps, and they are in this order for a reason: everything that
- * describes the place comes before anything that asks for money. A restaurant
- * owner who bails at the plan screen still leaves behind a complete draft we
- * can follow up on, and one who pays has already seen exactly what students
- * will see.
+ * Seven steps, and there is no longer a payment one. Under pay-per-redemption
+ * there is nothing to sell at signup: joining is free, being listed is free,
+ * and the first time money is mentioned is when a business decides to turn on
+ * Date Passes — which is a decision worth making with the dashboard open, not
+ * halfway through describing your hours.
+ *
+ * What that removes is the biggest drop-off point this flow had. What used to
+ * be the "Plan" step is now a plain statement of the terms on the review
+ * screen, because somebody should still finish this knowing exactly what
+ * Loose Leaf will and won't charge them for.
  *
  * Each step saves as it goes. Closing the laptop halfway through loses the
  * step you were on, not the four before it.
@@ -34,7 +38,6 @@ const STEPS = [
   { id: 'profile', label: 'Date profile' },
   { id: 'media', label: 'Photos' },
   { id: 'hours', label: 'Hours' },
-  { id: 'plan', label: 'Plan' },
   { id: 'offer', label: 'Offer' },
   { id: 'review', label: 'Review' },
 ]
@@ -59,7 +62,6 @@ const emptyDraft = {
   logoPath: null,
   coverPath: null,
   hours: {},
-  planId: null,
   offer: null,
 }
 
@@ -75,7 +77,7 @@ export default function PartnerOnboarding() {
   }))
   const [partnerId, setPartnerId] = useState(null)
   const [locationId, setLocationId] = useState(null)
-  const [plans, setPlans] = useState(PLAN_MIRROR)
+  const [feeCents, setFeeCents] = useState(150)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [uploading, setUploading] = useState(null)
@@ -84,7 +86,10 @@ export default function PartnerOnboarding() {
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
 
   useEffect(() => {
-    partners.plans().then(setPlans).catch(() => {})
+    partners
+      .pricing()
+      .then((p) => setFeeCents(p.feeCents))
+      .catch(() => {})
   }, [])
 
   // Somebody who was *invited* to an existing business must not be marched
@@ -274,7 +279,12 @@ export default function PartnerOnboarding() {
     }
   }
 
-  /** Saves the draft offer, submits for review, then hands off to Stripe. */
+  /**
+   * Saves the draft offer and submits the application for review. That is the
+   * whole of it now — there is no handoff to Stripe, because there is nothing
+   * to pay for yet. A card is asked for later, at the point the business
+   * decides to make an offer live, and only then.
+   */
   async function submit() {
     if (busy) return
     setBusy(true)
@@ -301,19 +311,9 @@ export default function PartnerOnboarding() {
 
       await partners.update(partnerId, { status: 'pending' })
       await refresh()
-
-      // Payment is the last thing, and it happens on Stripe's pages.
-      const url = await partners.checkoutUrl(
-        partnerId,
-        draft.planId,
-        `${window.location.origin}/partners/dashboard/billing`
-      )
-      window.location.assign(url)
+      navigate('/partners/dashboard', { replace: true })
     } catch (e) {
-      // A failed handoff to Stripe must not look like a failed application.
-      setError(
-        `${e.message} Your application is saved — you can finish payment from the dashboard.`
-      )
+      setError(`${e.message} Your application is saved — you can finish it from the dashboard.`)
       setBusy(false)
       await refresh()
     }
@@ -463,24 +463,14 @@ export default function PartnerOnboarding() {
           </Section>
         )}
 
-        {current.id === 'plan' && (
-          <Section title="Pick a plan." body="You can change this any time from the dashboard.">
-            <PlanCards plans={plans} selectedId={draft.planId} onSelect={(id) => set({ planId: id })} ctaLabel="Choose" />
-          </Section>
-        )}
-
         {current.id === 'offer' && (
-          <OfferStep
-            offer={draft.offer}
-            onChange={(o) => set({ offer: o })}
-            allowed={planAllowsOffers(plans, draft.planId)}
-          />
+          <OfferStep offer={draft.offer} onChange={(o) => set({ offer: o })} feeCents={feeCents} />
         )}
 
         {current.id === 'review' && (
           <Section
             title="Here's how you'll look."
-            body="This is the card students see. Submitting sends your application to Loose Leaf — a person reads every one, usually within a day or two — and then takes you to Stripe to set up billing."
+            body="This is the card students see. Submitting sends your application to Loose Leaf — a person reads every one, usually within a day or two. Nothing is charged, and we don't ask for a card."
           >
             <div className="max-w-[440px]">
               <DateSpotCard spot={previewSpot} fit={92} />
@@ -491,18 +481,21 @@ export default function PartnerOnboarding() {
               <Row label="Category" value={PARTNER_CATEGORIES.find((c) => c.id === draft.category)?.label} />
               <Row label="Address" value={[draft.addressLine, draft.city].filter(Boolean).join(', ')} />
               <Row label="Date types" value={draft.dateTypes.length ? `${draft.dateTypes.length} selected` : '—'} />
-              <Row
-                label="Plan"
-                value={
-                  draft.planId
-                    ? `${plans.find((p) => p.id === draft.planId)?.name} · ${money(
-                        plans.find((p) => p.id === draft.planId)?.monthly_cents
-                      )}/mo`
-                    : 'Not chosen'
-                }
-              />
+              <Row label="Cost to be here" value="Free" />
               <Row label="Offer" value={draft.offer ? draft.offer.title : 'None yet'} />
             </dl>
+
+            <div className="mt-1 rounded-card border border-notebook/50 bg-notebook-soft px-5 py-5">
+              <p className="text-[14.5px] font-medium text-navy">What Loose Leaf costs you</p>
+              <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
+                Nothing to join and nothing per month. You are charged {fee(feeCents)} when a
+                couple hands over a Date Pass and one of your staff scans it — billed once at the
+                end of the month, and not at all in a month where that never happened.
+              </p>
+              <p className="mt-2.5 max-w-[58ch] text-[13px] leading-relaxed text-mist">
+                We'll ask for a card when you're ready to turn an offer on, not before.
+              </p>
+            </div>
           </Section>
         )}
 
@@ -524,8 +517,8 @@ export default function PartnerOnboarding() {
           </button>
 
           {current.id === 'review' ? (
-            <Button variant="coral" size="lg" onClick={submit} disabled={busy || !draft.planId}>
-              {busy ? 'Submitting…' : 'Submit and set up billing'}
+            <Button variant="coral" size="lg" onClick={submit} disabled={busy}>
+              {busy ? 'Submitting…' : 'Submit application'}
             </Button>
           ) : (
             <Button variant="coral" size="lg" onClick={next} disabled={!valid || busy}>
@@ -684,18 +677,7 @@ const blankOffer = {
   monthlyCap: 100,
 }
 
-function OfferStep({ offer, onChange, allowed }) {
-  if (!allowed) {
-    return (
-      <Section
-        title="Offers come with Featured Partner."
-        body="The Date Spot plan puts you in front of students browsing for somewhere to go, with your photos and your hours. Offers, Date Passes and the rest arrive when you move up a tier — you can do that from the dashboard whenever you like."
-      >
-        <p className="text-[14px] text-graphite">Nothing to do here. Carry on to the review.</p>
-      </Section>
-    )
-  }
-
+function OfferStep({ offer, onChange, feeCents = 150 }) {
   const o = offer ?? blankOffer
 
   return (
@@ -703,6 +685,12 @@ function OfferStep({ offer, onChange, allowed }) {
       title="Make it worth the walk."
       body="Optional, and you can add it later. Most partners run something modest on the nights they're quiet rather than something dramatic on a Friday they're already full."
     >
+      <p className="-mt-1 max-w-[58ch] rounded-2xl border border-notebook/50 bg-notebook-soft px-4 py-3 text-[13.5px] leading-relaxed text-graphite">
+        This is the part Loose Leaf charges for, and only this part: {fee(feeCents)} when somebody
+        redeems a pass for it. Drafting it now costs nothing — it goes live when you turn it on
+        from the dashboard, which is also when we'll ask for a card.
+      </p>
+
       {!offer ? (
         <Button variant="outline" size="md" onClick={() => onChange(blankOffer)}>
           Create an offer
@@ -785,11 +773,6 @@ function normaliseUrl(v) {
   const s = (v ?? '').trim()
   if (!s) return null
   return /^https?:\/\//i.test(s) ? s : `https://${s}`
-}
-
-function planAllowsOffers(plans, planId) {
-  const plan = plans.find((p) => p.id === planId)
-  return Boolean(plan?.entitlements?.offers)
 }
 
 function offerSummary(o) {

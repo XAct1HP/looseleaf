@@ -14,7 +14,7 @@ than simulating a signup that takes card details.
 
 ## What you need to supply
 
-Two secrets, and three Stripe price IDs. Nothing else in this system needs a
+Three secrets and one Stripe price ID. Nothing else in this system needs a
 credential.
 
 | Where | Name | What it is |
@@ -22,8 +22,8 @@ credential.
 | Supabase → Edge Functions | `STRIPE_SECRET_KEY` | `sk_live_…` / `sk_test_…` |
 | Supabase → Edge Functions | `STRIPE_WEBHOOK_SECRET` | `whsec_…` from the endpoint |
 | Supabase → Edge Functions | `PARTNER_SITE_URL` | comma-separated allow-list of return origins |
-| Supabase → Edge Functions | `REPORT_USAGE_TOKEN` | only if you ever meter verified dates |
-| Postgres | `partner_plans.stripe_price_id` | one recurring price per plan |
+| Supabase → Edge Functions | `METER_WORKER_TOKEN` | guards the job that tells Stripe what to bill |
+| Postgres | `platform_billing.stripe_metered_price_id` | the one metered price, $1.50/redemption |
 
 `PARTNER_SITE_URL` is a **list**, first entry wins as the fallback:
 
@@ -36,8 +36,8 @@ stops the billing flow being an open redirect. Add your dev origin, or a
 checkout test from `localhost` lands you on production and looks exactly like a
 webhook bug.
 
-**There is no Stripe key in the front end.** Not even a publishable one.
-Checkout and every change afterwards happen on Stripe-hosted pages, so the
+**There is no Stripe key in the front end.** Not even a publishable one. Card
+capture and every change afterwards happen on Stripe-hosted pages, so the
 browser only ever receives a redirect URL. If you find yourself adding
 `VITE_STRIPE_…` to `.env`, something has gone wrong.
 
@@ -56,6 +56,7 @@ supabase db push
 #   20260822120000_partner_permissions.sql per-page capabilities, coordinates
 #   20260823120000_partner_scan_always.sql scanning is membership, not a grant
 #   20260823130000_campus_stats.sql        real headcounts for the Campus page
+#   20260824120000_pay_per_redemption.sql  free tier, $1.50/redemption, credit ladder
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -70,29 +71,25 @@ Re-enable the hook afterwards if you haven't already:
 **Dashboard → Authentication → Hooks → Before User Created →
 `public.restrict_signup_to_campus`**.
 
-### 2. Create the plans in Stripe
+### 2. Set up Stripe
 
-Three products, each with one recurring monthly price:
-
-| Plan id | Name | Price |
-| --- | --- | --- |
-| `date-spot` | Date Spot | $49/mo |
-| `featured` | Featured Partner | $99/mo |
-| `date-partner` | Date Partner | $199/mo |
-
-Then point the rows at them:
+Full instructions, including migrating anyone still on an old subscription, are
+in **[STRIPE-PAY-PER-REDEMPTION.md](STRIPE-PAY-PER-REDEMPTION.md)**. The short
+version: one billing meter named `date_pass_redemption`, one usage-based
+monthly price at $1.50/unit against it, then
 
 ```sql
-update partner_plans set stripe_price_id = 'price_…' where id = 'date-spot';
-update partner_plans set stripe_price_id = 'price_…' where id = 'featured';
-update partner_plans set stripe_price_id = 'price_…' where id = 'date-partner';
+update platform_billing set
+  stripe_metered_price_id = 'price_…',
+  redemption_fee_cents    = 150
+where id;
 ```
 
-Prices, names, and **what each plan unlocks** all live in `partner_plans`.
-Changing $199 to $179, or moving Date Passes down a tier, is an `update` and a
-page refresh — no deploy. Nothing in the app branches on a plan id; every check
-is `can(entitlements, 'date_passes')` against the `entitlements` JSON on the
-plan row.
+There are no plans to create. `partner_plans` still exists and still holds the
+`entitlements` JSON — every check in the app is
+`can(entitlements, 'date_passes')` and nothing branches on a plan id — but
+there is one row, `free`, and everything on it is switched on. It is now a
+feature-flag table rather than a price list.
 
 ### 3. Deploy the functions
 
@@ -100,10 +97,15 @@ plan row.
 cp supabase/functions/.env.example supabase/functions/.env   # fill it in
 supabase secrets set --env-file supabase/functions/.env
 
-supabase functions deploy partner-checkout
+supabase functions deploy partner-billing-setup
 supabase functions deploy partner-portal
-supabase functions deploy stripe-webhook --no-verify-jwt
+supabase functions deploy partner-meter-redemptions --no-verify-jwt
+supabase functions deploy stripe-webhook            --no-verify-jwt
 ```
+
+`partner-checkout` and `partner-report-usage` are gone — delete them from the
+project so a stale deployment can't take a card for a plan that no longer
+exists.
 
 `--no-verify-jwt` on the webhook is required — Stripe does not carry a Supabase
 token. It protects itself with the signature instead, and nothing in the body is
@@ -123,21 +125,35 @@ Events to send:
 - `customer.subscription.created`
 - `customer.subscription.updated`
 - `customer.subscription.deleted`
+- `invoice.finalized`
 - `invoice.paid`
 - `invoice.payment_failed`
+- `invoice.marked_uncollectible`
+- `payment_method.attached`
+- `payment_method.detached`
+- `customer.updated`
 
 Copy the endpoint's signing secret into `STRIPE_WEBHOOK_SECRET` and redeploy.
 
+`invoice.finalized` is the one that is easy to leave off and expensive to
+miss: it stamps the invoice id onto the redemptions it covers, which is what
+makes a bill reconcilable against the partner's own list.
+
 ### 5. Check it end to end
 
-Use a Stripe test key and card `4242 4242 4242 4242`:
+Use a Stripe test key and card `4242 4242 4242 4242`. The full script is in
+[STRIPE-PAY-PER-REDEMPTION.md](STRIPE-PAY-PER-REDEMPTION.md); the shape of it:
 
 1. `/partners/join` → make an account with a non-`.edu` address
-2. Fill in the onboarding, choose a plan, complete Checkout
-3. `partner_subscriptions.status` should become `active` within a few seconds —
-   **from the webhook**, not from the redirect
-4. Approve the business in Backstage → Partners
-5. As a student, open Date Spots. It should now be there.
+2. Fill in the onboarding. **No card is asked for and no plan is chosen.**
+3. Approve the business in Backstage → Partners
+4. As a student, open Date Spots. It should be there already — being listed is
+   free, so nothing about billing gates it.
+5. Back in the dashboard, try to publish an offer → refused until a card is
+   added. Add one; `partner_subscriptions.payment_method_at` fills in **from
+   the webhook**, not from the redirect.
+6. Unlock a pass, scan it, run the metering worker, advance a test clock a
+   month. One $1.50 invoice.
 
 ---
 
@@ -319,7 +335,9 @@ prompt at plan time, used in memory and never persisted — not a column.
 
 ## The performance fee
 
-`$199/month + $5 per verified date` is built and switched off. It stays off
+Superseded as of 2026-08-24 — this *is* the model now, at $1.50 rather than
+$5 and with no monthly fee under it. Kept for the archaeology. It used to stay
+off
 behind three separate locks, all of which have to be opened by hand:
 
 1. `partner_plans.per_verified_date_cents` above zero
@@ -387,7 +405,9 @@ distinguishes `anon` (**nobody asked**) from `ready` with an empty list
 to onboard. Conflating them sent owners who already had a restaurant to
 "describe your restaurant".
 
-**A plan limit is never reported as a permission.** The nav is filtered twice —
+**A plan limit is never reported as a permission.** (Since pay-per-redemption
+every entitlement is true for everybody, so this no longer bites in practice —
+but the rule is why the nav still can't hide a person's last page.) The nav is filtered twice —
 by what the person may reach, then by what the plan turned on — and the second
 filter may hide pages but may never hide the last one. `scan` carries no plan
 requirement at all. Before this, `scan` required the Date Passes entitlement,
@@ -439,7 +459,8 @@ title.
 ## Moderation
 
 New businesses land as `pending` and are invisible to students. `partner_is_live()`
-requires **both** staff approval and a live subscription, so paying is not
+requires staff approval and nothing else as of 2026-08-24 — it used to require
+**both** staff approval and a live subscription, so paying was not
 enough and neither is approval on its own. Backstage → Partners is where a
 person reads each application; declining writes a note the partner sees
 verbatim on their dashboard.

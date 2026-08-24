@@ -3,7 +3,7 @@ import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
 import { Field, TextInput, TextArea, TagPicker, DayPicker } from '../../../components/partners/fields'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { can } from '../../../lib/partnerPlans'
+import { can } from '../../../lib/partnerBilling'
 import RoleAccess from '../../../components/partners/RoleAccess'
 import * as partners from '../../../services/partners'
 import { DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
@@ -125,12 +125,9 @@ export default function Settings() {
         {!canTarget ? (
           <div className="mt-5 rounded-2xl border border-notebook/40 bg-notebook-soft/60 px-5 py-4">
             <p className="text-[14px] leading-relaxed text-graphite">
-              Targeting controls come with the Date Partner plan. Until then Loose Leaf uses your
-              Date Spot’s own tags and hours, which for most partners is the same answer.
+              Targeting isn’t switched on for this account. Loose Leaf uses your Date Spot’s own
+              tags and hours instead, which for most partners is the same answer.
             </p>
-            <Button to="/partners/dashboard/billing" variant="outline" size="sm" className="mt-4">
-              See plans
-            </Button>
           </div>
         ) : target ? (
           <div className="mt-6 space-y-6">

@@ -1,13 +1,13 @@
 # Supabase CLI project config.
 #
-# The only thing here that isn't a default: the Stripe webhook and the usage
-# reporter must run with JWT verification off, because Stripe and a cron
+# The only thing here that isn't a default: the Stripe webhook and the metering
+# worker must run with JWT verification off, because Stripe and a cron
 # scheduler don't carry a Supabase token. They protect themselves instead —
-# the webhook by signature, the reporter by a shared header token.
+# the webhook by signature, the worker by a shared header token.
 
 project_id = "looseleaf"
 
-[functions.partner-checkout]
+[functions.partner-billing-setup]
 verify_jwt = true
 
 [functions.partner-portal]
@@ -16,5 +16,5 @@ verify_jwt = true
 [functions.stripe-webhook]
 verify_jwt = false
 
-[functions.partner-report-usage]
+[functions.partner-meter-redemptions]
 verify_jwt = false

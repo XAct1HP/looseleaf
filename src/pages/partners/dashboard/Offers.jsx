@@ -6,7 +6,8 @@ import { Chip } from '../../../components/ui/Chip'
 import { Field, TextInput, TextArea, Select, DayPicker, MoneyInput } from '../../../components/partners/fields'
 import { IconSpark } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
-import { can, limit } from '../../../lib/partnerPlans'
+import { can, limit, fee } from '../../../lib/partnerBilling'
+import { Link } from 'react-router-dom'
 import * as partners from '../../../services/partners'
 import { daysText } from '../../../data/partnerCatalog'
 
@@ -61,6 +62,25 @@ export default function Offers() {
   const allowed = can(entitlements, 'offers')
   const maxActive = limit(entitlements, 'max_active_offers', 0)
   const activeCount = list.filter((o) => o.status === 'active').length
+
+  // Publishing an offer is the moment a business can start owing Loose Leaf
+  // money, so it is the moment a card is required — and the only one. Read
+  // here purely to explain the situation and disable a button that would
+  // fail anyway; the database refuses the redemption regardless of this.
+  const [billing, setBilling] = useState(null)
+  const canPublish = Boolean(billing?.has_card)
+
+  useEffect(() => {
+    if (!partner) return
+    let live = true
+    partners
+      .billingSummary(partner.id)
+      .then((b) => live && setBilling(b))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [partner])
 
   const load = async () => {
     if (!partner) return
@@ -121,9 +141,16 @@ export default function Offers() {
   }
 
   async function setStatus(offer, status) {
+    if (status === 'active' && !canPublish) {
+      setError(
+        'Add a card before turning an offer on. Nothing is charged until somebody actually ' +
+          'redeems a pass — the card is there so we can bill for it when they do.'
+      )
+      return
+    }
     if (status === 'active' && activeCount >= maxActive && offer.status !== 'active') {
       setError(
-        `Your plan runs ${maxActive} offer${maxActive === 1 ? '' : 's'} at a time. Pause one first, or move up a tier.`
+        `You can run ${maxActive} offer${maxActive === 1 ? '' : 's'} at a time. Pause one first.`
       )
       return
     }
@@ -136,7 +163,7 @@ export default function Offers() {
     <>
       <PageHead
         title="Offers"
-        subtitle={`What Loose Leaf couples get for choosing you. You can run ${maxActive} at a time on this plan.`}
+        subtitle={`What Loose Leaf couples get for choosing you. Free to draft; ${fee(billing?.fee_cents ?? 150)} when one is redeemed.`}
         action={
           <Button variant="coral" size="md" onClick={() => setEditing({ ...blank })}>
             New offer
@@ -148,6 +175,47 @@ export default function Offers() {
         <p className="mb-6 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] leading-relaxed text-coral-deep">
           {error}
         </p>
+      )}
+
+      {/* The one place billing enters the product before it has to. Framed as
+          the next step rather than as a block, because drafting an offer with
+          no card is a perfectly reasonable thing to have just done. */}
+      {billing && !billing.has_card && (
+        <div className="mb-7 rounded-card border border-notebook/50 bg-notebook-soft px-5 py-5">
+          <p className="text-[15px] font-medium text-navy">
+            Add a card to turn an offer on.
+          </p>
+          <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
+            Nothing is charged for having one. You are billed {fee(billing.fee_cents)} at the end
+            of the month for each Date Pass your staff actually scanned, and nothing at all in a
+            month where none were. Draft as many offers as you like in the meantime.
+          </p>
+          <Link
+            to="/partners/dashboard/billing"
+            className="press focus-ring mt-4 inline-flex items-center rounded-full bg-coral px-4 py-2 text-[14px] font-medium text-white hover:bg-coral-deep"
+          >
+            Add a card
+          </Link>
+        </div>
+      )}
+
+      {billing?.has_card && !billing.can_issue && (
+        <div className="mb-7 rounded-card border border-[#C9821F]/30 bg-[#FBF3E4] px-5 py-5">
+          <p className="text-[15px] font-medium text-navy">
+            Your offers are paused while an invoice is outstanding.
+          </p>
+          <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
+            They stay exactly as they are and students simply stop being shown them. Passes
+            already in someone's hand are still being honoured, and everything comes back on its
+            own once the invoice clears.
+          </p>
+          <Link
+            to="/partners/dashboard/billing"
+            className="press focus-ring mt-4 inline-flex items-center rounded-full border border-rule px-4 py-2 text-[14px] font-medium text-navy hover:border-navy/25"
+          >
+            Open billing
+          </Link>
+        </div>
       )}
 
       {!list.length ? (
