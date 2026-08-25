@@ -38,11 +38,62 @@
 
     <!-- Home screen. iOS ignores SVG for apple-touch-icon, so that one is a PNG. -->
     <link rel="icon" type="image/svg+xml" href="/leaf.svg" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Looseleaf" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+
+    <!--
+      ── Which app is this, decided before anything renders ──────────────────
+
+      Looseleaf serves two products — the student app and the partner scanner —
+      from this one static file, and a document may only name one web app
+      manifest. React swaps the tag by route (see ManifestForRoute in App.jsx),
+      and on Chrome that is enough.
+
+      It is NOT enough on iOS, and this script is the difference. Safari takes
+      its metadata once, when the document loads, and does not go back for it
+      when the tags change later.
+
+      What that looked like on a real handset, because the asymmetry is the
+      clue: the Add to Home Screen sheet showed the *right icon* and the
+      *wrong name and wrong URL*. Only the icon is re-resolved at the moment
+      you tap Share — Safari has to go and fetch the image — so that one alone
+      picked up React's swap. The name and start_url both came from the
+      snapshot taken at load: the student app's, pointing at "/". An icon that
+      looks perfect, opening the dating app.
+
+      Deciding here, synchronously during head parsing, means only ever one
+      manifest exists and it is already correct before the first byte of the
+      bundle runs. The React swap stays, for client-side navigation.
+    -->
+    <script>
+      (function () {
+        var p = location.pathname
+        var partner = p === '/partners' || p.indexOf('/partners/') === 0
+
+        function add(name, attrs) {
+          var el = document.createElement(name)
+          for (var k in attrs) el.setAttribute(k, attrs[k])
+          document.head.appendChild(el)
+        }
+
+        add('link', {
+          rel: 'manifest',
+          href: partner ? '/scanner.webmanifest' : '/manifest.webmanifest',
+        })
+        add('link', {
+          rel: 'apple-touch-icon',
+          sizes: '180x180',
+          href: partner ? '/scanner-apple-touch-icon.png' : '/apple-touch-icon.png',
+        })
+        // What iOS pre-fills the name field with. Kept short because the home
+        // screen truncates at about a dozen characters; whoever installs it can
+        // rename it there anyway.
+        add('meta', {
+          name: 'apple-mobile-web-app-title',
+          content: partner ? 'LL Scanner' : 'Looseleaf',
+        })
+      })()
+    </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

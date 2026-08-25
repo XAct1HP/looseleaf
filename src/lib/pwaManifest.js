@@ -13,6 +13,24 @@
  * and registers a worker — must stay out of that bundle, or a student's own
  * install banner would be silently suppressed by a listener meant for staff.
  *
+ * ── Why this is not the whole story on iOS ──────────────────────────────────
+ *
+ * Safari takes its app metadata once, at document load, and does not go back
+ * for it when the tags change afterwards. So swapping from JavaScript fixes
+ * Chrome and does nothing at all for an iPhone.
+ *
+ * Measured on a real handset, the asymmetry is worth knowing: of the three
+ * things Add to Home Screen shows, **only the icon** picked up the swap —
+ * Safari re-resolves that one because it has to go and fetch the image. The
+ * name and `start_url` both came from the load-time snapshot, so the sheet
+ * offered the scanner's coral icon under the name "Looseleaf" pointing at
+ * "/". An icon that looks perfect, opening the dating app.
+ *
+ * The decision therefore happens *before this file runs*, in an inline head
+ * script in `index.html`, from the same pathname. What is left here is the
+ * client-side half: a Chrome user navigating between the two products without
+ * a document load. Both must agree, and both read `location.pathname`.
+ *
  * ── Why by route, and not on the dashboard ──────────────────────────────────
  *
  * The first version of this swapped the tags in `DashboardLayout`. That left
@@ -43,21 +61,54 @@ const SCANNER = {
   appleIcon: '/scanner-apple-touch-icon.png',
 }
 
-let current = null
+/**
+ * Seeded from the DOM rather than starting at null, because `index.html` has
+ * already made this decision — synchronously, in a head script, from the same
+ * pathname — before any of this runs. Starting blind would make the first call
+ * here look like a *change*, and a change throws away any install prompt the
+ * browser has already handed us for the very manifest we are re-selecting.
+ */
+let current = (() => {
+  if (typeof document === 'undefined') return null
+  const href = document.querySelector('link[rel="manifest"]')?.getAttribute('href')
+  if (!href) return null
+  return href.includes('scanner') ? 'scanner' : 'student'
+})()
+
 const watchers = new Set()
+
+/** The head script creates these; this is for the case where it somehow didn't. */
+function ensure(selector, make) {
+  let el = document.querySelector(selector)
+  if (!el) {
+    el = make()
+    document.head.appendChild(el)
+  }
+  return el
+}
 
 function setTags(spec) {
   if (typeof document === 'undefined') return
   if (current === spec.kind) return
 
-  const link = document.querySelector('link[rel="manifest"]')
-  if (link) link.setAttribute('href', spec.manifest)
+  ensure('link[rel="manifest"]', () => {
+    const l = document.createElement('link')
+    l.setAttribute('rel', 'manifest')
+    return l
+  }).setAttribute('href', spec.manifest)
 
-  const title = document.querySelector('meta[name="apple-mobile-web-app-title"]')
-  if (title) title.setAttribute('content', spec.appleTitle)
+  ensure('meta[name="apple-mobile-web-app-title"]', () => {
+    const m = document.createElement('meta')
+    m.setAttribute('name', 'apple-mobile-web-app-title')
+    return m
+  }).setAttribute('content', spec.appleTitle)
 
-  const icon = document.querySelector('link[rel="apple-touch-icon"]')
-  if (icon) icon.setAttribute('href', spec.appleIcon)
+  ensure('link[rel="apple-touch-icon"]', () => {
+    const l = document.createElement('link')
+    l.setAttribute('rel', 'apple-touch-icon')
+    l.setAttribute('sizes', '180x180')
+    return l
+  }).setAttribute('href', spec.appleIcon)
 
   current = spec.kind
   watchers.forEach((fn) => {

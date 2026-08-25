@@ -41,6 +41,18 @@ import {
 
 const SCANNER_PATH = '/partners/dashboard/scan'
 
+/**
+ * On iOS the manifest is snapshotted at document load, so the *only* way to be
+ * sure Safari is holding the scanner's is to have arrived at a partner URL
+ * through a real page load. A React route change does not count.
+ *
+ * A full-page `assign()` rather than a router navigation, deliberately — the
+ * whole point is to make the browser parse the document again.
+ */
+function openScannerForReal() {
+  window.location.assign(`${SCANNER_PATH}?install=1`)
+}
+
 /* ── the two glyphs that do all the work ─────────────────────────────────── */
 
 /** iOS Share: a box with an arrow leaving the top of it. */
@@ -119,7 +131,7 @@ const STEPS = {
       'Scroll down the list and tap Add to Home Screen.',
       'Tap Add, top right. The scanner appears on your home screen.',
     ],
-    note: 'iPhones never offer to do this for you — Apple leaves it to the Share menu, so this is the only route.',
+    note: 'iPhones never offer to do this for you — Apple leaves it to the Share menu, so this is the only route. The address bar should say /partners/dashboard/scan while you do it.',
   },
   'ios-chrome': {
     Glyph: ShareGlyph,
@@ -222,6 +234,16 @@ export default function InstallSheet({ open, onClose }) {
   const { Glyph } = plan
   const scannerUrl = url(SCANNER_PATH)
 
+  // Safari takes its manifest from the document it loaded, and a client-side
+  // route change does not reload one. So on iOS, being on the right *page* is
+  // not enough — you have to have got here by loading it. If the address bar
+  // doesn't already say the scanner, the honest first step is to go there
+  // properly, and everything below waits until it does.
+  const iosSnapshotRisk =
+    platform.startsWith('ios') &&
+    typeof window !== 'undefined' &&
+    window.location.pathname !== SCANNER_PATH
+
   async function install() {
     const result = await promptInstall()
     setOutcome(result)
@@ -237,6 +259,8 @@ export default function InstallSheet({ open, onClose }) {
     >
       {installed ? (
         <AlreadyInstalled />
+      ) : iosSnapshotRisk ? (
+        <OpenScannerFirst onGo={openScannerForReal} />
       ) : (
         <>
           {/* Where a browser will do this for us, the instructions are the
@@ -358,6 +382,34 @@ export default function InstallSheet({ open, onClose }) {
         </>
       )}
     </Sheet>
+  )
+}
+
+/**
+ * The iPhone detour, and the reason it exists is worth stating plainly on the
+ * screen rather than hiding behind a redirect: somebody who has just been told
+ * "add this to your home screen" and is instead shown a button is owed a
+ * sentence about why.
+ */
+function OpenScannerFirst({ onGo }) {
+  return (
+    <div className="py-2">
+      <p className="text-[15px] leading-relaxed text-graphite">
+        One step first. On an iPhone, the icon you add points at whichever page
+        Safari loaded — and this isn’t the scanner yet. Open it properly and the
+        steps will carry on from there.
+      </p>
+
+      <Button variant="coral" size="lg" full className="mt-6" onClick={onGo}>
+        Open the scanner
+      </Button>
+
+      <p className="mt-4 text-[13px] leading-relaxed text-mist">
+        It’s the same app — this just reloads the page at the right address, so
+        what lands on your home screen opens the camera instead of the student
+        app.
+      </p>
+    </div>
   )
 }
 
