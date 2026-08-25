@@ -69,6 +69,18 @@ const gated = (fn) => (...args) => {
 
 export const sendCode = gated(live.sendCode)
 export const isPartnerUser = gated(live.isPartnerUser)
+
+/**
+ * Not gated, and answers false rather than throwing when there's no backend.
+ * The login screen asks this on every attempt purely to decide how kindly to
+ * fail; it is not permission, and it must never be the thing that stops a
+ * demo-mode page rendering.
+ */
+export async function inviteOpen(email) {
+  if (!partnersEnabled) return false
+  return live.inviteOpen(email)
+}
+
 export const register = gated(live.register)
 export const mine = gated(live.mine)
 export const update = gated(live.update)

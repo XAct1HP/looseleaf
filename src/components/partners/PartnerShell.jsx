@@ -21,12 +21,17 @@ export default function PartnerShell({ children, cta = true }) {
             <ForPartners size="md" />
           </Link>
 
-          {/* "Partner log in" and "Become a Partner" are five words and a
-              phone is 390px wide, so below `sm` they live behind one button.
-              Above it, nothing about this bar has changed. */}
+          {/* Plain "Log in", not "Partner log in". Most people who ever use
+              this link are staff at a business that is already a partner, and
+              the qualifier read to them as a door for somebody else — leaving
+              "Become a Partner" as the only button that looked like theirs.
+              The page it opens says who it's for.
+
+              Together with the coral CTA that's five words, and a phone is
+              390px wide, so below `sm` they live behind one button. */}
           <TopMenu
             items={[
-              { to: '/partners/login', label: 'Partner log in' },
+              { to: '/partners/login', label: 'Log in' },
               ...(cta ? [{ to: '/partners/join', label: 'Become a Partner', variant: 'coral' }] : []),
             ]}
           />
@@ -52,7 +57,14 @@ export default function PartnerShell({ children, cta = true }) {
               Become a Partner
             </Link>
             <Link to="/partners/login" className="hover:text-navy">
-              Partner log in
+              Log in
+            </Link>
+            {/* Same destination, second name. A staff member sent to
+                hellolooseleaf.com by their manager scans this footer for the
+                word "staff", not for "log in" — and finding neither is how
+                they end up clicking "Become a Partner". */}
+            <Link to="/partners/login" className="hover:text-navy">
+              Staff sign-in
             </Link>
             <Link to="/" className="hover:text-navy">
               Loose Leaf for students

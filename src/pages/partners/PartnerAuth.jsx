@@ -31,6 +31,10 @@ export default function PartnerAuth() {
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  // Told apart from `error` on purpose. "That code was wrong" is a red line
+  // under a field; "we have never seen this address" is a paragraph, because
+  // the person reading it usually needs to go and ask somebody something.
+  const [noAccount, setNoAccount] = useState(false)
   const codeRef = useRef(null)
 
   useEffect(() => {
@@ -45,8 +49,22 @@ export default function PartnerAuth() {
     if (!ready || busy) return
     setBusy(true)
     setError(null)
+    setNoAccount(false)
     try {
-      await partners.sendCode(email, { createAccount: joining })
+      // ── Why a first-time staff member may create an account here ──────────
+      //
+      // A login box that mints an account for any address typed into it is a
+      // signup box wearing the wrong label, so this path deliberately does not
+      // do that. But a shift manager added to a business this morning has no
+      // account at all, and sending them to "Become a Partner" would have them
+      // register a second business to get at their boss's scanner.
+      //
+      // So we ask one question first — is anybody expecting this address? —
+      // and let exactly those addresses through. The answer grants nothing on
+      // its own: the invitation is still accepted, against the address in
+      // their token, on the other side of the code.
+      const invited = joining ? false : await partners.inviteOpen(email)
+      await partners.sendCode(email, { createAccount: joining || invited })
       try {
         sessionStorage.setItem('looseleaf.partner.name', name.trim())
       } catch {
@@ -54,7 +72,8 @@ export default function PartnerAuth() {
       }
       setStep('code')
     } catch (err) {
-      setError(err.message)
+      if (err.code === 'no_account') setNoAccount(true)
+      else setError(err.message)
     } finally {
       setBusy(false)
     }
@@ -151,13 +170,28 @@ export default function PartnerAuth() {
           ) : (
             <>
               <h1 className="font-display text-[32px] font-semibold leading-tight tracking-[-0.02em]">
-                {joining ? 'Let’s get your place on Loose Leaf.' : 'Welcome back.'}
+                {joining ? 'Let’s get your place on Loose Leaf.' : 'Log in.'}
               </h1>
-              <p className="mt-3 max-w-[44ch] text-[15.5px] leading-relaxed text-graphite">
+              <p className="mt-3 max-w-[46ch] text-[15.5px] leading-relaxed text-graphite">
                 {joining
                   ? 'Use whatever email you actually check — no .edu address needed, this side is for businesses.'
-                  : 'We’ll email you a code. No password to lose behind the bar.'}
+                  : 'Owners, managers and staff all sign in here. We’ll email you a code — no password to lose behind the bar.'}
               </p>
+
+              {/* First-time staff are the people most likely to be on the wrong
+                  page, and the wrong page is one coral button away. Say plainly
+                  that this is their door too, before they go looking for a
+                  signup they don't need. */}
+              {!joining && (
+                <div className="mt-6 rounded-2xl border border-notebook/50 bg-notebook-soft px-4 py-4">
+                  <p className="text-[13.5px] font-medium text-navy">First time signing in?</p>
+                  <p className="mt-1.5 max-w-[48ch] text-[13.5px] leading-relaxed text-graphite">
+                    If someone added you to their team, this is still where you log in — use the
+                    email address they added you with. There’s nothing to set up first, and you
+                    don’t need an account of your own yet.
+                  </p>
+                </div>
+              )}
 
               <form onSubmit={sendCode} className="mt-8 space-y-5">
                 {joining && (
@@ -193,6 +227,8 @@ export default function PartnerAuth() {
 
                 {error && <p className="text-[13.5px] text-coral-deep">{error}</p>}
 
+                {noAccount && <NoAccountNote email={email} />}
+
                 <Button type="submit" variant="coral" size="lg" full disabled={!ready || busy}>
                   {busy ? 'Sending…' : 'Email me a code'}
                 </Button>
@@ -209,14 +245,18 @@ export default function PartnerAuth() {
         <p className="mt-10 text-center text-[13.5px] text-graphite">
           {joining ? (
             <>
-              Already a partner?{' '}
+              Already on a team?{' '}
               <Link to="/partners/login" className="font-medium underline underline-offset-2 hover:text-navy">
                 Log in
               </Link>
             </>
           ) : (
+            // Narrowed on purpose. This used to read "New here? Become a
+            // Partner", which is the wrong sentence for the newest person on
+            // this page: a staff member IS new here, and does not need to
+            // list a business to scan a pass at one.
             <>
-              New here?{' '}
+              Want to list a business of your own?{' '}
               <Link to="/partners/join" className="font-medium underline underline-offset-2 hover:text-navy">
                 Become a Partner
               </Link>
@@ -225,6 +265,40 @@ export default function PartnerAuth() {
         </p>
       </main>
     </PartnerShell>
+  )
+}
+
+/**
+ * The one failure on this screen that is not the reader's mistake to fix.
+ *
+ * It fires when the address has no account *and* no invitation waiting, which
+ * for a staff member almost always means the person who added them typed a
+ * different address — a personal one, or a typo, or the shared inbox instead
+ * of theirs. The old copy was a red line reading "No Loose Leaf Partner
+ * account for that address yet", which is true, unhelpful, and quietly
+ * suggests the fix is to go and become a partner.
+ */
+function NoAccountNote({ email }) {
+  return (
+    <div className="rounded-2xl border border-coral/25 bg-coral-soft/40 px-4 py-4">
+      <p className="text-[13.5px] font-medium text-navy">
+        Nothing is waiting for {email.trim().toLowerCase()}.
+      </p>
+      <ul className="mt-2 space-y-1.5 text-[13.5px] leading-relaxed text-graphite">
+        <li>
+          · <span className="font-medium text-navy">Staff or manager?</span> Invitations are matched
+          to one exact address. Ask whoever added you which one they used — as soon as it’s there,
+          this screen will let you straight in.
+        </li>
+        <li>
+          · <span className="font-medium text-navy">Signing your business up?</span> That starts at{' '}
+          <Link to="/partners/join" className="font-medium underline underline-offset-2 hover:text-navy">
+            Become a Partner
+          </Link>
+          .
+        </li>
+      </ul>
+    </div>
   )
 }
 

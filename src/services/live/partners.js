@@ -77,9 +77,42 @@ export async function sendCode(email, { createAccount = true } = {}) {
   })
   if (error) {
     if (/not found|signups/i.test(error.message)) {
-      throw new Error('No Loose Leaf Partner account for that address yet.')
+      // Carries a code as well as a sentence: the login screen answers this
+      // one with a whole explanation rather than a red line, because the
+      // person reading it is usually a staff member whose manager hasn't
+      // added them yet, and "no account" is not advice.
+      const missing = new Error('We don’t have a Loose Leaf account for that address yet.')
+      missing.code = 'no_account'
+      throw missing
     }
     throw new Error(error.message)
+  }
+}
+
+/**
+ * Is somebody expecting this person? The login screen asks before it sends a
+ * code, so a staff member their manager added this morning can sign in on an
+ * address that has never had an account — without ever being routed through
+ * "Become a Partner", which is a business signup and the wrong answer to
+ * "my boss put me on the team".
+ *
+ * A bare boolean by design; the migration explains why. Note that this must
+ * never be load-bearing for *access* — it only decides whether the OTP is
+ * allowed to create the auth user. Everything that actually grants membership
+ * still goes through `accept_partner_invite()`, which re-checks the address
+ * against the token of whoever signed in. A failed lookup reads as "no
+ * invite", so a wobbly network degrades to today's behaviour instead of
+ * opening the door.
+ */
+export async function inviteOpen(email) {
+  const address = (email ?? '').trim().toLowerCase()
+  if (!address) return false
+  try {
+    const { data, error } = await supabase.rpc('partner_invite_open', { p_email: address })
+    if (error) return false
+    return Boolean(data)
+  } catch {
+    return false
   }
 }
 

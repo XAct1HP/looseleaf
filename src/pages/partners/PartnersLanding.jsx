@@ -9,7 +9,7 @@ import { passUrl } from '../../lib/site'
 import { Underline, Star, Squiggle, CoffeeDoodle, BinderHoles } from '../../components/brand/Doodles'
 import { IconPin, IconSpark, IconCalendar, IconLock, IconShield, IconEye } from '../../components/ui/Icons'
 import * as partners from '../../services/partners'
-import { FREE_TIER, money } from '../../lib/partnerBilling'
+import { FREE_TIER, fee, money } from '../../lib/partnerBilling'
 
 /* ── the example card in the hero ───────────────────────────────────────── */
 //  Invented on purpose. Putting a real restaurant's name next to a discount it
@@ -92,7 +92,7 @@ const FAQ = [
   },
   {
     q: 'Do I have to run a discount?',
-    a: 'No, and it costs you nothing not to. Your Date Spot profile — hours, photos, the lot — is free whether or not there is an offer attached. An offer is simply the only thing we ever charge for, so a profile on its own is a perfectly good way to use Loose Leaf.',
+    a: 'No, and it costs you nothing not to. Your Date Spot profile — hours, photos, the lot — is free whether or not there is an offer attached. A redeemed Date Pass is the only thing we ever charge for, and you cannot have one without an offer, so a profile on its own is a perfectly good and permanently free way to use Loose Leaf.',
   },
   {
     q: 'What do you need from me to start?',
@@ -168,8 +168,15 @@ export default function PartnersLanding() {
               </Button>
             </div>
 
-            <p className="mt-6 text-[13px] leading-relaxed text-mist">
-              From $49/month. Cancel any time. We review every partner by hand before students see them.
+            {/* The price belongs in the hero, not two screens down. A
+                restaurant owner's second question is always "what does it
+                cost", and making them scroll for it reads as an answer being
+                managed. The fee is the live one, so this line and the pricing
+                card below can never drift apart. */}
+            <p className="mt-6 max-w-[48ch] text-[13px] leading-relaxed text-mist">
+              Free to join, free to stay listed. You pay {fee(pricing.feeCents)} when a Date Pass is
+              redeemed at your counter — nothing else, and nothing at all in a month where none
+              are. We review every partner by hand before students see them.
             </p>
           </div>
 
@@ -409,14 +416,29 @@ export default function PartnersLanding() {
               <Button to="/partners/join" variant="coral" size="lg" className="sm:px-9">
                 Become a Partner
               </Button>
+              {/* Not "I already have an account" — the people most likely to
+                  need this button are staff who have never had one, and were
+                  added to a team by their manager this morning. */}
               <Button to="/partners/login" variant="ghost" size="lg" className="!text-paper/80 hover:!bg-white/10 hover:!text-paper">
-                I already have an account
+                Log in
               </Button>
             </div>
           </div>
         </div>
 
-        <p className="mt-8 text-center text-[13.5px] text-mist">
+        {/* Staff sent here by their manager are the one audience this page was
+            never written for, and every other route off it says "Become a
+            Partner" — which is how somebody ends up signing their employer up
+            a second time to get at a scanner. One sentence fixes it. */}
+        <p className="mx-auto mt-8 max-w-[52ch] text-center text-[13.5px] text-mist">
+          Work at a Loose Leaf partner and your manager added you to the team?{' '}
+          <Link to="/partners/login" className="font-medium text-graphite underline underline-offset-2 hover:text-navy">
+            Log in
+          </Link>{' '}
+          with the email they used — you don’t need to become a partner yourself.
+        </p>
+
+        <p className="mt-4 text-center text-[13.5px] text-mist">
           Looking for the student side?{' '}
           <Link to="/" className="font-medium text-graphite underline underline-offset-2 hover:text-navy">
             Loose Leaf is here

@@ -1168,5 +1168,105 @@ begin
   perform set_partner_role_pages(v_partner, 'staff', array['scan']);
 end $$;
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  15 · A first-time staff member can reach the login screen
+-- ═══════════════════════════════════════════════════════════════════════════
+--
+--  The login screen sends its one-time code with account creation switched
+--  off, so that typing any address into a login box does not mint an account.
+--  That left the one person who most needs to log in — a shift manager added
+--  this morning, who has never had an account — with nowhere to go but
+--  "Become a Partner", which would have them register their employer twice.
+--
+--  `partner_invite_open()` is the single question the login screen asks
+--  before deciding: is somebody expecting this address? It is callable while
+--  signed out, so what it must NOT do is the interesting half.
+
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_invite  uuid;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  v_invite := invite_partner_member(v_partner, 'NewHire@Jolly.com', 'staff');
+  perform set_config('test.open_invite', v_invite::text, false);
+
+  --  Signed out. This is how the login screen actually calls it.
+  perform set_config('test.uid', '', false);
+
+  perform assert(partner_invite_open('newhire@jolly.com'),
+                 'an invited address is recognised before it has any account');
+  perform assert(partner_invite_open('  NewHire@Jolly.COM '),
+                 'and is recognised however it was typed');
+  perform assert(not partner_invite_open('stranger@nowhere.com'),
+                 'an address nobody invited is not');
+  perform assert(not partner_invite_open(''), 'nor is an empty string');
+  perform assert(not partner_invite_open(null), 'nor is null');
+end $$;
+
+--  Knowing you are invited is not being invited. Everything that grants
+--  anything still lives behind accept_partner_invite().
+do $$
+declare n int;
+begin
+  perform set_config('test.uid', '', false);
+  set local role authenticated;
+
+  select count(*) into n from partner_invites;
+  perform assert(n = 0,
+                 'saying yes to the lookup still reads zero invitation rows');
+  perform assert(not partner_can(current_setting('test.partner')::uuid, 'scan'),
+                 'and grants no page on the business that invited them');
+
+  reset role;
+end $$;
+
+--  It answers for the invitation's *state*, not merely its existence — a spent
+--  or lapsed invite must stop opening the door, or revoking one would achieve
+--  nothing.
+do $$
+declare
+  v_hire   uuid;
+  v_invite uuid := current_setting('test.open_invite')::uuid;
+begin
+  insert into auth.users (email) values ('newhire@jolly.com') returning id into v_hire;
+
+  perform act_as(v_hire);
+  perform accept_partner_invite(v_invite, 'Ray');
+
+  perform set_config('test.uid', '', false);
+  perform assert(not partner_invite_open('newhire@jolly.com'),
+                 'an accepted invitation stops opening the login screen');
+
+  --  And an expired one, which my_partner_invites() already refuses to show.
+  perform act_as(current_setting('test.biz')::uuid);
+  v_invite := invite_partner_member(current_setting('test.partner')::uuid,
+                                    'lapsed@jolly.com', 'staff');
+  update partner_invites set expires_at = now() - interval '1 day' where id = v_invite;
+
+  perform set_config('test.uid', '', false);
+  perform assert(not partner_invite_open('lapsed@jolly.com'),
+                 'and neither does an expired one');
+
+  --  Revoking is the owner's undo, and it has to reach this too.
+  perform act_as(current_setting('test.biz')::uuid);
+  perform revoke_partner_invite(v_invite);
+  perform set_config('test.uid', '', false);
+  perform assert(not partner_invite_open('lapsed@jolly.com'),
+                 'and a revoked one is gone from it entirely');
+end $$;
+
+--  Tidy up after ourselves: the hire we just added is a real member now, and
+--  anything appended after this section should not inherit them by surprise.
+do $$
+declare v_partner uuid := current_setting('test.partner')::uuid;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  delete from partner_members
+   where partner_id = v_partner
+     and partner_user_id in (select id from partner_users where email = 'newhire@jolly.com');
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'
