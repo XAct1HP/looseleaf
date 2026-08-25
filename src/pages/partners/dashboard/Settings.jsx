@@ -5,6 +5,7 @@ import { Field, TextInput, TextArea, TagPicker, DayPicker } from '../../../compo
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { can } from '../../../lib/partnerBilling'
 import RoleAccess from '../../../components/partners/RoleAccess'
+import { InstallLink } from '../../../components/partners/InstallNudge'
 import * as partners from '../../../services/partners'
 import { DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
 
@@ -110,6 +111,25 @@ export default function Settings() {
 
       {/* who can see what */}
       <RoleAccess className="mb-6" />
+
+      {/* Owners and managers reach this here; staff cannot — `partner_can()`
+          refuses `settings` before it reads the column — so their copy of this
+          lives permanently in the scanner-only header instead. */}
+      <section className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-rule bg-white px-6 py-5">
+        <div className="min-w-0">
+          <h2 className="font-display text-[17px] font-semibold leading-tight">
+            The scanner on your own phone
+          </h2>
+          <p className="mt-1.5 max-w-[56ch] text-[13.5px] leading-relaxed text-graphite">
+            Adds it to your home screen so it opens straight to the camera, with no browser chrome
+            in the way. Your team can do the same from their own screen; there’s a printable card
+            for them on the Team page.
+          </p>
+        </div>
+        <InstallLink className="rounded-xl border border-rule px-4 py-2.5 hover:border-coral/40">
+          Add to home screen
+        </InstallLink>
+      </section>
 
       {/* targeting */}
       <section className="rounded-card border border-rule bg-white px-6 py-6">

@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Loose Leaf Scanner">
+  <!--
+    The scanner's own mark, deliberately NOT the Looseleaf leaf.
+
+    A staff member's home screen ends up with one icon on it that has to mean
+    "the thing I scan passes with" from across a counter, at 48px, in a hurry.
+    Reusing the student app's icon would put two identical marks on the phone
+    of anybody who has both — and the student app is the one they'd tap by
+    mistake, mid-shift, in front of a customer.
+
+    So: the four viewfinder corners staff already look through on the scan
+    screen, on coral, with the notebook rule and margin line underneath so it
+    still reads as Loose Leaf. Full-bleed, because Android crops a maskable
+    icon to whatever shape the launcher likes and anything near the edge goes.
+  -->
+  <rect width="512" height="512" fill="#FF6468"/>
+
+  <!-- paper card behind the viewfinder: the "pass" being read -->
+  <rect x="150" y="132" width="212" height="248" rx="26" fill="#FFFDF8"/>
+  <path d="M186 132v248" stroke="#DF62AD" stroke-width="7" opacity="0.75"/>
+  <path d="M214 196h118M214 236h118M214 276h74" stroke="#A9C8F5" stroke-width="13" stroke-linecap="round"/>
+
+  <!-- the viewfinder corners, in the app's own line weight -->
+  <g fill="none" stroke="#111C38" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M104 172v-40a28 28 0 0 1 28-28h40"/>
+    <path d="M408 172v-40a28 28 0 0 0-28-28h-40"/>
+    <path d="M104 340v40a28 28 0 0 0 28 28h40"/>
+    <path d="M408 340v40a28 28 0 0 1-28 28h-40"/>
+  </g>
+
+  <!-- the scan line, which is the only part that says "reading it now" -->
+  <path d="M128 256h256" stroke="#111C38" stroke-width="20" stroke-linecap="round" opacity="0.92"/>
+</svg>

@@ -157,3 +157,76 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Printing the counter card ─────────────────────────────────────────────
+ *
+ * The only printable thing in Looseleaf: the card an owner tapes by the till
+ * telling staff how to put the scanner on their phone.
+ *
+ * Everything here hangs off `.print-mode`, which `CounterCard` puts on <html>
+ * while it is open. Gating it that way means Ctrl+P anywhere else in the app
+ * still prints the page the way a browser normally would, rather than a blank
+ * sheet — and it needs no `:has()` and no guessing about which overlay is up.
+ *
+ * The card is rendered inside a Sheet, which is *portalled to the end of
+ * <body>* and is a fixed, vertically centred box that scrolls internally.
+ * Both of those have to be undone or the card prints halfway down page one
+ * with its last step clipped. Hiding the app with `visibility` is not enough
+ * either: a hidden element still occupies its space, so #root goes away
+ * entirely and the sheet is put back into ordinary flow behind it.
+ */
+@media print {
+  .print-mode,
+  .print-mode body {
+    background: #fff;
+  }
+
+  /* the app itself never prints; the portalled sheet is its sibling and stays */
+  .print-mode #root {
+    display: none !important;
+  }
+
+  .print-mode .sheet-root {
+    position: static !important;
+    display: block !important;
+  }
+
+  .print-mode .sheet-panel {
+    position: static !important;
+    display: block !important;
+    max-width: none !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+    animation: none !important;
+  }
+
+  .print-mode .sheet-body {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* chrome with no business on paper — removed, not merely hidden, so it
+     stops taking up the top third of the page */
+  .print-mode .sheet-scrim,
+  .print-mode .sheet-grip,
+  .print-mode .sheet-head,
+  .print-mode .sheet-foot,
+  .print-mode .no-print {
+    display: none !important;
+  }
+
+  .print-mode .print-card {
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    /* nothing on this card is worth breaking across two sheets of paper */
+    break-inside: avoid;
+  }
+}
+
+@page {
+  margin: 16mm;
+}

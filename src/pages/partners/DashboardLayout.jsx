@@ -11,6 +11,8 @@ import { can } from '../../lib/partnerBilling'
 import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
 import ForPartners from '../../components/partners/ForPartners'
+import { InstallLink } from '../../components/partners/InstallNudge'
+import { applyScannerManifest, registerScannerWorker } from '../../lib/pwa'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
@@ -70,6 +72,23 @@ export default function DashboardLayout() {
   const { status, partner, partners: list, entitlements, select } = usePartnerAccount()
   const navigate = useNavigate()
   const { pathname } = useLocation()
+
+  // ── Which app is this page offering to install? ──────────────────────────
+  //
+  // index.html is one static file serving both halves of the product, and its
+  // manifest describes the *student* app. Left alone, a member of staff who
+  // added this to their home screen got an icon called "Looseleaf" that opened
+  // the dating app — so the tags are swapped for the scanner's own manifest on
+  // the way in. Not reverted on the way out: leaving the dashboard means
+  // signing out or following a link back to /partners, and both of those
+  // remount the whole tree with a fresh document anyway.
+  //
+  // The worker is registered here rather than in main.jsx so a student never
+  // installs one at all.
+  useEffect(() => {
+    applyScannerManifest()
+    registerScannerWorker()
+  }, [])
 
   // "Signed out" and "signed in with no business" are different answers and
   // lead different places. Only the second one is an invitation to onboard.
@@ -219,10 +238,19 @@ function ScannerOnlyShell({ partner }) {
               boxes of different heights lines up the boxes, not the words in
               them, which is why the business name used to sit a couple of
               pixels above "Log out". */}
+          {/* The one permanent way a member of staff can reach the install
+              steps. It cannot live in Settings, which is where this would
+              normally go: `partner_can()` refuses `settings` before it even
+              reads the column, so staff — the people who most need the app on
+              their phone — can never open that page. */}
           <div className="ml-auto flex items-center gap-1">
-            <span className="hidden max-w-[26ch] truncate px-2 py-2 text-[13.5px] font-medium leading-[20px] text-graphite sm:block">
+            <span className="hidden max-w-[20ch] truncate px-2 py-2 text-[13.5px] font-medium leading-[20px] text-graphite sm:block">
               {partner.name}
             </span>
+            <InstallLink className="px-3 py-2">
+              <span className="hidden sm:inline">Add to home screen</span>
+              <span className="sm:hidden">Install</span>
+            </InstallLink>
             <LogOut />
           </div>
         </div>

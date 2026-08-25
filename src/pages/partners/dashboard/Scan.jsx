@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { PageHead } from '../DashboardLayout'
 import Button from '../../../components/ui/Button'
 import { IconCheck, IconX, IconSearch, IconScan } from '../../../components/ui/Icons'
+import InstallNudge from '../../../components/partners/InstallNudge'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import * as partners from '../../../services/partners'
 
@@ -112,6 +113,20 @@ export default function Scan() {
     check(fromLink)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partner])
+
+  // `?install=1` — from an invitation, or the QR on the counter card — opens
+  // the walkthrough on arrival rather than leaving somebody to find the strip.
+  // Read once and held in state: the effect below strips it from the URL, and
+  // reading `params` directly would flip this back to false on that rewrite
+  // and close the sheet under the reader's thumb.
+  const [askedToInstall, setAskedToInstall] = useState(() => params.get('install') === '1')
+  useEffect(() => {
+    if (params.get('install') !== '1') return
+    const next = new URLSearchParams(params)
+    next.delete('install')
+    setParams(next, { replace: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   /**
    * One frame, decoded whichever way this browser can manage.
@@ -389,6 +404,14 @@ export default function Scan() {
       />
 
       <div className="mx-auto max-w-[440px]">
+        {/* Above the billing banners deliberately: this one is about the
+            device in their hand and is dismissible, while those are about
+            whether there is anything to scan and are not. */}
+        <InstallNudge
+          autoOpen={askedToInstall}
+          onAutoOpened={() => setAskedToInstall(false)}
+        />
+
         {/* Saying so up front is the honest version — the old behaviour was to
             remove the page, which for a member of staff meant signing in to a
             screen that said they had no access, as though the problem were

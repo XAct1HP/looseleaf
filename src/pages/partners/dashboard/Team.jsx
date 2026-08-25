@@ -6,6 +6,7 @@ import Sheet from '../../../components/ui/Sheet'
 import { Chip } from '../../../components/ui/Chip'
 import { Field, TextInput } from '../../../components/partners/fields'
 import { IconPeople, IconMail } from '../../../components/ui/Icons'
+import CounterCard from '../../../components/partners/CounterCard'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { can } from '../../../lib/partnerBilling'
 import * as partners from '../../../services/partners'
@@ -130,6 +131,7 @@ export default function Team() {
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
   const [sent, setSent] = useState(null)
+  const [printing, setPrinting] = useState(false)
 
   const myRole = members.find((m) => m.isYou)?.role ?? partner?.role ?? 'staff'
   const isOwner = myRole === 'owner'
@@ -191,10 +193,23 @@ export default function Team() {
       )}
 
       {sent && (
-        <p className="mb-6 rounded-2xl border border-moss/30 bg-moss-soft px-4 py-3 text-[13.5px] leading-relaxed text-[#3F7454]">
-          Invitation sent to {sent}. They’ll see it the next time they sign in at{' '}
-          <span className="font-medium">looseleaf/partners</span> with that address.
-        </p>
+        <div className="mb-6 rounded-2xl border border-moss/30 bg-moss-soft px-4 py-3.5 text-[13.5px] leading-relaxed text-[#3F7454]">
+          <p>
+            Invitation sent to {sent}. They can sign in at{' '}
+            <span className="font-medium">looseleaf/partners</span> with that address right away —
+            they don’t need an account first, and they must not go through “Become a Partner”.
+          </p>
+          {/* Said here because this is the moment the owner is thinking about
+              that person, and the next thing they'll do is try to explain it
+              across a counter. */}
+          <button
+            type="button"
+            onClick={() => setPrinting(true)}
+            className="focus-ring mt-2 rounded-lg font-medium text-[#3F7454] underline underline-offset-2 hover:text-navy"
+          >
+            Print them a card for the counter
+          </button>
+        </div>
       )}
 
       {loading ? (
@@ -303,7 +318,27 @@ export default function Team() {
         </>
       )}
 
-      <section className="mt-8 rounded-card border border-rule bg-cream/60 px-6 py-6">
+      {/* Reaching the people who never open a dashboard. Staff are told about
+          Loose Leaf verbally at the start of a shift and are not in anybody's
+          mailing list; something printed by the till is the only channel that
+          actually gets to all of them. */}
+      <section className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-card border border-rule bg-white px-6 py-5">
+        <div className="min-w-0">
+          <h2 className="font-display text-[17px] font-semibold leading-tight">
+            Getting the scanner onto their phones
+          </h2>
+          <p className="mt-1.5 max-w-[54ch] text-[13.5px] leading-relaxed text-graphite">
+            Staff who add it to their home screen open straight to the camera instead of hunting
+            for a tab. Print one card, tape it by the till, and anyone who scans it gets the steps
+            for whatever phone they happen to have.
+          </p>
+        </div>
+        <Button variant="outline" size="md" onClick={() => setPrinting(true)}>
+          Print a counter card
+        </Button>
+      </section>
+
+      <section className="mt-5 rounded-card border border-rule bg-cream/60 px-6 py-6">
         <h2 className="font-display text-[18px] font-semibold leading-tight">
           What a staff login can see.
         </h2>
@@ -326,6 +361,12 @@ export default function Team() {
           </p>
         )}
       </section>
+
+      <CounterCard
+        open={printing}
+        onClose={() => setPrinting(false)}
+        partnerName={partner?.name}
+      />
 
       <InviteSheet
         open={inviting}
