@@ -721,6 +721,10 @@ begin
     'unbilled_cents',     cs.unbilled_cents,
     'remaining_cents',    cs.remaining_cents,
     'has_card',           cs.has_card,
+    'payment_method',     (select payment_method_brand from partner_subscriptions
+                            where partner_id = p_partner),
+    'payment_method_type',(select payment_method_type  from partner_subscriptions
+                            where partner_id = p_partner),
     'suspended',          cs.suspended,
     'can_issue',          cs.can_issue,
     'can_redeem',         cs.can_redeem,

@@ -181,119 +181,182 @@ export function safeReturnTo(value: unknown, fallback?: string) {
 }
 
 /**
- * ── What card would Stripe actually charge? ─────────────────────────────────
+ * ── What payment method would Stripe actually charge? ───────────────────────
  *
  * One implementation, used by the webhook and by the reconcile endpoint. Two
- * copies of "is there a card on file" would drift, and the column they write
- * is the single thing standing between a business and being able to hand out
- * Date Passes.
+ * copies of "is there a payment method on file" would drift, and the column
+ * they write is the single thing standing between a business and being able to
+ * hand out Date Passes.
  *
- * `reached` is the important field, and its absence was a real bug: the first
- * version swallowed a Stripe error and then wrote `last4 ?? null` anyway, so a
- * timeout while *asking* about the card was recorded as *there is no card* —
- * silently switching a paying partner off. "Stripe says no card" and "we could
- * not ask Stripe" are different facts and the caller has to be able to tell
- * them apart.
+ * Two bugs are fixed here, and both had the same shape — reporting "no payment
+ * method" when the truth was something else:
+ *
+ *   **`reached`.** The first version swallowed a Stripe error and then wrote
+ *   `last4 ?? null` anyway, so a timeout while *asking* was recorded as *there
+ *   is nothing on file*, silently switching a paying partner off. "Stripe says
+ *   there is nothing" and "we could not ask Stripe" are different facts and
+ *   the caller has to be able to tell them apart.
+ *
+ *   **Not everything is a card.** The second version looked only at `.card`
+ *   and listed only `type: 'card'`, so a customer who checked out with Link, a
+ *   US bank account, or Cash App had a perfectly chargeable payment method
+ *   that read as none at all. Stripe Checkout offers those by default. The
+ *   list call now passes no `type` filter — "without the filter, the list
+ *   includes all current and future payment method types" — and presence is
+ *   decided by *a payment method existing*, never by a `last4` being parseable.
  *
  * Three places are checked because Stripe puts the answer in different ones
- * depending on how the card arrived: Checkout sets the subscription's default,
- * the billing portal sets the customer's invoice default, and a bare
+ * depending on how it arrived: Checkout sets the subscription's default, the
+ * billing portal sets the customer's invoice default, and a bare
  * `payment_method.attached` sets neither.
  */
-export async function readDefaultCard(customerId: string): Promise<{
+export type PaymentMethodState = {
   reached: boolean
+  id: string | null
+  type: string | null
   brand: string | null
   last4: string | null
+  label: string | null
   email: string | null
   error?: string
-}> {
-  let brand: string | null = null
-  let last4: string | null = null
-  let email: string | null = null
+}
 
+const NOTHING: PaymentMethodState = {
+  reached: true,
+  id: null,
+  type: null,
+  brand: null,
+  last4: null,
+  label: null,
+  email: null,
+}
+
+/**
+ * How to say a payment method out loud. Deliberately covers the wallets rather
+ * than falling through to "card" — telling somebody who paid with their bank
+ * account that their *card* is on file is a small lie that makes them doubt
+ * everything else on the page.
+ */
+function describe(pm): { type: string; brand: string | null; last4: string | null; label: string } {
+  const type = pm?.type ?? 'unknown'
+
+  if (type === 'card' && pm.card) {
+    const brand = pm.card.brand ?? null
+    const last4 = pm.card.last4 ?? null
+    const name = brand ? brand.charAt(0).toUpperCase() + brand.slice(1) : 'Card'
+    return { type, brand, last4, label: last4 ? `${name} ····${last4}` : name }
+  }
+
+  if (type === 'us_bank_account' && pm.us_bank_account) {
+    const bank = pm.us_bank_account.bank_name ?? 'Bank account'
+    const last4 = pm.us_bank_account.last4 ?? null
+    return { type, brand: bank, last4, label: last4 ? `${bank} ····${last4}` : bank }
+  }
+
+  if (type === 'link') {
+    const email = pm.link?.email ?? null
+    return { type, brand: 'Link', last4: null, label: email ? `Link (${email})` : 'Link' }
+  }
+
+  if (type === 'cashapp') return { type, brand: 'Cash App Pay', last4: null, label: 'Cash App Pay' }
+  if (type === 'paypal')  return { type, brand: 'PayPal',       last4: null, label: 'PayPal' }
+
+  // Anything Stripe adds later still reads as *something*, which is the whole
+  // point — an unrecognised type must never come back as "nothing on file".
+  const pretty = type.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+  return { type, brand: pretty, last4: null, label: pretty }
+}
+
+export async function readDefaultPaymentMethod(customerId: string): Promise<PaymentMethodState> {
   try {
     const customer = await stripe.customers.retrieve(customerId, {
       expand: ['invoice_settings.default_payment_method'],
     })
 
     if ('deleted' in customer && customer.deleted) {
-      // A deleted customer genuinely has no card. That is an answer, not a
+      // A deleted customer genuinely has nothing. That is an answer, not a
       // failure, so it is reported as one.
-      return { reached: true, brand: null, last4: null, email: null }
+      return NOTHING
     }
 
-    email = (customer.email as string | null) ?? null
-    const pm = customer.invoice_settings?.default_payment_method as
-      | { card?: { brand?: string; last4?: string } }
-      | string
-      | null
+    const email = (customer.email as string | null) ?? null
 
-    if (pm && typeof pm !== 'string' && pm.card) {
-      brand = pm.card.brand ?? null
-      last4 = pm.card.last4 ?? null
+    const asState = (pm): PaymentMethodState => ({
+      reached: true,
+      id: pm.id ?? null,
+      email,
+      ...describe(pm),
+    })
+
+    // 1 · the customer's invoice default — what the billing portal sets
+    const invoiceDefault = customer.invoice_settings?.default_payment_method
+    if (invoiceDefault && typeof invoiceDefault !== 'string') return asState(invoiceDefault)
+
+    // 2 · the subscription's own default — what Checkout sets, and therefore
+    //     the branch that fires on a first sign-up rather than a rare fallback
+    const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1, status: 'all' })
+    const subPm = subs.data[0]?.default_payment_method
+    if (subPm) {
+      const pm = await stripe.paymentMethods.retrieve(
+        typeof subPm === 'string' ? subPm : (subPm as { id: string }).id
+      )
+      return asState(pm)
     }
 
-    // Checkout in subscription mode sets the *subscription's* default and does
-    // not always set the customer's, so this branch is the one that fires on a
-    // first sign-up rather than a rare fallback.
-    if (!last4) {
-      const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1, status: 'all' })
-      const subPm = subs.data[0]?.default_payment_method
-      if (subPm) {
-        const method = await stripe.paymentMethods.retrieve(
-          typeof subPm === 'string' ? subPm : (subPm as { id: string }).id
-        )
-        brand = method.card?.brand ?? brand
-        last4 = method.card?.last4 ?? last4
-      }
-    }
+    // 3 · anything attached at all. No `type` filter on purpose: filtering to
+    //     'card' is exactly what made a Link or bank customer look empty.
+    const methods = await stripe.paymentMethods.list({ customer: customerId, limit: 1 })
+    if (methods.data[0]) return asState(methods.data[0])
 
-    // Still nothing? Any card attached to the customer will be found at
-    // collection time even with no default named, so it counts.
-    if (!last4) {
-      const methods = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 1 })
-      brand = methods.data[0]?.card?.brand ?? brand
-      last4 = methods.data[0]?.card?.last4 ?? last4
-    }
-
-    return { reached: true, brand, last4, email }
+    return { ...NOTHING, email }
   } catch (e) {
-    // Carried out rather than swallowed. The first version of this caught and
-    // discarded, which is how a card that Stripe was perfectly willing to talk
-    // about came to read as "no card on file" with nothing anywhere saying
+    // Carried out rather than swallowed. The first version caught and
+    // discarded, which is how a payment method Stripe was perfectly willing to
+    // talk about came to read as "none on file" with nothing anywhere saying
     // why. Whatever Stripe objected to, somebody needs to be able to see it.
     return {
       reached: false,
+      id: null,
+      type: null,
       brand: null,
       last4: null,
+      label: null,
       email: null,
       error: (e as Error)?.message ?? 'Unknown Stripe error',
     }
   }
 }
 
+/** Kept under the old name so nothing that still calls it has to change. */
+export const readDefaultCard = readDefaultPaymentMethod
+
 /**
- * Writes what `readDefaultCard` found. **Never called when `reached` is false**
- * — leaving the columns exactly as they were is the correct response to not
- * knowing, because the alternative is switching somebody off over a network
- * blip.
+ * Writes what `readDefaultPaymentMethod` found. **Never called when `reached`
+ * is false** — leaving the columns exactly as they were is the correct
+ * response to not knowing, because the alternative is switching somebody off
+ * over a network blip.
+ *
+ * Presence is `id`, not `last4`. A Link wallet has no last four digits and is
+ * entirely chargeable; keying off the digits is what made one look like no
+ * payment method at all.
  */
-export async function writeCardState(
+export async function writePaymentMethodState(
   db: ReturnType<typeof serviceClient>,
   partnerId: string,
-  card: { reached: boolean; brand: string | null; last4: string | null; email: string | null }
+  pm: PaymentMethodState
 ) {
-  if (!card.reached) return false
+  if (!pm.reached) return false
 
   const { error } = await db
     .from('partner_subscriptions')
     .update({
-      payment_method_brand: card.brand,
-      payment_method_last4: card.last4,
-      // Null when Stripe says there is no card, which is what switches Date
+      payment_method_type: pm.type,
+      payment_method_brand: pm.label ?? pm.brand,
+      payment_method_last4: pm.last4,
+      // Null when Stripe says there is nothing, which is what switches Date
       // Passes back off — the same column, in both directions.
-      payment_method_at: card.last4 ? new Date().toISOString() : null,
-      billing_email: card.email,
+      payment_method_at: pm.id ? new Date().toISOString() : null,
+      billing_email: pm.email,
       updated_at: new Date().toISOString(),
     })
     .eq('partner_id', partnerId)
@@ -301,6 +364,8 @@ export async function writeCardState(
   if (error) throw new Error(error.message)
   return true
 }
+
+export const writeCardState = writePaymentMethodState
 
 /** The one place that reads how billing is configured. */
 export async function billingConfig(db: ReturnType<typeof serviceClient>) {

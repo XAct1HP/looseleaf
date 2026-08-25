@@ -29,8 +29,8 @@
 import {
   serviceClient,
   requirePartner,
-  readDefaultCard,
-  writeCardState,
+  readDefaultPaymentMethod,
+  writePaymentMethodState,
   json,
   CORS,
 } from '../_shared/stripe.ts'
@@ -69,9 +69,9 @@ Deno.serve(async (req) => {
     return json({ synced: false, has_card: false, reason: 'no_customer' })
   }
 
-  const card = await readDefaultCard(sub.stripe_customer_id)
+  const pm = await readDefaultPaymentMethod(sub.stripe_customer_id)
 
-  if (!card.reached) {
+  if (!pm.reached) {
     // Stripe is having a moment. Change nothing, and be honest that the answer
     // is unknown rather than reporting "no card" — the caller shows a "try
     // again" rather than telling a partner their card vanished.
@@ -82,18 +82,21 @@ Deno.serve(async (req) => {
         reason: 'stripe_unreachable',
         // Their own billing, and the alternative is a support thread that
         // starts "it just doesn't work".
-        detail: card.error ?? null,
+        detail: pm.error ?? null,
       },
       503
     )
   }
 
-  await writeCardState(db, partnerId, card)
+  await writePaymentMethodState(db, partnerId, pm)
 
   return json({
     synced: true,
-    has_card: Boolean(card.last4),
-    brand: card.brand,
-    last4: card.last4,
+    // Presence is the payment method existing, not a last4 being parseable —
+    // a Link wallet has no digits and is entirely chargeable.
+    has_card: Boolean(pm.id),
+    type: pm.type,
+    label: pm.label,
+    last4: pm.last4,
   })
 })

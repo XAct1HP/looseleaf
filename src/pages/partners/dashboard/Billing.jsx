@@ -188,7 +188,7 @@ export default function Billing() {
       {justReturned && !summary?.has_card && checking === 'none' && (
         <div className="mb-6 rounded-card border border-[#C9821F]/30 bg-[#FBF3E4] px-5 py-5">
           <p className="text-[15px] font-medium text-navy">
-            Stripe doesn’t show a card on this account yet.
+            Stripe doesn’t show a payment method on this account yet.
           </p>
           <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
             If you closed the Stripe page before finishing, nothing was saved — start again below.
@@ -279,9 +279,12 @@ export default function Billing() {
               </dd>
             </div>
             <div>
-              <dt className="text-[12.5px] text-mist">Card on file</dt>
-              <dd className="mt-1 text-[14.5px] font-medium capitalize text-navy">
-                {summary?.has_card ? 'Yes' : 'None yet'}
+              {/* Named rather than assumed. Telling somebody who paid with
+                  their bank account that their *card* is on file is a small
+                  lie that makes them doubt everything else on the page. */}
+              <dt className="text-[12.5px] text-mist">Payment method</dt>
+              <dd className="mt-1 text-[14.5px] font-medium text-navy">
+                {summary?.has_card ? (summary.payment_method ?? 'On file') : 'None yet'}
               </dd>
             </div>
             <div>

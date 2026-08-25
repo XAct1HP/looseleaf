@@ -35,8 +35,8 @@ import {
   stripe,
   cryptoProvider,
   serviceClient,
-  readDefaultCard,
-  writeCardState,
+  readDefaultPaymentMethod,
+  writePaymentMethodState,
   json,
 } from '../_shared/stripe.ts'
 
@@ -254,7 +254,8 @@ async function syncSubscription(db, sub, metadataPartnerId?: string): Promise<st
 }
 
 /**
- * Mirrors whichever card Stripe would actually charge.
+ * Mirrors whichever payment method Stripe would actually charge — card,
+ * wallet or bank account. Which kind it is has never been the question.
  *
  * `payment_method_at` is the column `partner_has_card()` reads, and therefore
  * the single thing standing between a business and being able to hand out
@@ -269,11 +270,13 @@ async function syncSubscription(db, sub, metadataPartnerId?: string): Promise<st
  * behaviour we actually want.
  */
 async function syncDefaultCard(db, partnerId: string, customerId: string) {
-  const card = await readDefaultCard(customerId)
-  if (!card.reached) {
-    throw new Error(`Could not read the card for customer ${customerId}; leaving it untouched.`)
+  const pm = await readDefaultPaymentMethod(customerId)
+  if (!pm.reached) {
+    throw new Error(
+      `Could not read the payment method for ${customerId}: ${pm.error ?? 'unknown'}. Left untouched.`
+    )
   }
-  await writeCardState(db, partnerId, card)
+  await writePaymentMethodState(db, partnerId, pm)
 }
 
 async function partnerForCustomer(db, customerId: string | null) {
