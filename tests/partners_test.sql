@@ -157,10 +157,17 @@ begin
   -- so an offer with a day window would make this file pass Sunday to
   -- Thursday and fail on a Friday. The day-window behaviour is tested
   -- separately, against explicit timestamps, in section 6.
+  --
+  -- `requires_date` and `per_person_rule` are switched off for the same
+  -- reason: this offer is the one every later section unlocks against, and
+  -- both defaults would make those sections about the access rules instead of
+  -- about what they are testing. Both rules get a section of their own (16).
   insert into partner_offers (partner_id, title, offer_type, percent_off,
-                              days_of_week, status, max_monthly_redemptions, terms)
+                              days_of_week, status, max_monthly_redemptions, terms,
+                              requires_date, per_person_rule)
   values (v_partner, 'Loose Leaf Date', 'percent_off', 15,
-          array[0,1,2,3,4,5,6], 'active', 100, 'Dine-in only.')
+          array[0,1,2,3,4,5,6], 'active', 100, 'Dine-in only.',
+          false, 'unlimited')
   returning id into v_offer;
   perform set_config('test.offer', v_offer::text, false);
 end $$;
@@ -1266,6 +1273,386 @@ begin
   delete from partner_members
    where partner_id = v_partner
      and partner_user_id in (select id from partner_users where email = 'newhire@jolly.com');
+end $$;
+
+-- ═════════════════════════════════════════════════════════════════════════
+--  16. how often one person may use an offer, and where from
+-- ═════════════════════════════════════════════════════════════════════════
+--
+--  Both halves of 20260827120000. The cooldown is exercised by moving a
+--  redemption's timestamp backwards rather than by waiting, and the "where
+--  from" half needs a real conversation, so this section builds Ada and Bo a
+--  match to plan inside.
+
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_ada uuid := current_setting('test.ada')::uuid;
+  v_bo  uuid := current_setting('test.bo')::uuid;
+  v_match uuid;
+  v_conv uuid;
+begin
+  insert into matches (profile_a, profile_b)
+  values (least(v_ada, v_bo), greatest(v_ada, v_bo))
+  returning id into v_match;
+
+  insert into conversations (match_id) values (v_match) returning id into v_conv;
+  perform set_config('test.conv', v_conv::text, false);
+end $$;
+
+--  16a. requires_date: a perk you can only unlock while planning something
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_conv uuid := current_setting('test.conv')::uuid;
+  v_offer uuid;
+  r record;
+  ok boolean := false;
+begin
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status, requires_date, per_person_rule)
+  values (v_partner, 'Date night, dessert on us', 'percent_off', 20,
+          array[0,1,2,3,4,5,6], 'active', true, 'unlimited')
+  returning id into v_offer;
+
+  perform act_as(current_setting('test.ada')::uuid);
+
+  begin
+    perform issue_date_pass(v_offer, null, 'discovery');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a date-only offer cannot be unlocked from browsing');
+
+  --  And not by handing it a conversation you are not in, which is the
+  --  interesting half — the id is a uuid somebody could paste.
+  ok := false;
+  begin
+    perform issue_date_pass(v_offer, gen_random_uuid(), 'planner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'nor with a conversation id that is not yours');
+
+  select * into r from issue_date_pass(v_offer, v_conv, 'planner');
+  perform assert(r.pass_code like 'LL-%', 'but it unlocks inside a real conversation');
+  perform assert((select conversation_id from date_passes where id = r.pass_id) = v_conv,
+                 'and the pass remembers the date it belongs to');
+
+  --  Bo is in the same conversation; Sam the student is not.
+  perform act_as(current_setting('test.staff')::uuid);
+  ok := false;
+  begin
+    perform issue_date_pass(v_offer, v_conv, 'planner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'somebody outside the conversation cannot unlock through it');
+
+  update partner_offers set status = 'ended' where id = v_offer;
+end $$;
+
+--  16b. per_person_rule: once ever, once in a while, or as often as you like
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_ada uuid := current_setting('test.ada')::uuid;
+  v_offer uuid;
+  r record;
+  v_code text;
+  ok boolean := false;
+begin
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status, requires_date,
+                              per_person_rule, per_person_cooldown_days)
+  values (v_partner, 'Once a month', 'percent_off', 10,
+          array[0,1,2,3,4,5,6], 'active', false, 'cooldown', 30)
+  returning id into v_offer;
+
+  perform act_as(v_ada);
+  select * into r from issue_date_pass(v_offer, null, 'discovery');
+  v_code := r.pass_code;
+  perform assert(v_code like 'LL-%', 'the first unlock is free of any rule');
+
+  --  Redeem it, which is the event the clock runs from.
+  perform act_as(current_setting('test.biz')::uuid);
+  perform redeem_date_pass(v_partner, v_code, 1000);
+
+  perform act_as(v_ada);
+  begin
+    perform issue_date_pass(v_offer, null, 'discovery');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a used offer cannot simply be unlocked again');
+  perform assert((select count(*) from date_passes
+                   where offer_id = v_offer and issued_to = v_ada) = 1,
+                 'and no second pass was minted trying');
+
+  --  Twenty-nine days later: still inside the window.
+  update date_pass_redemptions set redeemed_at = now() - interval '29 days'
+   where offer_id = v_offer;
+  update date_passes set redeemed_at = now() - interval '29 days'
+   where offer_id = v_offer;
+
+  ok := false;
+  begin
+    perform issue_date_pass(v_offer, null, 'discovery');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'twenty-nine days into a thirty-day cooldown is still no');
+
+  --  Thirty-one days later: yes.
+  update date_pass_redemptions set redeemed_at = now() - interval '31 days'
+   where offer_id = v_offer;
+  update date_passes set redeemed_at = now() - interval '31 days'
+   where offer_id = v_offer;
+
+  select * into r from issue_date_pass(v_offer, null, 'discovery');
+  perform assert(r.pass_code <> v_code, 'past the cooldown it unlocks again, as a new pass');
+
+  --  The unlock that never got used is not a use: expire it and try again.
+  update date_passes
+     set status = 'expired',
+         issued_at = now() - interval '30 days',
+         expires_at = now() - interval '1 day'
+   where id = r.pass_id;
+  select * into r from issue_date_pass(v_offer, null, 'discovery');
+  perform assert(r.pass_code is not null,
+                 'unlocking and never going does not spend the allowance');
+
+  update partner_offers set status = 'ended' where id = v_offer;
+end $$;
+
+--  once, and unlimited
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_ada uuid := current_setting('test.ada')::uuid;
+  v_once uuid; v_free uuid;
+  r record; v_code text;
+  ok boolean := false;
+begin
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status, requires_date, per_person_rule)
+  values (v_partner, 'First visit only', 'percent_off', 25,
+          array[0,1,2,3,4,5,6], 'active', false, 'once')
+  returning id into v_once;
+
+  perform act_as(v_ada);
+  select * into r from issue_date_pass(v_once, null, 'discovery');
+  v_code := r.pass_code;
+  perform act_as(current_setting('test.biz')::uuid);
+  perform redeem_date_pass(v_partner, v_code, 1000);
+
+  perform act_as(v_ada);
+  begin
+    perform issue_date_pass(v_once, null, 'discovery');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a once-per-person offer is once, full stop');
+
+  --  Not even a year later.
+  update date_pass_redemptions set redeemed_at = now() - interval '400 days'
+   where offer_id = v_once;
+  ok := false;
+  begin
+    perform issue_date_pass(v_once, null, 'discovery');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'and it does not quietly lapse after a year');
+
+  --  Bo, who has never been, is unaffected — the rule is per person.
+  perform act_as(current_setting('test.bo')::uuid);
+  select * into r from issue_date_pass(v_once, null, 'discovery');
+  perform assert(r.pass_code like 'LL-%', 'somebody else''s use costs you nothing');
+
+  --  Unlimited still means unlimited.
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status, requires_date, per_person_rule)
+  values (v_partner, 'Come every night', 'percent_off', 5,
+          array[0,1,2,3,4,5,6], 'active', false, 'unlimited')
+  returning id into v_free;
+
+  perform act_as(v_ada);
+  select * into r from issue_date_pass(v_free, null, 'discovery');
+  v_code := r.pass_code;
+  perform act_as(current_setting('test.biz')::uuid);
+  perform redeem_date_pass(v_partner, v_code, 1000);
+  perform act_as(v_ada);
+  select * into r from issue_date_pass(v_free, null, 'discovery');
+  perform assert(r.pass_code <> v_code, 'an unlimited offer hands out a second pass');
+
+  update partner_offers set status = 'ended' where id in (v_once, v_free);
+end $$;
+
+--  16c. the rules are readable by the person they apply to, the caps are not
+do $$
+declare n int;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+
+  select count(*) into n
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'public_offers'
+    and column_name in ('requires_date', 'per_person_rule', 'per_person_cooldown_days');
+  perform assert(n = 3, 'a student can read the rules they are subject to');
+
+  select count(*) into n
+  from information_schema.columns
+  where table_schema = 'public' and table_name = 'public_offers'
+    and (column_name like 'max_%' or column_name like '%_count' or column_name = 'status');
+  perform assert(n = 0, 'and still none of the business''s caps or counts');
+
+  reset role;
+end $$;
+
+-- ═════════════════════════════════════════════════════════════════════════
+--  17. a manager who registers the business
+-- ═════════════════════════════════════════════════════════════════════════
+--
+--  20260827130000. The founding manager holds the account until an owner
+--  joins, and hands it over the moment one does.
+
+do $$
+declare
+  v_mgr uuid; v_partner uuid; v_pages text[];
+begin
+  insert into auth.users (email) values ('gm@bellrose.com') returning id into v_mgr;
+  perform act_as(v_mgr);
+
+  v_partner := register_partner('Nia Manager', 'Bellrose', 'restaurant', 'manager');
+  perform set_config('test.mgr', v_mgr::text, false);
+  perform set_config('test.mgr_partner', v_partner::text, false);
+
+  perform assert((select role from partner_members
+                   where partner_id = v_partner and partner_user_id = v_mgr) = 'manager',
+                 'registering as a manager makes you a manager, not an owner');
+  perform assert(not exists (select 1 from partner_members
+                              where partner_id = v_partner and role = 'owner'),
+                 'and the business has no owner at all yet');
+
+  v_pages := partner_my_pages(v_partner);
+  perform assert(v_pages @> array['overview','spot','offers','scan',
+                                  'redemptions','analytics','team','billing'],
+                 'the founding manager reaches every page of the dashboard');
+  perform assert('settings' = any (v_pages),
+                 'including Settings, or they could never invite an owner');
+  perform assert(partner_can(v_partner, 'billing'),
+                 'so they can set up the card themselves');
+  perform assert(is_partner_admin(v_partner),
+                 'and edit the Date Spot they just described');
+end $$;
+
+--  Settings is still not a grant. Writing it into the column by hand does
+--  nothing — for this manager or any other.
+do $$
+declare
+  v_partner uuid := current_setting('test.mgr_partner')::uuid;
+  v_other uuid;
+  ok boolean := false;
+begin
+  perform act_as(current_setting('test.mgr')::uuid);
+
+  --  A second manager, who did not register anything.
+  insert into auth.users (email) values ('shift@bellrose.com') returning id into v_other;
+  insert into partner_users (id, email, full_name) values (v_other, 'shift@bellrose.com', 'Shift Lead');
+  insert into partner_members (partner_id, partner_user_id, role)
+  values (v_partner, v_other, 'manager');
+
+  perform act_as(v_other);
+  perform assert(not partner_can(v_partner, 'settings'),
+                 'a manager who did not register the place holds no account');
+  perform assert(partner_can(v_partner, 'billing'),
+                 'though they reach what the manager grid actually grants');
+
+  update partners
+     set role_pages = '{"manager": ["settings","billing"], "staff": ["scan"]}'::jsonb
+   where id = v_partner;
+  perform assert(not partner_can(v_partner, 'settings'),
+                 'and writing settings into the grid by hand still grants nothing');
+
+  begin
+    perform set_partner_role_pages(v_partner, 'manager', array['team']);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'nor can they edit the grid');
+
+  --  Put the founding manager's grid back the way registration left it.
+  perform act_as(current_setting('test.mgr')::uuid);
+  perform set_partner_role_pages(v_partner, 'manager',
+    array['overview','spot','offers','scan','redemptions','analytics','team','billing']);
+  perform assert(partner_can(v_partner, 'settings'),
+                 'the founding manager can still edit it');
+
+  delete from partner_members
+   where partner_id = v_partner and partner_user_id = v_other;
+end $$;
+
+--  Handing the business over: they can invite an owner, and the moment that
+--  owner exists the account is not theirs any more.
+do $$
+declare
+  v_partner uuid := current_setting('test.mgr_partner')::uuid;
+  v_mgr uuid := current_setting('test.mgr')::uuid;
+  v_owner uuid; v_invite uuid;
+  ok boolean := false;
+begin
+  perform act_as(v_mgr);
+
+  begin
+    perform set_partner_member_role(v_partner, v_mgr, 'owner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'the founding manager cannot promote themselves to owner');
+
+  v_invite := invite_partner_member(v_partner, 'boss@bellrose.com', 'owner');
+  perform assert(v_invite is not null, 'but they can invite the actual owner');
+
+  insert into auth.users (email) values ('boss@bellrose.com') returning id into v_owner;
+  perform act_as(v_owner);
+  insert into partner_users (id, email, full_name)
+  values (v_owner, 'boss@bellrose.com', 'Ola Owner');
+  perform accept_partner_invite(v_invite);
+
+  perform assert(partner_can(v_partner, 'settings'), 'the owner who accepts holds the account');
+
+  perform act_as(v_mgr);
+  perform assert(not partner_can(v_partner, 'settings'),
+                 'and the founding manager becomes an ordinary manager again');
+  perform assert(partner_can(v_partner, 'team'),
+                 'keeping exactly what the grid grants them');
+  perform assert((select role_pages from my_partners() where id = v_partner) is null,
+                 'the grid stops being theirs to read');
+
+  ok := false;
+  begin
+    perform invite_partner_member(v_partner, 'second@bellrose.com', 'owner');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'and inviting another owner is the owner''s job now');
+
+  --  The owner narrows them, and it takes effect immediately.
+  perform act_as(v_owner);
+  perform set_partner_role_pages(v_partner, 'manager', array['team']);
+  perform act_as(v_mgr);
+  perform assert(not partner_can(v_partner, 'billing'),
+                 'an owner can take billing back off the manager who signed up');
+  perform assert(partner_can(v_partner, 'scan'),
+                 'and cannot take the scanner off anybody');
+end $$;
+
+--  Registering as staff is not a thing, and an owner registration is
+--  unchanged from every earlier section in this file.
+do $$
+declare v_x uuid; ok boolean := false;
+begin
+  insert into auth.users (email) values ('nobody@else.com') returning id into v_x;
+  perform act_as(v_x);
+  begin
+    perform register_partner('No Body', 'Somewhere', 'cafe', 'staff');
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'you cannot register a business as its staff');
+  perform assert(not exists (select 1 from partners where name = 'Somewhere'),
+                 'and nothing was created trying');
 end $$;
 
 \echo ''

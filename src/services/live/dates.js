@@ -75,7 +75,11 @@ export async function spots() {
 export async function offersByPartner() {
   const { data, error } = await supabase
     .from('public_offers')
-    .select('id, partner_id, title, offer_type, percent_off, amount_off_cents, min_spend_cents, free_item, description, terms, days_of_week, start_time, end_time')
+    .select(
+      'id, partner_id, title, offer_type, percent_off, amount_off_cents, min_spend_cents, ' +
+        'free_item, description, terms, days_of_week, start_time, end_time, ' +
+        'requires_date, per_person_rule, per_person_cooldown_days'
+    )
   bail(error)
 
   const map = {}
@@ -96,6 +100,12 @@ export function shapeOffer(o) {
     startTime: o.start_time,
     endTime: o.end_time,
     summary: offerSummary(o),
+    // The access rules, so a screen can say what will happen instead of
+    // offering a button that can only fail. The database enforces them either
+    // way — these are for the sentence, not for the decision.
+    requiresDate: o.requires_date ?? false,
+    perPersonRule: o.per_person_rule ?? 'unlimited',
+    perPersonCooldownDays: o.per_person_cooldown_days ?? null,
   }
 }
 

@@ -42,8 +42,29 @@ const STEPS = [
   { id: 'review', label: 'Review' },
 ]
 
+/*  Who is filling this in. Not a formality: the person describing the hours
+    and picking the photos is very often the general manager, and recording
+    them as the owner is a lie the team page repeats to everybody who joins
+    afterwards. A manager who signs the business up gets the whole dashboard
+    anyway — see 20260827130000 — so nobody is choosing between honesty and
+    being able to do their job. */
+const SIGNUP_ROLES = [
+  {
+    id: 'owner',
+    label: 'I own it',
+    blurb: 'You have the final say on the business, and on the account.',
+  },
+  {
+    id: 'manager',
+    label: 'I manage it',
+    blurb:
+      'You run the place day to day. You’ll have the whole dashboard, and you can invite the owner later.',
+  },
+]
+
 const emptyDraft = {
   fullName: '',
+  role: 'owner',
   businessName: '',
   category: '',
   description: '',
@@ -132,7 +153,12 @@ export default function PartnerOnboarding() {
   const valid = useMemo(() => {
     switch (current.id) {
       case 'business':
-        return draft.fullName.trim().length > 1 && draft.businessName.trim().length > 1 && !!draft.category
+        return (
+          draft.fullName.trim().length > 1 &&
+          draft.businessName.trim().length > 1 &&
+          !!draft.category &&
+          !!draft.role
+        )
       case 'location':
         return draft.addressLine.trim().length > 3
       case 'profile':
@@ -185,6 +211,7 @@ export default function PartnerOnboarding() {
             fullName: draft.fullName,
             businessName: draft.businessName,
             category: draft.category,
+            role: draft.role === 'manager' ? 'manager' : 'owner',
           })
           setPartnerId(id)
         }
@@ -353,6 +380,35 @@ export default function PartnerOnboarding() {
             <Field label="Your name" required htmlFor="o-name">
               <TextInput id="o-name" value={draft.fullName} onChange={(v) => set({ fullName: v })} placeholder="Sam Okafor" />
             </Field>
+            <Field
+              label="And you are…"
+              required
+              hint="Either way you can set the whole thing up. This is so your team page says something true."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                {SIGNUP_ROLES.map((r) => {
+                  const on = draft.role === r.id
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => set({ role: r.id })}
+                      aria-pressed={on}
+                      className={`focus-ring rounded-2xl border px-4 py-3.5 text-left transition ${
+                        on
+                          ? 'border-coral bg-coral-wash/60'
+                          : 'border-rule bg-white hover:border-coral/40'
+                      }`}
+                    >
+                      <span className="block text-[14.5px] font-medium text-navy">{r.label}</span>
+                      <span className="mt-1 block text-[12.5px] leading-relaxed text-mist">
+                        {r.blurb}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            </Field>
             <Field label="Business name" required htmlFor="o-biz">
               <TextInput id="o-biz" value={draft.businessName} onChange={(v) => set({ businessName: v })} placeholder="The Lantern Room" />
             </Field>
@@ -480,6 +536,10 @@ export default function PartnerOnboarding() {
               <Row label="Business" value={draft.businessName} />
               <Row label="Category" value={PARTNER_CATEGORIES.find((c) => c.id === draft.category)?.label} />
               <Row label="Address" value={[draft.addressLine, draft.city].filter(Boolean).join(', ')} />
+              <Row
+                label="You"
+                value={draft.role === 'manager' ? 'Manager' : 'Owner'}
+              />
               <Row label="Date types" value={draft.dateTypes.length ? `${draft.dateTypes.length} selected` : '—'} />
               <Row label="Cost to be here" value="Free" />
               <Row label="Offer" value={draft.offer ? draft.offer.title : 'None yet'} />

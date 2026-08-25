@@ -84,3 +84,18 @@ commercial limits stay the business's.
 live; approval without paying isn't live; a suspended partner stops being live
 immediately; and a `past_due` subscription drops the spot out of both
 recommendations and the spots directory.
+
+**An offer is only as often as the business said.** A date-only perk refuses to
+unlock from browsing, refuses a conversation id the caller isn't in, and works
+inside a real one. A thirty-day cooldown refuses on day twenty-nine and allows
+on day thirty-one, counted from the *redemption* — so unlocking a pass and
+never going does not spend the allowance, and one person's visit costs nobody
+else theirs. `once` does not quietly lapse after a year; `unlimited` still
+means unlimited.
+
+**A manager can register a business without becoming its owner.** The founding
+manager reaches every page including Settings, so they can set up billing and
+invite the actual owner — but cannot promote themselves, and hands the account
+over automatically the moment an owner accepts. A manager who did *not*
+register the place holds nothing, and writing `settings` into `role_pages` by
+hand still gets neither of them anywhere.

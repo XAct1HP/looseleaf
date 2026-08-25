@@ -122,11 +122,17 @@ export async function isPartnerUser() {
   return Boolean(data)
 }
 
-export async function register({ fullName, businessName, category }) {
+/**
+ * `role` is 'owner' or 'manager' — what this person actually is at the
+ * business, not a permission level. A manager who registers gets the whole
+ * dashboard regardless; the database decides that, not this call.
+ */
+export async function register({ fullName, businessName, category, role = 'owner' }) {
   const { data, error } = await supabase.rpc('register_partner', {
     p_full_name: fullName,
     p_name: businessName,
     p_category: category,
+    p_role: role === 'manager' ? 'manager' : 'owner',
   })
   bail(error)
   return data

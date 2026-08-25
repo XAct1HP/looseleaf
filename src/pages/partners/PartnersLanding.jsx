@@ -3,9 +3,8 @@ import { Link } from 'react-router-dom'
 import PartnerShell from '../../components/partners/PartnerShell'
 import Pricing from '../../components/partners/Pricing'
 import DateSpotCard from '../../components/dates/DateSpotCard'
-import QrCode from '../../components/dates/QrCode'
+import DatePassCard from '../../components/dates/DatePassCard'
 import Button from '../../components/ui/Button'
-import { passUrl } from '../../lib/site'
 import { Underline, Star, Squiggle, CoffeeDoodle, BinderHoles } from '../../components/brand/Doodles'
 import { IconPin, IconSpark, IconCalendar, IconLock, IconShield, IconEye } from '../../components/ui/Icons'
 import * as partners from '../../services/partners'
@@ -29,6 +28,21 @@ const EXAMPLE_SPOT = {
   offer: { summary: '15% off your date', daysText: 'Sunday–Thursday' },
 }
 
+/*  The pass on this page is the *same component* a student is holding —
+    `DatePassCard`, straight out of the app, given an invented pass. A drawing
+    of the product on the page that explains the product is a small lie, and
+    it drifts the first time the real thing changes. Two weeks out, computed,
+    so the expiry line never reads as a date that has already been. */
+const EXAMPLE_PASS = {
+  code: EXAMPLE_CODE,
+  status: 'issued',
+  partnerName: EXAMPLE_SPOT.name,
+  offerSummary: EXAMPLE_SPOT.offer.summary,
+  daysText: EXAMPLE_SPOT.offer.daysText,
+  expiresAt: new Date(Date.now() + 14 * 86400000).toISOString(),
+  terms: 'Dine-in only. One pass per couple. Not valid with other offers.',
+}
+
 const STEPS = [
   {
     n: '01',
@@ -44,7 +58,7 @@ const STEPS = [
     title: 'Create a Loose Leaf offer',
     body:
       'Something worth walking over for. You set the days, the hours, and the ceiling — so the traffic arrives on the nights you actually want it, not on a Friday you were already full.',
-    detail: ['15% off, free dessert, BOGO', 'Sunday–Thursday, 4pm to close', 'Cap it monthly or daily', 'Pause it any time'],
+    detail: ['15% off, free dessert, BOGO', 'Sunday–Thursday, 4pm to close', 'Cap it monthly, daily, or per person', 'Pause it any time'],
   },
   {
     n: '03',
@@ -270,7 +284,7 @@ export default function PartnersLanding() {
                 ['Single-use by default', 'A pass cannot be redeemed twice unless you say it can.'],
                 ['Works without a scanner', 'Codes are short and readable, so a phone camera is optional.'],
                 ['Checked server-side', 'Validity is decided by Loose Leaf, not by whatever the customer’s screen says.'],
-                ['Capped where you cap it', 'Hit your monthly limit and the offer stops being handed out.'],
+                ['Capped per month and per person', 'Your monthly ceiling, and how often one person can come back — once ever, once a month, or as often as they like. And you can keep the perk to two people planning a date rather than anybody browsing.'],
               ].map(([t, d]) => (
                 <div key={t}>
                   <dt className="text-[14.5px] font-medium text-navy">{t}</dt>
@@ -280,31 +294,13 @@ export default function PartnersLanding() {
             </dl>
           </div>
 
-          <div className="relative mx-auto w-full max-w-[360px]">
-            <div className="rounded-sheet border border-rule bg-navy px-7 py-8 text-paper shadow-lift">
-              <span className="paper-lines pointer-events-none absolute inset-0 rounded-sheet opacity-[0.05]" aria-hidden="true" />
-              <p className="text-[11.5px] font-semibold uppercase tracking-[0.1em] text-paper/60">
-                Your Loose Leaf Date Pass
-              </p>
-              <p className="mt-3 font-display text-[26px] font-semibold leading-tight">The Lantern Room</p>
-              <p className="mt-1 text-[15px] text-paper/75">15% off your date</p>
-
-              {/* A real code, generated the same way a real pass is — showing a
-                  drawing of a QR on the page that explains QR codes would be a
-                  small lie in the middle of an argument about trust. */}
-              <div className="my-6 w-fit rounded-2xl bg-paper p-3">
-                <QrCode value={passUrl(EXAMPLE_CODE)} size={124} label="Example Date Pass code" />
-              </div>
-
-              <p className="font-sans text-[15px] font-semibold tracking-[0.14em] text-paper/90">
-                {EXAMPLE_CODE}
-              </p>
-              <p className="mt-3 text-[12.5px] text-paper/55">
-                Valid Sunday–Thursday · Expires August 27
-              </p>
-            </div>
+          <div className="relative mx-auto w-full max-w-[340px]">
+            {/* The student's component, not a picture of it. `compact` is the
+                same size it renders at in their wallet's used-and-expired
+                list, which is about right beside a column of body copy. */}
+            <DatePassCard pass={EXAMPLE_PASS} compact />
             <p className="mt-3 text-center font-hand text-[16px] text-graphite">
-              show this to your server
+              exactly what lands on their phone
             </p>
           </div>
         </div>

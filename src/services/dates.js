@@ -34,7 +34,7 @@ export async function recommend(opts = {}) {
 }
 
 export async function unlockOffer(offerId, opts = {}) {
-  if (isDemo) return (await demo()).unlockOffer(offerId)
+  if (isDemo) return (await demo()).unlockOffer(offerId, opts)
   return live.unlockOffer(offerId, opts)
 }
 

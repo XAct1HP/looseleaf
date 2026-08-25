@@ -136,6 +136,11 @@ export const DEMO_OFFER = {
   daysOfWeek: [0, 1, 2, 3, 4],
   daysText: 'Sunday–Thursday',
   startTime: '16:00',
+  // The demo carries the same access rules a real offer defaults to, so the
+  // demo campus is never quietly a more generous product than the live one.
+  requiresDate: true,
+  perPersonRule: 'cooldown',
+  perPersonCooldownDays: 30,
 }
 
 export function offersByPartner() {
@@ -244,9 +249,17 @@ export function recommend({
 let passes = []
 let seq = 0
 
-export function unlockOffer(offerId) {
+export function unlockOffer(offerId, { conversationId = null } = {}) {
   const existing = passes.find((p) => p.offerId === offerId && p.status === 'issued')
   if (existing) return { ...existing }
+
+  // The same refusal `issue_date_pass` gives, in the same words. A demo that
+  // hands out a pass the live product would decline teaches the wrong thing.
+  if (DEMO_OFFER.requiresDate && !conversationId) {
+    throw new Error(
+      'This perk is for a date you’re planning — open it from a chat with your match.'
+    )
+  }
 
   seq += 1
   const pass = {

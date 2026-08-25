@@ -56,8 +56,15 @@ const roleLabel = (id) => ROLES.find((r) => r.id === id)?.label ?? id
  * A manager runs the floor, so they hire and lose staff — but they cannot mint
  * an owner, who could then remove them or change the card on file. The
  * database enforces this; the picker just doesn't offer what would be refused.
+ *
+ * `holdsAccount` is the one exception, and it is the exception that matters: a
+ * manager who registered a business with no owner yet *must* be able to invite
+ * one, or it can never be handed over. Read off the fact that `my_partners()`
+ * returned them the role grid, which is exactly the account-holder test the
+ * database applies — rather than guessed at from the member list.
  */
-const assignableBy = (myRole) => (myRole === 'owner' ? ROLES : ROLES.filter((r) => r.id !== 'owner'))
+const assignableBy = (myRole, holdsAccount) =>
+  myRole === 'owner' || holdsAccount ? ROLES : ROLES.filter((r) => r.id !== 'owner')
 
 /**
  * The database refuses to remove the last owner. Hiding the button rather than
@@ -76,7 +83,7 @@ function canRemove(member, myRole, members) {
   return true
 }
 
-function RoleControl({ member, editable, myRole, busy, onChange }) {
+function RoleControl({ member, editable, myRole, holdsAccount, busy, onChange }) {
   if (!editable) {
     return (
       <Chip tone={member.role === 'owner' ? 'navy' : 'cream'} className="!px-2.5 !py-1 !text-[11.5px]">
@@ -92,7 +99,7 @@ function RoleControl({ member, editable, myRole, busy, onChange }) {
       aria-label={`Role for ${member.name}`}
       className="rounded-xl border border-rule bg-white px-3 py-1.5 text-[13px] text-navy focus:outline-none"
     >
-      {assignableBy(myRole).map((r) => (
+      {assignableBy(myRole, holdsAccount).map((r) => (
         <option key={r.id} value={r.id}>
           {r.label}
         </option>
@@ -135,6 +142,10 @@ export default function Team() {
 
   const myRole = members.find((m) => m.isYou)?.role ?? partner?.role ?? 'staff'
   const isOwner = myRole === 'owner'
+  // `my_partners()` hands the role grid back to whoever holds the account, and
+  // to nobody else — so its presence is the account-holder answer, straight
+  // from the database rather than re-derived here.
+  const holdsAccount = partner?.rolePages != null
   // Managers hire too — the whole point of handing them the team page.
   const canManage = isOwner || myRole === 'manager'
 
@@ -241,6 +252,7 @@ export default function Team() {
                       member={m}
                       editable={canManage && !m.isYou && (isOwner || m.role !== 'owner')}
                       myRole={myRole}
+                      holdsAccount={holdsAccount}
                       busy={busy === m.id}
                       onChange={(role) => act(m.id, () => partners.setMemberRole(partner.id, m.id, role))}
                     />
@@ -259,6 +271,7 @@ export default function Team() {
                     member={m}
                     editable={canManage && !m.isYou && (isOwner || m.role !== 'owner')}
                     myRole={myRole}
+                    holdsAccount={holdsAccount}
                     busy={busy === m.id}
                     onChange={(role) => act(m.id, () => partners.setMemberRole(partner.id, m.id, role))}
                   />
@@ -373,6 +386,7 @@ export default function Team() {
         partnerName={partner?.name}
         onClose={() => setInviting(false)}
         myRole={myRole}
+        holdsAccount={holdsAccount}
         hasPasses={hasPasses}
         onInvite={async (email, role) => {
           await partners.invite(partner.id, email, role)
@@ -385,7 +399,7 @@ export default function Team() {
   )
 }
 
-function InviteSheet({ open, partnerName, myRole, hasPasses, onClose, onInvite }) {
+function InviteSheet({ open, partnerName, myRole, holdsAccount, hasPasses, onClose, onInvite }) {
   const [email, setEmail] = useState('')
   const [role, setRole] = useState('staff')
   const [busy, setBusy] = useState(false)
@@ -423,7 +437,7 @@ function InviteSheet({ open, partnerName, myRole, hasPasses, onClose, onInvite }
         <div>
           <span className="label">What can they do?</span>
           <div className="space-y-2">
-            {assignableBy(myRole).map((r) => (
+            {assignableBy(myRole, holdsAccount).map((r) => (
               <button
                 key={r.id}
                 type="button"

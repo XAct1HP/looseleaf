@@ -411,9 +411,15 @@ function Prompts({ draft, set }) {
       </p>
 
       <Sheet open={editing !== null} onClose={() => setEditing(null)} title="Pick a prompt" maxWidth="max-w-lg">
-        <div className="hide-scrollbar -mx-6 mb-4 flex gap-2 overflow-x-auto px-6 pb-1">
+        {/* Wrapped, not scrolled. This used to be one horizontally-scrolling
+            row with its scrollbar hidden, so on a narrow screen the last
+            categories sat past the right edge with nothing on screen saying
+            they were there — and a hidden scrollbar is not a thumb anybody can
+            grab. Six labels wrap to two or three lines and all of them are
+            reachable, which is the whole job. */}
+        <div className="mb-4 flex flex-wrap gap-2">
           {PROMPT_CATEGORIES.map((c) => (
-            <SelectChip key={c.id} selected={category === c.id} onClick={() => setCategory(c.id)} className="shrink-0 !py-2 !text-[13px]">
+            <SelectChip key={c.id} selected={category === c.id} onClick={() => setCategory(c.id)} className="!py-2 !text-[13px]">
               {c.label}
             </SelectChip>
           ))}

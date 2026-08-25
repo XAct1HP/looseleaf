@@ -57,6 +57,10 @@ supabase db push
 #   20260823120000_partner_scan_always.sql scanning is membership, not a grant
 #   20260823130000_campus_stats.sql        real headcounts for the Campus page
 #   20260824120000_pay_per_redemption.sql  free tier, $1.50/redemption, credit ladder
+#   20260825120000_payment_method_type.sql what kind of card is on file
+#   20260826120000_partner_invite_lookup.sql  invited staff sign in with no account
+#   20260827120000_offer_access_rules.sql  per-person frequency, date-only perks
+#   20260827130000_founding_manager.sql    a manager can register the business
 ```
 
 The first one also **tightens student signup**. The campus email-domain check
@@ -230,6 +234,45 @@ Staff fall on the same side of that line as students, which is the point. A
 member of waiting staff scanning passes has no reason to know how many of them
 the business will honour this month.
 
+The one thing the view deliberately *does* expose is the rules a student is
+personally subject to — `requires_date`, `per_person_rule`,
+`per_person_cooldown_days` — because a screen that knows them can say what will
+happen instead of offering a button that can only fail. A rule you are subject
+to is not somebody else's commercial secret. The caps stay off it.
+
+## How often one person can use an offer, and where from
+
+`20260827120000`. Two settings per offer, both enforced in `issue_date_pass()`:
+
+| Column | Means |
+| --- | --- |
+| `per_person_rule` | `once` · `cooldown` · `unlimited` |
+| `per_person_cooldown_days` | how long `cooldown` waits — default **30** |
+| `requires_date` | true: unlockable only from a conversation the person is in |
+
+Both were holes rather than choices. `date_passes_one_live_uidx` stops somebody
+holding two live passes for the same offer, which *reads* like a limit and is
+not one — a redeemed pass is no longer `issued`, so the index lets the next one
+straight through, and the same person could take the same free dessert every
+night of the week at $1.50 a time to the restaurant. And any signed-in student
+could walk down Date Spots unlocking every perk on it with no date involved,
+which is a coupon book with a dating app attached.
+
+Two details worth keeping:
+
+* **The clock runs from the redemption, not the unlock.** Unlocking and never
+  going is not a use of anything — the pass expires on its own and the person
+  can unlock it again. Only walking in counts, which is the same event the
+  partner is invoiced for, so the rule a restaurant sets and the line on its
+  bill count the same thing.
+* **`requires_date` is checked with `in_conversation()`**, the same function the
+  message policies use, so a conversation id somebody copied off a friend's
+  screen buys them nothing.
+
+Defaults are the careful end — once a month, dates only — because these columns
+landed on offers that already existed, and the direction that costs a partner
+money if it is wrong is the loose one.
+
 ## Photos, and why they appear immediately
 
 One pipeline — `src/lib/imagePipeline.js` — shared by business photos and
@@ -379,6 +422,32 @@ looks at the column at all:
   returns false for it, and `set_partner_role_pages()` filters it out of
   anything written there — so writing `{"manager": ["settings"]}` straight into
   the table by hand still gets a manager nothing.
+
+### The account holder, and the manager who signs the business up
+
+`20260827130000`. Registration asks whether you own the place or manage it, and
+records the answer as a real role — because the person who fills this form in
+is very often the general manager, and calling them an owner is a lie the team
+page then repeats to everybody who joins later.
+
+That leaves a business with **no owner at all**, which without care is a dead
+end: every "owner only" control — the grid, inviting an owner, Settings itself
+— would be unreachable by anybody, and the manager who just signed up could not
+set up billing or add their team.
+
+So there is one narrow idea: the **account holder**. Normally an owner. Where a
+business has no owner, it is the manager who registered it —
+`partners.created_by`, and only them, `partner_is_account_holder()`. They hold
+the account until an owner joins, and the moment one does they are an ordinary
+manager again, reaching exactly what the owner grants them. `role_pages` for a
+manager-registered business starts with every page ticked, so an owner arriving
+later narrows it with one click like any other grant.
+
+`settings` is still never grantable — `partner_can()` still refuses to consult
+the column for it, and the account-holder test is a property of who you are,
+not a row anybody can write. And a founding manager can invite an owner but
+cannot promote *themselves* to one; the role they chose at signup would mean
+nothing otherwise.
 
 ## Where a sign-in lands
 

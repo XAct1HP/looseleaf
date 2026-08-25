@@ -48,8 +48,20 @@ const blank = {
   new_customers_only: false,
   multi_use: false,
   pass_valid_days: 14,
+  //  Both default to the careful end. A restaurant that wants to be more
+  //  generous can say so in two clicks; one that finds out the hard way that
+  //  the same student ate free every Tuesday cannot get the month back.
+  per_person_rule: 'cooldown',
+  per_person_cooldown_days: 30,
+  requires_date: true,
   status: 'draft',
 }
+
+const FREQUENCIES = [
+  { id: 'once', label: 'Once per person, ever' },
+  { id: 'cooldown', label: 'Once every so often' },
+  { id: 'unlimited', label: 'As often as they like' },
+]
 
 export default function Offers() {
   const { partner, entitlements } = usePartnerAccount()
@@ -474,6 +486,69 @@ function OfferSheet({ offer, onClose, onSave, busy }) {
           </label>
         </div>
 
+        {/* ── who, and how often ─────────────────────────────────────────
+            The caps above are about the *offer* — how much of it exists in a
+            month. These two are about one *person*, which is the question a
+            monthly cap cannot answer: a hundred redemptions and a hundred
+            different couples are not the same hundred dollars fifty. */}
+        <div className="border-t border-rule pt-5">
+          <p className="mb-4 text-[13px] font-semibold uppercase tracking-[0.08em] text-mist">
+            Who can use it
+          </p>
+
+          <Field
+            label="How often can the same person use this?"
+            hint="Counted from the visit, not from unlocking it — a pass nobody brought in costs nobody anything."
+            htmlFor="o-freq"
+          >
+            <Select
+              id="o-freq"
+              value={form.per_person_rule ?? 'cooldown'}
+              onChange={(v) => set({ per_person_rule: v || 'cooldown' })}
+              options={FREQUENCIES}
+              placeholder="Once every so often"
+            />
+          </Field>
+
+          {(form.per_person_rule ?? 'cooldown') === 'cooldown' && (
+            <div className="mt-5">
+              <Field
+                label="Wait this many days"
+                hint="30 is a month. 7 makes you somebody's Tuesday."
+                htmlFor="o-cool"
+              >
+                <TextInput
+                  id="o-cool"
+                  inputMode="numeric"
+                  value={String(form.per_person_cooldown_days ?? 30)}
+                  onChange={(v) =>
+                    set({ per_person_cooldown_days: Number(v.replace(/\D/g, '')) || 30 })
+                  }
+                />
+              </Field>
+            </div>
+          )}
+
+          <label className="mt-4 flex items-start gap-3 rounded-2xl border border-rule bg-white px-4 py-3">
+            <input
+              type="checkbox"
+              checked={Boolean(form.requires_date)}
+              onChange={(e) => set({ requires_date: e.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-[#FF6468]"
+            />
+            <span>
+              <span className="block text-[14px] text-navy">
+                Only for two people planning a date
+              </span>
+              <span className="mt-0.5 block text-[12.5px] leading-relaxed text-mist">
+                On by default. The perk shows on your Date Spot either way — with this on, it only
+                unlocks from a conversation between two people who matched, so what walks in is a
+                date rather than somebody who came for the discount.
+              </span>
+            </span>
+          </label>
+        </div>
+
         <Field label="Terms" hint="The small print on the pass." htmlFor="o-terms">
           <TextArea id="o-terms" rows={3} value={form.terms ?? ''} onChange={(v) => set({ terms: v })} maxLength={240} placeholder="Dine-in only. One pass per couple. Not valid with other offers." />
         </Field>
@@ -516,6 +591,9 @@ function clean(o) {
     new_customers_only: Boolean(o.new_customers_only),
     multi_use: Boolean(o.multi_use),
     pass_valid_days: o.pass_valid_days || 14,
+    per_person_rule: o.per_person_rule || 'cooldown',
+    per_person_cooldown_days: Math.min(365, Math.max(1, Number(o.per_person_cooldown_days) || 30)),
+    requires_date: Boolean(o.requires_date),
     status: o.status || 'draft',
   }
 }

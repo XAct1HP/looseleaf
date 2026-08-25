@@ -51,6 +51,13 @@ export default function SpotSheet({ spot, onClose, conversationId = null, surfac
   const hasHours = Object.keys(spot.hours ?? {}).length > 0
   const today = TODAY_KEY()
 
+  // A business can say its perk is for couples planning a date rather than for
+  // anybody browsing. When this sheet was opened from a chat there *is* a date
+  // being planned, so the button behaves normally; opened from Date Spots
+  // there isn't one, and `issue_date_pass` would refuse.
+  const dateOnly = Boolean(spot.offer?.requiresDate) && !conversationId
+  const onceText = frequencyLine(spot.offer)
+
   async function unlock() {
     if (busy || !spot.offer) return
     setBusy(true)
@@ -140,13 +147,39 @@ export default function SpotSheet({ spot, onClose, conversationId = null, surfac
                 </div>
               </div>
 
-              <Button variant="coral" size="md" full className="mt-4" onClick={unlock} disabled={busy}>
-                {busy ? 'Getting your pass…' : 'Unlock this offer'}
-              </Button>
-              <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11.5px] leading-relaxed text-mist">
-                <IconLock size={12} />
-                Nothing is charged, and they never learn who you are.
-              </p>
+              {/* A perk the business has marked date-only cannot be unlocked
+                  from here, so this does not offer a button that can only
+                  fail. It says what the perk is for and points at where it
+                  comes from — which is also the honest description of it: it
+                  exists to make a date easier to say yes to, not to be
+                  collected off a list. */}
+              {dateOnly ? (
+                <>
+                  <p className="mt-4 rounded-2xl border border-[#F2E6D6] bg-white px-4 py-3 text-[13px] leading-relaxed text-graphite">
+                    This one unlocks when you’re planning a date — open it from a chat with your
+                    match and the pass is yours.
+                  </p>
+                  <Button variant="outline" size="md" full className="mt-3" to="/app/matches">
+                    Go to your matches
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button variant="coral" size="md" full className="mt-4" onClick={unlock} disabled={busy}>
+                    {busy ? 'Getting your pass…' : 'Unlock this offer'}
+                  </Button>
+                  <p className="mt-2.5 flex items-center justify-center gap-1.5 text-center text-[11.5px] leading-relaxed text-mist">
+                    <IconLock size={12} />
+                    Nothing is charged, and they never learn who you are.
+                  </p>
+                </>
+              )}
+
+              {onceText && (
+                <p className="mt-2.5 text-center text-[11.5px] leading-relaxed text-mist">
+                  {onceText}
+                </p>
+              )}
             </div>
           )}
 
@@ -260,6 +293,25 @@ export default function SpotSheet({ spot, onClose, conversationId = null, surfac
       )}
     </Sheet>
   )
+}
+
+/**
+ * How often one person can use this, in words, or nothing at all when the
+ * answer is "as often as you like" — a rule worth stating is one that could
+ * surprise somebody, and no limit surprises nobody.
+ */
+function frequencyLine(offer) {
+  if (!offer) return null
+  if (offer.perPersonRule === 'once') return 'One per person.'
+  if (offer.perPersonRule === 'cooldown') {
+    const d = offer.perPersonCooldownDays
+    if (!d) return null
+    if (d === 1) return 'Once a day per person.'
+    if (d === 7) return 'Once a week per person.'
+    if (d === 30) return 'Once a month per person.'
+    return `Once every ${d} days per person.`
+  }
+  return null
 }
 
 function SectionLabel({ children }) {

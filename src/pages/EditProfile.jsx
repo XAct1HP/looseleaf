@@ -222,13 +222,15 @@ export default function EditProfile() {
       </Sheet>
 
       <Sheet open={promptFor !== null} onClose={() => setPromptFor(null)} title="Pick a prompt" maxWidth="max-w-lg">
-        <div className="hide-scrollbar -mx-6 mb-4 flex gap-2 overflow-x-auto px-6 pb-1">
+        {/* Wrapped rather than scrolled — see the same sheet in Onboarding. A
+            row with a hidden scrollbar simply hid the last categories. */}
+        <div className="mb-4 flex flex-wrap gap-2">
           {PROMPT_CATEGORIES.map((c) => (
             <SelectChip
               key={c.id}
               selected={category === c.id}
               onClick={() => setCategory(c.id)}
-              className="shrink-0 !py-2 !text-[13px]"
+              className="!py-2 !text-[13px]"
             >
               {c.label}
             </SelectChip>

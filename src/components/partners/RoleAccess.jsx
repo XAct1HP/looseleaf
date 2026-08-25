@@ -45,7 +45,8 @@ export default function RoleAccess({ className = '' }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    // `rolePages` comes back null for anybody who isn't an owner.
+    // `rolePages` comes back null for anybody who doesn't hold the account —
+    // an owner, or the manager who registered a business that has none yet.
     if (partner?.rolePages) {
       setGrid({
         manager: partner.rolePages.manager ?? ['scan', 'team'],
