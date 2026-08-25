@@ -36,9 +36,40 @@ import { serviceClient, meterEvent, billingConfig, json } from '../_shared/strip
 Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'POST only.' }, 405)
 
+  // The token lives in *two* places and they are easy to confuse, so these two
+  // errors are worded to tell them apart rather than both saying "no":
+  //
+  //   · Supabase Vault — read by the cron job, to SEND the header.
+  //   · Edge Function secrets — read here, to CHECK the header.
+  //
+  // Setting only the first is the natural mistake, because Vault is the one
+  // you touch while scheduling the job. It leaves this function refusing every
+  // call, which looks like a token mismatch and is not one.
   const expected = Deno.env.get('METER_WORKER_TOKEN')
-  if (!expected) return json({ error: 'Metering is not configured.' }, 409)
-  if (req.headers.get('x-worker-token') !== expected) return json({ error: 'Not authorised.' }, 401)
+  if (!expected) {
+    return json(
+      {
+        error:
+          'METER_WORKER_TOKEN is not set on this function, so nothing can be billed. ' +
+          'Run: supabase secrets set METER_WORKER_TOKEN=<value>. It must match the ' +
+          'value in Supabase Vault under the name meter_worker_token, which is what ' +
+          'the cron job sends.',
+        missing: 'METER_WORKER_TOKEN',
+      },
+      409
+    )
+  }
+  if (req.headers.get('x-worker-token') !== expected) {
+    return json(
+      {
+        error:
+          'The x-worker-token header does not match METER_WORKER_TOKEN. The Vault ' +
+          'secret the cron job sends and the function secret it is checked against ' +
+          'have drifted apart — set both to the same value.',
+      },
+      401
+    )
+  }
 
   const db = serviceClient()
 

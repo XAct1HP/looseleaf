@@ -131,6 +131,32 @@ New secret, alongside the existing ones:
 METER_WORKER_TOKEN=<a long random string>
 ```
 
+```bash
+supabase secrets set --env-file supabase/functions/.env
+# or just the one:
+supabase secrets set METER_WORKER_TOKEN=<the value>
+```
+
+> ### The token lives in two places and they must match
+>
+> This is the single most confusing thing in the whole setup, so it is worth
+> being explicit about:
+>
+> | Where | Who reads it | What for |
+> | --- | --- | --- |
+> | **Supabase Vault**, named `meter_worker_token` | the cron job | to **send** the `x-worker-token` header |
+> | **Edge Function secrets**, `METER_WORKER_TOKEN` | `partner-meter-redemptions` | to **check** that header |
+>
+> They are different stores. Setting only the Vault one is the natural mistake,
+> because Vault is what you touch while scheduling the job — and it leaves the
+> function rejecting every call, which looks exactly like a token mismatch and
+> is not one.
+>
+> `{"error":"METER_WORKER_TOKEN is not set on this function…"}` means the
+> function secret is missing. A 401 about the header means the two have drifted
+> apart. Nothing is billed in either case, and nothing anywhere else looks
+> wrong.
+
 `REPORT_USAGE_TOKEN` is no longer read and can be removed.
 
 ## 5 · Schedule the metering worker
@@ -220,9 +246,16 @@ header, so any scheduler works — a GitHub Actions cron, a Vercel cron job,
 even cron-job.org:
 
 ```bash
-curl -X POST https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions \
-     -H 'x-worker-token: <METER_WORKER_TOKEN>'
+curl -X POST "https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions" -H "x-worker-token: <METER_WORKER_TOKEN>"
 ```
+
+Deliberately on one line. In PowerShell a trailing `\` is not a line
+continuation — curl reads it as a second URL and answers
+`curl: (3) URL rejected: Bad hostname` *after* having already run the real
+request, so you get a valid response and an error together and it looks like
+the call failed when it did not. On Windows, call `curl.exe` explicitly too:
+Windows PowerShell 5.1 aliases `curl` to `Invoke-WebRequest`, which does not
+understand `-X` or `-H` at all.
 
 The tradeoff is that a scheduler living outside Supabase is one more thing that
 can quietly stop without anyone noticing. Whatever you pick, alert on it.
