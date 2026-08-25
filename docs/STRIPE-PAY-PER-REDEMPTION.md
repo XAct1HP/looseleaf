@@ -104,10 +104,18 @@ so a price rise never applies retroactively.
 
 ```bash
 supabase functions deploy partner-billing-setup
+supabase functions deploy partner-billing-sync
 supabase functions deploy partner-portal
 supabase functions deploy partner-meter-redemptions --no-verify-jwt
 supabase functions deploy stripe-webhook            --no-verify-jwt
 ```
+
+`partner-billing-sync` asks Stripe directly what card is on a customer and
+writes the answer. The Billing page calls it whenever somebody comes back from
+Stripe's pages, so a partner is never stuck waiting on a webhook that did not
+arrive. It does **not** trust the redirect — `?billing=ok` only decides that we
+should go and look; Stripe decides what is true, and a hand-typed URL produces
+a reconcile that says "no card".
 
 `partner-checkout` and `partner-report-usage` are gone. Delete them so a stale
 deployment can't take a card for a plan that no longer exists:
@@ -221,28 +229,117 @@ can quietly stop without anyone noticing. Whatever you pick, alert on it.
 
 ### Checking it is actually working
 
-```sql
--- the job exists and is active
-select jobname, schedule, active from cron.job;
+Run these in the SQL Editor. Each one is shown with the output you should get
+when everything is fine.
 
--- the last few runs, and whether they succeeded
+**Does the job exist, and is it on?**
+
+```sql
+select jobname, schedule, active from cron.job;
+```
+
+```
+jobname                      | schedule      | active
+-----------------------------+---------------+-------
+meter-date-pass-redemptions  | */15 * * * *  | true
+```
+
+**Has it been firing?**
+
+```sql
 select status, return_message, start_time
 from cron.job_run_details
 where jobid = (select jobid from cron.job where jobname = 'meter-date-pass-redemptions')
 order by start_time desc limit 10;
+```
 
--- nothing should sit here for long
+```
+status     | return_message | start_time
+-----------+----------------+----------------------------
+succeeded  | SELECT 1       | 2026-08-24 18:45:00.213+00
+succeeded  | SELECT 1       | 2026-08-24 18:30:00.198+00
+succeeded  | SELECT 1       | 2026-08-24 18:15:00.221+00
+```
+
+Rows exactly 15 minutes apart. `return_message` is a bare command tag and is
+**not** the function's reply — there is nothing to learn from it.
+
+**Is the ledger draining?**
+
+```sql
 select count(*), min(redeemed_at)
 from date_pass_redemptions where bill_status = 'pending';
 ```
 
+```
+count | min
+------+----------------------------
+0     | null
+```
+
+Non-zero is fine as long as `min` is inside the last 15 minutes — that is just
+redemptions that happened since the last run.
+
+### The one that actually proves it
+
+**`succeeded` above does not mean the HTTP request worked.** `net.http_post` is
+asynchronous: it queues the request and returns a request id immediately, so
+the SQL statement completes whether the edge function answers 200, 401, or
+never answers at all. A wall of green `succeeded` rows is perfectly compatible
+with every single call being rejected. This is the failure mode that will waste
+your afternoon, so check the response table too:
+
+```sql
+select id, status_code, error_msg, created,
+       left(content, 200) as content
+from net._http_response
+order by created desc limit 10;
+```
+
+```
+id   | status_code | error_msg | created                     | content
+-----+-------------+-----------+-----------------------------+----------------------------------------
+1043 | 200         | null      | 2026-08-24 18:45:01.402+00  | {"reported":2,"failed":0,"errors":[]}
+1042 | 200         | null      | 2026-08-24 18:30:01.377+00  | {"reported":0,"failed":0,"note":"nothing outstanding"}
+```
+
+`"reported": 0` with `"nothing outstanding"` is a quiet fifteen minutes, not a
+fault. Note that pg_net **purges these rows after 6 hours**, so an empty result
+may only mean you are looking the morning after.
+
+Do not wait a quarter of an hour to find out. Fire it by hand immediately after
+scheduling — run the same `select net.http_post(...)` on its own, wait five
+seconds, then read `net._http_response`.
+
+### What the failures look like
+
+| You see | It means |
+| --- | --- |
+| No rows in `cron.job` | Never created, or created against a different project |
+| `active = false` | Exists but is paused |
+| No `job_run_details` rows | Hasn't fired yet — wait for the next :00/:15/:30/:45 |
+| `failed` · `schema "net" does not exist` | `pg_net` was never enabled |
+| `failed` · `permission denied for schema net` | Enabled, but not granted to the job's role |
+| All `succeeded`, but `pending` keeps growing | The async trap — go read `net._http_response` |
+| `status_code 401` · `{"error":"Not authorised."}` | The token in the cron job ≠ `METER_WORKER_TOKEN` on the function |
+| `status_code 409` · `"Metering is not configured."` | `METER_WORKER_TOKEN` is not set on the function at all |
+| `status_code 409` · `"No metered price configured"` | `platform_billing.stripe_metered_price_id` is still null |
+| `status_code 404` | Wrong project ref or function name in the URL |
+| `timed_out = true` | Cold start. Fine occasionally, investigate if constant |
+| `net._http_response` empty, cron succeeded | Probably just the 6-hour purge — look right after a run |
+
+### What to alert on
+
 Stripe refuses meter events older than 35 days. `redemptions_awaiting_meter()`
 stops offering anything older than 30, so a redemption that has failed to
 report for a month stops being retried and needs looking at rather than
-silently going round forever. That last query is the one to alert on: **if the
-oldest `pending` row is more than a day old, the worker is not running**, and
-every hour it stays that way is revenue that eventually cannot be billed at
-all.
+silently going round forever.
+
+The pending query is the one to wire an alert to: **if the oldest `pending` row
+is more than a day old, the worker is not running.** Every hour it stays that
+way is revenue that eventually cannot be billed at all, and nothing else in the
+product will look wrong while it happens — partners keep scanning, students
+keep getting passes, and the money quietly stops.
 
 ## 6 · Update the webhook endpoint
 

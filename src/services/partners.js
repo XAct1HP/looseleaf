@@ -107,6 +107,7 @@ export const saveTargeting = gated(live.saveTargeting)
 export const subscription = gated(live.subscription)
 export const billingSetupUrl = gated(live.billingSetupUrl)
 export const billingPortalUrl = gated(live.billingPortalUrl)
+export const syncBilling = gated(live.syncBilling)
 export const billingSummary = gated(live.billingSummary)
 export const billableRedemptions = gated(live.billableRedemptions)
 

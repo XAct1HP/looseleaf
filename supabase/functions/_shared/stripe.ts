@@ -180,6 +180,128 @@ export function safeReturnTo(value: unknown, fallback?: string) {
   }
 }
 
+/**
+ * ── What card would Stripe actually charge? ─────────────────────────────────
+ *
+ * One implementation, used by the webhook and by the reconcile endpoint. Two
+ * copies of "is there a card on file" would drift, and the column they write
+ * is the single thing standing between a business and being able to hand out
+ * Date Passes.
+ *
+ * `reached` is the important field, and its absence was a real bug: the first
+ * version swallowed a Stripe error and then wrote `last4 ?? null` anyway, so a
+ * timeout while *asking* about the card was recorded as *there is no card* —
+ * silently switching a paying partner off. "Stripe says no card" and "we could
+ * not ask Stripe" are different facts and the caller has to be able to tell
+ * them apart.
+ *
+ * Three places are checked because Stripe puts the answer in different ones
+ * depending on how the card arrived: Checkout sets the subscription's default,
+ * the billing portal sets the customer's invoice default, and a bare
+ * `payment_method.attached` sets neither.
+ */
+export async function readDefaultCard(customerId: string): Promise<{
+  reached: boolean
+  brand: string | null
+  last4: string | null
+  email: string | null
+  error?: string
+}> {
+  let brand: string | null = null
+  let last4: string | null = null
+  let email: string | null = null
+
+  try {
+    const customer = await stripe.customers.retrieve(customerId, {
+      expand: ['invoice_settings.default_payment_method'],
+    })
+
+    if ('deleted' in customer && customer.deleted) {
+      // A deleted customer genuinely has no card. That is an answer, not a
+      // failure, so it is reported as one.
+      return { reached: true, brand: null, last4: null, email: null }
+    }
+
+    email = (customer.email as string | null) ?? null
+    const pm = customer.invoice_settings?.default_payment_method as
+      | { card?: { brand?: string; last4?: string } }
+      | string
+      | null
+
+    if (pm && typeof pm !== 'string' && pm.card) {
+      brand = pm.card.brand ?? null
+      last4 = pm.card.last4 ?? null
+    }
+
+    // Checkout in subscription mode sets the *subscription's* default and does
+    // not always set the customer's, so this branch is the one that fires on a
+    // first sign-up rather than a rare fallback.
+    if (!last4) {
+      const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1, status: 'all' })
+      const subPm = subs.data[0]?.default_payment_method
+      if (subPm) {
+        const method = await stripe.paymentMethods.retrieve(
+          typeof subPm === 'string' ? subPm : (subPm as { id: string }).id
+        )
+        brand = method.card?.brand ?? brand
+        last4 = method.card?.last4 ?? last4
+      }
+    }
+
+    // Still nothing? Any card attached to the customer will be found at
+    // collection time even with no default named, so it counts.
+    if (!last4) {
+      const methods = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 1 })
+      brand = methods.data[0]?.card?.brand ?? brand
+      last4 = methods.data[0]?.card?.last4 ?? last4
+    }
+
+    return { reached: true, brand, last4, email }
+  } catch (e) {
+    // Carried out rather than swallowed. The first version of this caught and
+    // discarded, which is how a card that Stripe was perfectly willing to talk
+    // about came to read as "no card on file" with nothing anywhere saying
+    // why. Whatever Stripe objected to, somebody needs to be able to see it.
+    return {
+      reached: false,
+      brand: null,
+      last4: null,
+      email: null,
+      error: (e as Error)?.message ?? 'Unknown Stripe error',
+    }
+  }
+}
+
+/**
+ * Writes what `readDefaultCard` found. **Never called when `reached` is false**
+ * — leaving the columns exactly as they were is the correct response to not
+ * knowing, because the alternative is switching somebody off over a network
+ * blip.
+ */
+export async function writeCardState(
+  db: ReturnType<typeof serviceClient>,
+  partnerId: string,
+  card: { reached: boolean; brand: string | null; last4: string | null; email: string | null }
+) {
+  if (!card.reached) return false
+
+  const { error } = await db
+    .from('partner_subscriptions')
+    .update({
+      payment_method_brand: card.brand,
+      payment_method_last4: card.last4,
+      // Null when Stripe says there is no card, which is what switches Date
+      // Passes back off — the same column, in both directions.
+      payment_method_at: card.last4 ? new Date().toISOString() : null,
+      billing_email: card.email,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('partner_id', partnerId)
+
+  if (error) throw new Error(error.message)
+  return true
+}
+
 /** The one place that reads how billing is configured. */
 export async function billingConfig(db: ReturnType<typeof serviceClient>) {
   const { data } = await db

@@ -449,6 +449,34 @@ export async function billingPortalUrl(partnerId, returnTo) {
 }
 
 /**
+ * Asks Stripe, right now, what card is on this customer — and writes the
+ * answer. Called when somebody comes back from Stripe's pages, so a partner is
+ * never left waiting on a webhook that may not arrive.
+ *
+ * This does not trust the redirect. The redirect decides that we should go and
+ * look; Stripe decides what is true. Typing `?billing=ok` into the address bar
+ * gets you a reconcile that says you have no card.
+ *
+ * Returns `{ synced, has_card }`. `has_card: null` means Stripe could not be
+ * reached and nothing was changed — distinct from `false`, which means Stripe
+ * answered and there is genuinely no card.
+ */
+export async function syncBilling(partnerId) {
+  const { data, error } = await supabase.functions.invoke('partner-billing-sync', {
+    body: { partner_id: partnerId },
+  })
+  if (error) {
+    // A 503 from the function is "Stripe is unreachable", which is a real
+    // answer rather than a failure — unwrap it so the caller can say "try
+    // again" instead of showing a stack trace.
+    const detail = await error?.context?.json?.().catch(() => null)
+    if (detail?.reason === 'stripe_unreachable') return { synced: false, has_card: null }
+    throw new Error(detail?.error || error.message || 'Could not check with Stripe.')
+  }
+  return data ?? { synced: false, has_card: null }
+}
+
+/**
  * Everything the Billing page shows, in one round trip: the fee, the credit
  * ceiling, what is outstanding, and whether Date Passes can be handed out.
  *

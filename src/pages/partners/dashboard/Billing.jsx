@@ -33,6 +33,9 @@ export default function Billing() {
   const [ledger, setLedger] = useState([])
   const [busy, setBusy] = useState(null)
   const [error, setError] = useState(null)
+  // idle · checking · done · none · unreachable — the last two are the states
+  // that used to not exist, which is why the banner could never resolve.
+  const [checking, setChecking] = useState('idle')
   const justReturned = params.get('billing') === 'ok'
 
   const load = useCallback(async () => {
@@ -58,21 +61,81 @@ export default function Billing() {
     }
   }, [partner])
 
-  // Stripe has redirected back. Poll briefly for the webhook to land, then
-  // stop — this is a nicety, not the source of truth.
+  // Stripe has redirected back. Ask Stripe what the card situation actually
+  // is, rather than waiting to be told by a webhook that might not arrive —
+  // that wait is what left a partner staring at "this usually takes a few
+  // seconds" for several minutes with no way out.
+  //
+  // The redirect is not being trusted here. It decides that we should go and
+  // look; `partner-billing-sync` asks Stripe, and Stripe decides what is true.
+  // Typing `?billing=ok` into the address bar gets you a reconcile that
+  // reports no card.
   useEffect(() => {
     if (!justReturned || !partner) return
+    let live = true
     let tries = 0
-    const id = setInterval(async () => {
+    let timer
+
+    async function check() {
       tries += 1
-      const s = await load()
-      if (s?.has_card || tries >= 6) {
-        clearInterval(id)
-        if (s?.has_card) setParams({}, { replace: true })
+      let result = null
+      try {
+        result = await partners.syncBilling(partner.id)
+      } catch {
+        /* fall through to the reload below; the summary is still worth having */
       }
-    }, 2500)
-    return () => clearInterval(id)
+      if (!live) return
+
+      const s = await load()
+      if (!live) return
+
+      if (s?.has_card) {
+        setParams({}, { replace: true })
+        setChecking('done')
+        return
+      }
+
+      // Stripe unreachable (has_card === null) is worth one more go. A clean
+      // "no card" after a successful sync is a real answer, so stop asking.
+      const unreachable = result && result.has_card === null
+      if (tries >= 3 && !unreachable) {
+        setChecking('none')
+        return
+      }
+      if (tries >= 5) {
+        setChecking('unreachable')
+        return
+      }
+      timer = setTimeout(check, 2000)
+    }
+
+    setChecking('checking')
+    check()
+
+    return () => {
+      live = false
+      clearTimeout(timer)
+    }
   }, [justReturned, partner, load, setParams])
+
+  /** Manual retry, for when the automatic pass above gave up. */
+  async function recheck() {
+    setChecking('checking')
+    setError(null)
+    try {
+      await partners.syncBilling(partner.id)
+      const s = await load()
+      if (s?.has_card) {
+        setParams({}, { replace: true })
+        setChecking('done')
+      } else {
+        setChecking('none')
+      }
+    } catch (e) {
+      setError(e.message)
+      setChecking('unreachable')
+    }
+  }
 
   async function addCard() {
     setBusy('card')
@@ -113,11 +176,48 @@ export default function Billing() {
         subtitle="Free to be here. You pay only for Date Passes your staff actually scanned."
       />
 
-      {justReturned && !summary?.has_card && (
+      {/* Every one of these ends somewhere. The version of this banner that
+          only had the first state could sit on "a few seconds" forever, which
+          is worse than an error — an error at least tells you to do something. */}
+      {justReturned && !summary?.has_card && checking === 'checking' && (
         <p className="mb-6 rounded-2xl border border-notebook/50 bg-notebook-soft px-4 py-3 text-[13.5px] leading-relaxed text-[#2F5C99]">
-          Thanks — Stripe is confirming your card. This usually takes a few seconds; the page will
-          update itself.
+          Checking with Stripe…
         </p>
+      )}
+
+      {justReturned && !summary?.has_card && checking === 'none' && (
+        <div className="mb-6 rounded-card border border-[#C9821F]/30 bg-[#FBF3E4] px-5 py-5">
+          <p className="text-[15px] font-medium text-navy">
+            Stripe doesn’t show a card on this account yet.
+          </p>
+          <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
+            If you closed the Stripe page before finishing, nothing was saved — start again below.
+            If you did complete it, give it a moment and check once more.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button variant="outline" size="md" onClick={recheck}>
+              Check again
+            </Button>
+            <Button variant="coral" size="md" onClick={addCard} disabled={busy === 'card'}>
+              {busy === 'card' ? 'Opening…' : 'Add a card'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {justReturned && !summary?.has_card && checking === 'unreachable' && (
+        <div className="mb-6 rounded-card border border-coral/30 bg-coral-wash px-5 py-5">
+          <p className="text-[15px] font-medium text-coral-deep">
+            We can’t reach Stripe right now.
+          </p>
+          <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-coral-deep/90">
+            Your card is almost certainly fine — we just can’t confirm it this second, and we’d
+            rather say so than tell you something wrong. Nothing has been changed.
+          </p>
+          <Button variant="outline" size="md" className="mt-4" onClick={recheck}>
+            Try again
+          </Button>
+        </div>
       )}
 
       {error && (

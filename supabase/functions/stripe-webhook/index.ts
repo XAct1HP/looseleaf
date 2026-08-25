@@ -31,7 +31,14 @@
  *   supabase functions deploy stripe-webhook --no-verify-jwt
  */
 
-import { stripe, cryptoProvider, serviceClient, json } from '../_shared/stripe.ts'
+import {
+  stripe,
+  cryptoProvider,
+  serviceClient,
+  readDefaultCard,
+  writeCardState,
+  json,
+} from '../_shared/stripe.ts'
 
 const WEBHOOK_SECRET = Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? ''
 
@@ -253,66 +260,20 @@ async function syncSubscription(db, sub, metadataPartnerId?: string): Promise<st
  * the single thing standing between a business and being able to hand out
  * Date Passes. It is set from what Stripe says is on the customer, never from
  * a redirect — someone can type `?billing=ok` into an address bar.
+ *
+ * If Stripe cannot be reached, **nothing is written**. This used to write
+ * `payment_method_at: null` on any read failure, which meant a timeout while
+ * asking about a card looked identical to there being no card, and switched a
+ * paying partner's Date Passes off until somebody noticed. Throwing instead
+ * makes the webhook return 500, which makes Stripe retry, which is the
+ * behaviour we actually want.
  */
 async function syncDefaultCard(db, partnerId: string, customerId: string) {
-  let brand: string | null = null
-  let last4: string | null = null
-  let email: string | null = null
-
-  try {
-    const customer = await stripe.customers.retrieve(customerId, {
-      expand: ['invoice_settings.default_payment_method'],
-    })
-    if (!('deleted' in customer && customer.deleted)) {
-      email = (customer.email as string | null) ?? null
-      const pm = customer.invoice_settings?.default_payment_method as
-        | { card?: { brand?: string; last4?: string } }
-        | string
-        | null
-
-      if (pm && typeof pm !== 'string' && pm.card) {
-        brand = pm.card.brand ?? null
-        last4 = pm.card.last4 ?? null
-      }
-    }
-
-    // No default set on the customer? A subscription can carry its own, and
-    // Stripe charges that one first — so it is the one worth mirroring.
-    if (!last4) {
-      const subs = await stripe.subscriptions.list({ customer: customerId, limit: 1, status: 'all' })
-      const subPm = subs.data[0]?.default_payment_method
-      if (subPm) {
-        const pm = await stripe.paymentMethods.retrieve(
-          typeof subPm === 'string' ? subPm : (subPm as { id: string }).id
-        )
-        brand = pm.card?.brand ?? brand
-        last4 = pm.card?.last4 ?? last4
-      }
-    }
-
-    // Still nothing? Fall back to any card attached to the customer, because
-    // Stripe will find it at collection time even if no default is named.
-    if (!last4) {
-      const methods = await stripe.paymentMethods.list({ customer: customerId, type: 'card', limit: 1 })
-      brand = methods.data[0]?.card?.brand ?? brand
-      last4 = methods.data[0]?.card?.last4 ?? last4
-    }
-  } catch {
-    // Reading the card is best effort; the subscription state above is not.
+  const card = await readDefaultCard(customerId)
+  if (!card.reached) {
+    throw new Error(`Could not read the card for customer ${customerId}; leaving it untouched.`)
   }
-
-  await db
-    .from('partner_subscriptions')
-    .update({
-      payment_method_brand: brand,
-      payment_method_last4: last4,
-      // Null when there is no card at all, which is what switches Date Passes
-      // back off — the same column, in both directions.
-      payment_method_at: last4 ? new Date().toISOString() : null,
-      billing_email: email,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('partner_id', partnerId)
+  await writeCardState(db, partnerId, card)
 }
 
 async function partnerForCustomer(db, customerId: string | null) {

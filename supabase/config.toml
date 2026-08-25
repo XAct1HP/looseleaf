@@ -13,6 +13,9 @@ verify_jwt = true
 [functions.partner-portal]
 verify_jwt = true
 
+[functions.partner-billing-sync]
+verify_jwt = true
+
 [functions.stripe-webhook]
 verify_jwt = false
 
