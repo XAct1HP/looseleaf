@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { applyScannerManifest, applyStudentManifest } from './lib/pwaManifest'
 import { Suspense, lazy, useEffect } from 'react'
 import { useStore, useCampusOpen } from './state/store'
 import { isDemo } from './services/backend'
@@ -54,6 +55,30 @@ const PartnerAnalytics = lazy(() => import('./pages/partners/dashboard/Analytics
 const PartnerTeam = lazy(() => import('./pages/partners/dashboard/Team'))
 const PartnerBilling = lazy(() => import('./pages/partners/dashboard/Billing'))
 const PartnerSettings = lazy(() => import('./pages/partners/dashboard/Settings'))
+
+/**
+ * ── Which app does this page offer to install? ──────────────────────────────
+ *
+ * `index.html` names one manifest and Looseleaf ships two products, so the tag
+ * is swapped by route. It lives here rather than in the dashboard because the
+ * first version *did* live in the dashboard, and that left /partners,
+ * /partners/login and /partners/join still advertising the student app — so a
+ * member of staff adding "the scanner" from the login page got an icon that
+ * opened the dating app.
+ *
+ * `pwaManifest` is imported rather than `pwa`: this file is in the main bundle
+ * every student downloads, and `pwa` installs a `beforeinstallprompt` listener
+ * that would suppress the student app's own install banner. The tag swapping
+ * is pure DOM and carries no such cost.
+ */
+function ManifestForRoute() {
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (pathname.startsWith('/partners')) applyScannerManifest()
+    else applyStudentManifest()
+  }, [pathname])
+  return null
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation()
@@ -142,6 +167,7 @@ export default function App() {
   return (
     <>
       <ScrollToTop />
+      <ManifestForRoute />
       <Routes>
         {/* A signed-in visitor should never land back on the marketing page —
             send them to whichever step they actually stopped at. */}

@@ -1,58 +1,25 @@
 /**
  * ── Putting the scanner on a phone ──────────────────────────────────────────
  *
- * Everything in here exists because of one fact that was quietly true until
- * now: Looseleaf shipped a single web app manifest, and it described the
- * *student* app — `name: "Looseleaf"`, `start_url: "/"`. A member of staff who
- * followed any "add to home screen" advice got an icon that opened the dating
- * app. Teaching people to install it would have taught them to install the
- * wrong thing.
+ * The install prompt, the platform guess, the service worker and the snooze.
  *
- * So there are two manifests now, and this module decides which one the page
- * is currently advertising. It swaps three things, because three different
- * platforms read three different places:
- *
- *   · <link rel="manifest">          Android/Chrome, and iOS 16.4+
- *   · <meta apple-mobile-web-app-title>  what iOS writes under the icon
- *   · <link rel="apple-touch-icon">  the icon iOS actually uses
- *
- * None of this is a build-time decision, because index.html is one static file
- * serving both halves of the product.
+ * Deliberately NOT in the main bundle. This module adds a
+ * `beforeinstallprompt` listener at import time, and a listener that calls
+ * preventDefault suppresses Chrome's install banner for whatever app the page
+ * is currently advertising. Loaded on a student page it would quietly kill the
+ * *student* app's install prompt — so it is only ever reached from the lazy
+ * `/partners` chunk, and the tag-swapping half lives in `pwaManifest.js`,
+ * which is pure DOM and safe to load anywhere.
  */
 
-const STUDENT = {
-  manifest: '/manifest.webmanifest',
-  appleTitle: 'Looseleaf',
-  appleIcon: '/apple-touch-icon.png',
-}
+export {
+  applyScannerManifest,
+  applyStudentManifest,
+  currentManifest,
+  onManifestChange,
+} from './pwaManifest'
 
-const SCANNER = {
-  manifest: '/scanner.webmanifest',
-  appleTitle: 'LL Scanner',
-  appleIcon: '/scanner-apple-touch-icon.png',
-}
-
-function setTags({ manifest, appleTitle, appleIcon }) {
-  if (typeof document === 'undefined') return
-  const link = document.querySelector('link[rel="manifest"]')
-  if (link && !link.href.endsWith(manifest)) link.setAttribute('href', manifest)
-
-  const title = document.querySelector('meta[name="apple-mobile-web-app-title"]')
-  if (title) title.setAttribute('content', appleTitle)
-
-  const icon = document.querySelector('link[rel="apple-touch-icon"]')
-  if (icon && !icon.href.endsWith(appleIcon)) icon.setAttribute('href', appleIcon)
-}
-
-/** Called on entering the partner subtree. */
-export function applyScannerManifest() {
-  setTags(SCANNER)
-}
-
-/** Called on leaving it, so the student app never offers to install a scanner. */
-export function applyStudentManifest() {
-  setTags(STUDENT)
-}
+import { currentManifest, onManifestChange } from './pwaManifest'
 
 /* ── is this already installed? ─────────────────────────────────────────────
  *
@@ -146,11 +113,33 @@ function announce() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
+    // ── Only ever capture a prompt for the scanner ──────────────────────────
+    //
+    // Chrome fires this against whichever manifest the page was advertising at
+    // the time, and the event stays usable long after the page has swapped to
+    // a different one. Capturing indiscriminately produced a real, reported
+    // bug: land on /partners/login (student manifest), walk into the
+    // dashboard (manifest swaps), press a button that says "Install the
+    // scanner" — and install the dating app, because the held event still
+    // pointed at the old manifest.
+    //
+    // Not calling preventDefault here is the other half of it: on any page
+    // that is *not* offering the scanner, Chrome should be left to do its
+    // normal thing rather than have its banner silently swallowed by us.
+    if (currentManifest() !== 'scanner') return
     e.preventDefault()
     deferredPrompt = e
     announce()
   })
   window.addEventListener('appinstalled', () => {
+    deferredPrompt = null
+    announce()
+  })
+
+  // Belt and braces for the same hazard: if the advertised app changes at all,
+  // anything we are holding is about the app we are no longer offering.
+  onManifestChange(() => {
+    if (!deferredPrompt) return
     deferredPrompt = null
     announce()
   })

@@ -1,7 +1,9 @@
+import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import Logo from '../brand/Logo'
 import ForPartners from './ForPartners'
 import TopMenu from '../nav/TopMenu'
+import { registerScannerWorker } from '../../lib/pwa'
 
 /**
  * The frame around the public partner pages.
@@ -12,6 +14,16 @@ import TopMenu from '../nav/TopMenu'
  * have arrived somewhere serious without feeling they have left.
  */
 export default function PartnerShell({ children, cta = true }) {
+  // Chrome only offers a real install where a service worker covers the
+  // manifest's start_url, and the login page is the most likely place for a
+  // member of staff to be told "put this on your phone" — so the worker is
+  // registered from the public partner pages as well as from the dashboard.
+  // Registering an existing worker is a no-op update check, so calling it from
+  // both costs nothing.
+  useEffect(() => {
+    registerScannerWorker()
+  }, [])
+
   return (
     <div className="min-h-screen bg-paper">
       <header className="sticky top-0 z-40 border-b border-rule/70 bg-paper/90 backdrop-blur-md">

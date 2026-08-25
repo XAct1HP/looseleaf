@@ -4,7 +4,7 @@
   "short_name": "Scanner",
   "description": "Scan a Loose Leaf Date Pass at the counter.",
   "start_url": "/partners/dashboard/scan",
-  "scope": "/partners",
+  "scope": "/partners/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#FFFDF8",

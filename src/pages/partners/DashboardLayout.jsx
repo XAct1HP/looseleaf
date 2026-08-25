@@ -12,7 +12,7 @@ import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
 import ForPartners from '../../components/partners/ForPartners'
 import { InstallLink } from '../../components/partners/InstallNudge'
-import { applyScannerManifest, registerScannerWorker } from '../../lib/pwa'
+import { registerScannerWorker } from '../../lib/pwa'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
@@ -73,20 +73,12 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  // ── Which app is this page offering to install? ──────────────────────────
-  //
-  // index.html is one static file serving both halves of the product, and its
-  // manifest describes the *student* app. Left alone, a member of staff who
-  // added this to their home screen got an icon called "Looseleaf" that opened
-  // the dating app — so the tags are swapped for the scanner's own manifest on
-  // the way in. Not reverted on the way out: leaving the dashboard means
-  // signing out or following a link back to /partners, and both of those
-  // remount the whole tree with a fresh document anyway.
-  //
-  // The worker is registered here rather than in main.jsx so a student never
-  // installs one at all.
+  // The manifest swap itself is route-level now (see ManifestForRoute in
+  // App.jsx) — doing it here missed /partners/login, which is precisely where
+  // somebody is standing when they add "the scanner" to their home screen.
+  // What stays here is the worker, registered from the partner chunk so a
+  // student never installs one at all.
   useEffect(() => {
-    applyScannerManifest()
     registerScannerWorker()
   }, [])
 
