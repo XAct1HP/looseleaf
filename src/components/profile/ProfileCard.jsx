@@ -22,6 +22,8 @@ export default function ProfileCard({
   person,
   onLike,
   onPass,
+  fit = null,
+  reasons = null,
   showPass = true,
   showOverlap = true,
   showMenu = true,
@@ -30,6 +32,16 @@ export default function ProfileCard({
   const { state, actions } = useStore()
   const me = state.me
   const overlap = useMemo(() => overlapWith(person, me), [person, me])
+
+  // In live mode the reasons come back from `compatibility_reasons()` with the
+  // person, because scoring is a pair function and the client has no second
+  // profile to compare against. In demo mode they are computed here. Either
+  // way they render as the same list.
+  const shownOverlap = useMemo(() => {
+    if (!reasons?.length) return overlap
+    if (overlap.lines.length) return overlap
+    return { ...overlap, lines: reasons.map((text) => ({ key: text, icon: 'spark', text })) }
+  }, [overlap, reasons])
 
   const [noteFor, setNoteFor] = useState(null) // { target, targetLabel, quote }
   const [showMutuals, setShowMutuals] = useState(false)
@@ -141,7 +153,17 @@ export default function ProfileCard({
         )}
       </header>
 
-      {showOverlap && <OverlapCard overlap={overlap} onSeeMutuals={() => setShowMutuals(true)} />}
+      {/* One card, not two. The fit and the overlap are the same fact told
+          twice — the number is the arithmetic, the lines are the arithmetic in
+          words — and stacking them meant reading "3 shared interests" and
+          "3 interests in common" one above the other. */}
+      {showOverlap && (
+        <OverlapCard
+          overlap={shownOverlap}
+          fit={fit}
+          onSeeMutuals={() => setShowMutuals(true)}
+        />
+      )}
 
       {promptAt(0)}
       {photoAt(1)}

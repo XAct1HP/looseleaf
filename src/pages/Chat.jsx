@@ -242,6 +242,7 @@ export default function Chat() {
             <div className="!mt-7">
               <DateNudge
                 conversationId={convo.id}
+                person={person}
                 reason={nudge.reason}
                 onShown={() => actions.noteNudgeShown(convo.id)}
                 onDismiss={() => {

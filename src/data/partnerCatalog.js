@@ -29,14 +29,25 @@ export const PARTNER_CATEGORIES = [
   { id: 'other', label: 'Somewhere else', emoji: '📍' },
 ]
 
+/**
+ * The vocabulary a business describes itself in — and the same vocabulary a
+ * student's "what's a good date?" answers resolve into, through
+ * `IDEAL_DATES[].spot` in data/catalog.js. A tag added here with no route from
+ * a student answer is one no couple can ever ask for; a student answer with no
+ * tag here is one no business can ever satisfy. Keep the two ends together.
+ */
 export const DATE_TYPE_TAGS = [
   { id: 'first-date', label: 'First date', emoji: '👋' },
   { id: 'coffee', label: 'Coffee', emoji: '☕' },
+  { id: 'brunch', label: 'Brunch', emoji: '🥞' },
   { id: 'dinner', label: 'Dinner', emoji: '🍽' },
   { id: 'drinks', label: 'Drinks', emoji: '🍻' },
   { id: 'dessert', label: 'Dessert', emoji: '🍨' },
   { id: 'fun', label: 'Something fun', emoji: '🎳' },
   { id: 'activity', label: 'Activity', emoji: '🎯' },
+  { id: 'games', label: 'Games', emoji: '🎲' },
+  { id: 'movie', label: 'A movie', emoji: '🎬' },
+  { id: 'live-music', label: 'Live music or a show', emoji: '🎶' },
   { id: 'outdoors', label: 'Outdoors', emoji: '🌳' },
   { id: 'late-night', label: 'Late night', emoji: '🌙' },
   { id: 'casual', label: 'Casual', emoji: '🧦' },

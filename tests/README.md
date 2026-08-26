@@ -99,3 +99,24 @@ invite the actual owner — but cannot promote themselves, and hands the account
 over automatically the moment an owner accepts. A manager who did *not*
 register the place holds nothing, and writing `settings` into `role_pages` by
 hand still gets neither of them anywhere.
+
+**Discover is chosen, not shuffled.** A campus of fifty shows five people a
+day, sixty shows six, a hundred shows ten, and five hundred still shows ten.
+Asking twice in a day is the same five rather than five more; deciding about
+somebody takes them out for good without pulling a replacement in the same day;
+the next day tops back up to five; and a day you never opened does not stack up
+to ten tomorrow. Preferences are checked **both ways** — somebody whose own
+settings rule you out is never spent out of your five.
+
+**Compatibility is fair to whoever answered least.** It means the same thing
+from either side, a pair with no survey between them still scores, answering
+the same way raises it and the opposite way lowers it, a middle answer is
+halfway to both ends rather than a disagreement, and an unanswered question is
+neither. Nothing that orders people mentions a table with a price on it —
+asserted against `pg_get_functiondef`, not by reading the source.
+
+**Nobody is sent somewhere they can't get into.** A 21+ bar is not suggested to
+a twenty-year-old, and not suggested at all to somebody who said no to drinks.
+Asking for nothing in particular suggests what the two of them both said they
+liked. A business naming who it suits can only remove itself from suggestions,
+never lift itself up them.

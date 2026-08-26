@@ -23,36 +23,12 @@ values (
 )
 on conflict (id) do nothing;
 
-insert into interests (id, label, emoji) values
-  ('live-music',    'Live music',    '🎶'),
-  ('football',      'Football',      '🏈'),
-  ('basketball',    'Basketball',    '🏀'),
-  ('hockey',        'Hockey',        '🏒'),
-  ('running',       'Running',       '🏃'),
-  ('gym',           'Gym',           '🏋️'),
-  ('skiing',        'Skiing',        '🎿'),
-  ('travel',        'Travel',        '✈️'),
-  ('photography',   'Photography',   '📷'),
-  ('cooking',       'Cooking',       '🍳'),
-  ('coffee',        'Coffee',        '☕'),
-  ('concerts',      'Concerts',      '🎤'),
-  ('cars',          'Cars',          '🚗'),
-  ('motorcycles',   'Motorcycles',   '🏍️'),
-  ('gaming',        'Gaming',        '🎮'),
-  ('art',           'Art',           '🎨'),
-  ('movies',        'Movies',        '🎬'),
-  ('reading',       'Reading',       '📚'),
-  ('thrifting',     'Thrifting',     '🧥'),
-  ('clubbing',      'Clubbing',      '🪩'),
-  ('hiking',        'Hiking',        '🥾'),
-  ('pickleball',    'Pickleball',    '🥒'),
-  ('golf',          'Golf',          '⛳'),
-  ('baking',        'Baking',        '🧁'),
-  ('dogs',          'Dogs',          '🐕'),
-  ('volunteering',  'Volunteering',  '🤝'),
-  ('theater',       'Theater',       '🎭'),
-  ('climbing',      'Climbing',      '🧗')
-on conflict (id) do nothing;
+--  The interest vocabulary moved into 20260828120000_compatibility.sql when it
+--  grew from 28 tags to ~110 with categories. It lives in a migration rather
+--  than here because `compatibility()` scores category overlap, so an interest
+--  with no category is a row the engine cannot use — and a seed file is
+--  optional in a way a migration is not. Nothing to do here; the migration has
+--  already inserted them, and re-running it updates labels in place.
 
 insert into prompt_catalog (category, text) values
   ('about',    'I’m weirdly competitive about...'),

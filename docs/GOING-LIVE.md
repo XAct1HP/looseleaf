@@ -21,9 +21,12 @@ still isn't.
 - **Campuses start closed.** A new campus opens at 50 finished profiles.
   Below that, people can sign up and build a profile, then land on a waitlist.
 
-Reference data — the campus list, the 28 interests, the 32 prompts, the 8 real
-Ann Arbor date spots — stays in `seed.sql`. That isn't fixture content; the app
-doesn't work without it.
+Reference data — the campus list, the 32 prompts, the 8 real Ann Arbor date
+spots — stays in `seed.sql`. That isn't fixture content; the app doesn't work
+without it. The interest vocabulary moved out of `seed.sql` and into
+`20260828120000_compatibility.sql` when it grew to ~110 grouped tags: an
+interest with no category is a row the matching engine cannot use, and a
+migration is not optional in the way a seed file is.
 
 ---
 
@@ -243,13 +246,37 @@ closed:
 - Chat, the date nudge, and date planning
 - Tonight, Double Date, Formals
 
-`get_deck` and `create_match` already exist in the database and are tested; the
-remaining work is client-side — replacing the demo branches in
-`src/state/store.jsx` and adding `services/live/discovery.js` and
+`get_deck` and `create_match` already exist in the database and are tested, and
+`services/live/discovery.js` now wraps the deck half. The remaining work is
+client-side: replacing the demo branches in `src/state/store.jsx` and adding
 `services/live/messages.js` alongside the existing live modules.
+
+Three things about the live deck that the demo does not make obvious, and that
+whoever finishes the port needs to know:
+
+- **Reading the deck assigns it.** `get_deck()` writes a `deck_views` row for
+  everybody it returns, and those people are never offered again. So it is not
+  a query to call on a prefetch, on a hover, or twice on mount — call it when
+  somebody has actually opened Discover. Twice in a day is harmless; twice
+  across two days is not.
+- **How many is not the client's decision.** `deck_size_for()` is ten percent
+  of the campus capped at ten, in the database, where the tests can see it.
+- **Liking or passing must call `mark_deck_acted()`**, or the person stays in
+  the deck. `services/live/discovery.js` has it; wire it into whatever replaces
+  the demo `like`/`pass` actions.
 
 **Don't open a campus before that's done.** Fifty people would arrive to a
 Discover tab running on fixtures.
+
+---
+
+## How Discover chooses
+
+`20260828120000_compatibility.sql`, and `docs/MATCHING.md` for the whole of it.
+The short version: five people a day on a campus of fifty, ordered by
+`compatibility()`, and a person you decided about never returns. Preferences
+are checked **both ways** — the old deck spent a scarce daily allowance showing
+people whose own settings excluded you.
 
 ---
 

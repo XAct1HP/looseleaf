@@ -74,7 +74,11 @@ export async function loadMe(userId) {
       profile_preferences ( interested_in, min_age, max_age, intentions ),
       profile_photos ( position, storage_path, scene ),
       profile_prompts ( position, question, answer ),
-      profile_interests ( interest_id )
+      profile_interests ( interest_id ),
+      profile_survey (
+        ideal_dates, budget_level, max_walk_minutes, drinks,
+        going_out, chronotype, planning, group_size, texting, conversation
+      )
     `
     )
     .eq('id', userId)
@@ -119,6 +123,7 @@ export async function loadMe(userId) {
       .sort((a, b) => a.position - b.position)
       .map((p) => ({ q: p.question, a: p.answer })),
     interests: (data.profile_interests ?? []).map((i) => i.interest_id),
+    survey: surveyToUi(data.profile_survey),
     prefs: {
       interestedIn: prefsToUi(prefs.interested_in ?? []),
       ageRange: [prefs.min_age ?? 18, prefs.max_age ?? 30],
@@ -195,6 +200,7 @@ export async function saveOnboarding(userId, email, draft, { onProgress } = {}) 
 
   onProgress?.('Saving your interests')
   await saveInterests(userId, draft.interests ?? [])
+  await saveSurvey(userId, draft.survey ?? {})
 
   // Last, so a half-finished profile is never shown to anyone.
   const { error: doneError } = await supabase
@@ -264,6 +270,54 @@ export async function savePrompts(userId, prompts) {
   }
 }
 
+/**
+ * The compatibility survey, both ways.
+ *
+ * Snake in the database, camel in the app for the two multi-word fields, and
+ * the six either/ors keep their snake_case ids in both — those ids are the
+ * question's name, they appear in `SURVEY` in data/catalog.js, and renaming
+ * them at this boundary would mean two vocabularies for one question.
+ */
+export function surveyToUi(row) {
+  const s = Array.isArray(row) ? row[0] : row
+  if (!s) return {}
+  return {
+    idealDates: s.ideal_dates ?? [],
+    budgetLevel: s.budget_level ?? null,
+    maxWalkMinutes: s.max_walk_minutes ?? null,
+    drinks: s.drinks ?? null,
+    going_out: s.going_out ?? null,
+    chronotype: s.chronotype ?? null,
+    planning: s.planning ?? null,
+    group_size: s.group_size ?? null,
+    texting: s.texting ?? null,
+    conversation: s.conversation ?? null,
+  }
+}
+
+const nul = (v) => (v === undefined || v === '' ? null : v)
+
+export async function saveSurvey(userId, survey) {
+  const s = survey ?? {}
+  const { error } = await supabase.from('profile_survey').upsert(
+    {
+      profile_id: userId,
+      ideal_dates: s.idealDates ?? [],
+      budget_level: nul(s.budgetLevel),
+      max_walk_minutes: nul(s.maxWalkMinutes),
+      drinks: nul(s.drinks),
+      going_out: nul(s.going_out),
+      chronotype: nul(s.chronotype),
+      planning: nul(s.planning),
+      group_size: nul(s.group_size),
+      texting: nul(s.texting),
+      conversation: nul(s.conversation),
+    },
+    { onConflict: 'profile_id' }
+  )
+  if (error) throw new Error(error.message)
+}
+
 export async function saveInterests(userId, interests) {
   await supabase.from('profile_interests').delete().eq('profile_id', userId)
   if (interests.length) {
@@ -314,6 +368,7 @@ export async function updateProfile(userId, patch) {
   if (patch.photos) await savePhotos(userId, patch.photos)
   if (patch.prompts) await savePrompts(userId, patch.prompts)
   if (patch.interests) await saveInterests(userId, patch.interests)
+  if (patch.survey) await saveSurvey(userId, patch.survey)
 
   return loadMe(userId)
 }

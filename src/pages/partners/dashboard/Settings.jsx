@@ -5,6 +5,7 @@ import { Field, TextInput, TextArea, TagPicker, DayPicker } from '../../../compo
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { can } from '../../../lib/partnerBilling'
 import RoleAccess from '../../../components/partners/RoleAccess'
+import { InterestPicker } from '../../../components/profile/MatchingFields'
 import { InstallLink } from '../../../components/partners/InstallNudge'
 import * as partners from '../../../services/partners'
 import { DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
@@ -44,6 +45,7 @@ export default function Settings() {
           t ?? {
             date_types: [],
             vibes: [],
+            interests: [],
             price_levels: [],
             days_of_week: [0, 1, 2, 3, 4, 5, 6],
             start_time: '',
@@ -62,6 +64,7 @@ export default function Settings() {
       await partners.saveTargeting(partner.id, {
         date_types: target.date_types ?? [],
         vibes: target.vibes ?? [],
+        interests: target.interests ?? [],
         price_levels: target.price_levels ?? [],
         days_of_week: target.days_of_week?.length ? target.days_of_week : [0, 1, 2, 3, 4, 5, 6],
         start_time: target.start_time || null,
@@ -164,6 +167,22 @@ export default function Settings() {
                 options={VIBE_TAGS}
                 value={target.vibes ?? []}
                 onChange={(v) => setTarget({ ...target, vibes: v })}
+              />
+            </Field>
+
+            {/* Students describe themselves with these too, which is what
+                makes this worth asking: a climbing gym does not want to be
+                somebody's dinner suggestion, and it knows that about itself
+                better than we do. It narrows like everything else here — a
+                business ticking every box is a business that has said
+                nothing, not one that has bought something. */}
+            <Field
+              label="Only for people into…"
+              hint="Leave empty for everyone. Ticking things here can only remove you from suggestions, never add you to one."
+            >
+              <InterestPicker
+                value={target.interests ?? []}
+                onChange={(v) => setTarget({ ...target, interests: v })}
               />
             </Field>
 

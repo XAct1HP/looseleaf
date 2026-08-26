@@ -6,7 +6,8 @@ import Sheet from '../components/ui/Sheet'
 import { SelectChip } from '../components/ui/Chip'
 import { IconBack } from '../components/ui/Icons'
 import PhotoSlot from '../components/profile/PhotoSlot'
-import { INTENTIONS, INTERESTS, PROMPT_CATEGORIES, UNIVERSITY } from '../data/catalog'
+import { INTENTIONS, PROMPT_CATEGORIES, UNIVERSITY } from '../data/catalog'
+import { InterestPicker, SurveyStep } from '../components/profile/MatchingFields'
 import { useStore } from '../state/store'
 import { Underline } from '../components/brand/Doodles'
 
@@ -125,24 +126,21 @@ export default function EditProfile() {
         </Block>
 
         <Block id="interests" title="Interests">
-          <div className="flex flex-wrap gap-2">
-            {INTERESTS.map((i) => (
-              <SelectChip
-                key={i.id}
-                selected={draft.interests?.includes(i.id)}
-                onClick={() =>
-                  set({
-                    interests: draft.interests?.includes(i.id)
-                      ? draft.interests.filter((x) => x !== i.id)
-                      : [...(draft.interests ?? []), i.id],
-                  })
-                }
-              >
-                <span aria-hidden="true">{i.emoji}</span>
-                {i.label}
-              </SelectChip>
-            ))}
-          </div>
+          <InterestPicker
+            value={draft.interests ?? []}
+            onChange={(interests) => set({ interests })}
+          />
+        </Block>
+
+        {/* The same step onboarding shows, in the same words — anybody who
+            skipped it there finishes it here, and a question that gets asked
+            two different ways gets two different answers. */}
+        <Block id="matching" title="How you like to date">
+          <p className="-mt-1 mb-5 text-[13.5px] leading-relaxed text-graphite">
+            These decide who Discover shows you, and where we suggest the two of you go. Answer as
+            many or as few as you like.
+          </p>
+          <SurveyStep survey={draft.survey} set={(survey) => set({ survey })} />
         </Block>
 
         <Block id="campus" title="Campus life">

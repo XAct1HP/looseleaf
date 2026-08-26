@@ -161,7 +161,7 @@ export function spots() {
 /* ── ranking ────────────────────────────────────────────────────────────── */
 //  Deliberately the same shape as the SQL. If you change one, change both.
 
-const K = { type: 34, vibeEach: 6, vibeCap: 18, price: 14, walk: 16, open: 8, interest: 10, partnerCap: 10 }
+const K = { type: 34, vibeEach: 6, vibeCap: 18, price: 14, walk: 16, open: 8, interest: 10, couple: 12, partnerCap: 10 }
 
 /**
  * The fit percentage is scored against what could actually have been earned
@@ -169,10 +169,11 @@ const K = { type: 34, vibeEach: 6, vibeCap: 18, price: 14, walk: 16, open: 8, in
  * unreachable, and dividing by a ceiling nobody could hit would stamp a
  * confident suggestion with "49% fit".
  */
-function ceilingFor({ dateType, vibes, maxPrice }) {
+function ceilingFor({ dateType, vibes, maxPrice, wanted = [] }) {
   return (
     (dateType ? K.type : K.type / 2) +
     (vibes.length ? K.vibeCap : 0) +
+    (wanted.length ? K.couple : 0) +
     (maxPrice == null ? K.price / 2 : K.price) +
     K.walk +
     K.open +
@@ -181,7 +182,7 @@ function ceilingFor({ dateType, vibes, maxPrice }) {
   )
 }
 
-function score(spot, { dateType, vibes, maxPrice, interests }) {
+function score(spot, { dateType, vibes, maxPrice, interests, wanted = [] }) {
   let n = 0
 
   n += dateType ? K.type : K.type / 2
@@ -205,6 +206,12 @@ function score(spot, { dateType, vibes, maxPrice, interests }) {
   const shared = [...spot.dateTypes, ...spot.vibes].filter((t) => interests.includes(t)).length
   n += Math.min(K.interest, 2 * shared)
 
+  // What the two of them both call a good date. Mirrors `k_couple` in
+  // recommend_date_spots — the reason "surprise us" is a personal answer.
+  if (wanted.length) {
+    n += Math.min(K.couple, 6 * spot.dateTypes.filter((t) => wanted.includes(t)).length)
+  }
+
   return n
 }
 
@@ -218,16 +225,29 @@ export function recommend({
   vibes = [],
   maxPrice = null,
   interests = [],
+  wanted = [],
+  noDrinks = false,
+  minAge = null,
   dismissed = [],
   limit = 6,
 } = {}) {
   const offers = offersByPartner()
-  const ceiling = ceilingFor({ dateType, vibes, maxPrice })
+  const ceiling = ceilingFor({ dateType, vibes, maxPrice, wanted })
 
   return DEMO_SPOTS.filter((s) => !dismissed.includes(s.id))
     .filter((s) => !dateType || s.dateTypes.includes(dateType))
+    // If either of them said no to drinks, a drinks-only place is not a
+    // suggestion, it is an awkward evening.
+    // Nobody is sent somewhere they cannot get into.
+    .filter((s) => s.minAge == null || minAge == null || minAge >= s.minAge)
+    .filter(
+      (s) =>
+        !noDrinks ||
+        !s.dateTypes.includes('drinks') ||
+        s.dateTypes.some((t) => !['drinks', 'late-night', 'romantic', 'casual'].includes(t))
+    )
     .map((s) => {
-      const relevance = score(s, { dateType, vibes, maxPrice, interests })
+      const relevance = score(s, { dateType, vibes, maxPrice, interests, wanted })
       const total = relevance + boost(s, offers)
       return {
         ...s,

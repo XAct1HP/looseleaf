@@ -32,7 +32,7 @@ export const connectionById = (id) => CONNECTIONS.find((c) => c.id === id)
 
 const P = (q, a) => ({ q, a })
 
-export const PEOPLE = [
+const PEOPLE_BASE = [
   {
     id: 'p-emma',
     firstName: 'Emma',
@@ -420,6 +420,139 @@ export const PEOPLE = [
   },
 ]
 
+/**
+ * ── The survey, for the invented campus ─────────────────────────────────────
+ *
+ * Kept as a map rather than eighteen more lines inside each person, because
+ * this is exactly the sort of data that gets added again later — a new
+ * question means one row here, not eighteen edits.
+ *
+ * Answers use the same tokens as `profile_survey` and `SURVEY` in
+ * data/catalog.js. `extra` is a handful of interests from the wider catalogue
+ * so the demo profiles show the categories a real one would.
+ */
+const SURVEYS = {
+  'p-emma': {
+    extra: ['farmers-market', 'journaling', 'plants', 'brunch'],
+    survey: { idealDates: ['coffee', 'walk', 'brunch'], budgetLevel: 2, drinks: 'sometimes',
+      going_out: 'homebody', chronotype: 'early', planning: 'planner',
+      group_size: 'one-on-one', texting: 'texter', conversation: 'deep' },
+  },
+  'p-dev': {
+    extra: ['board-games', 'startups', 'boba', 'anime'],
+    survey: { idealDates: ['coffee', 'games', 'activity'], budgetLevel: 2, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'night', planning: 'planner',
+      group_size: 'one-on-one', texting: 'either', conversation: 'light' },
+  },
+  'p-maya': {
+    extra: ['museums', 'ceramics', 'vinyl', 'long-walks'],
+    survey: { idealDates: ['coffee', 'walk', 'movie'], budgetLevel: 1, drinks: 'never',
+      going_out: 'homebody', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'one-on-one', texting: 'in-person', conversation: 'deep' },
+  },
+  'p-jordan': {
+    extra: ['run-club', 'tailgating', 'bbq', 'podcasts'],
+    survey: { idealDates: ['activity', 'outdoors', 'dinner'], budgetLevel: 2, drinks: 'happy-to',
+      going_out: 'out-out', chronotype: 'early', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'either', conversation: 'light' },
+  },
+  'p-lauren': {
+    extra: ['pilates', 'thrifting', 'rom-coms', 'boba'],
+    survey: { idealDates: ['coffee', 'dessert', 'movie'], budgetLevel: 2, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'either', planning: 'planner',
+      group_size: 'one-on-one', texting: 'texter', conversation: 'light' },
+  },
+  'p-noah': {
+    extra: ['camping', 'fishing', 'craft-beer', 'documentaries'],
+    survey: { idealDates: ['outdoors', 'walk', 'drinks'], budgetLevel: 1, drinks: 'happy-to',
+      going_out: 'homebody', chronotype: 'early', planning: 'spontaneous',
+      group_size: 'one-on-one', texting: 'in-person', conversation: 'deep' },
+  },
+  'p-sana': {
+    extra: ['research', 'tea', 'reading', 'chess'],
+    survey: { idealDates: ['coffee', 'study', 'walk'], budgetLevel: 1, drinks: 'never',
+      going_out: 'homebody', chronotype: 'night', planning: 'planner',
+      group_size: 'one-on-one', texting: 'either', conversation: 'deep' },
+  },
+  'p-tyler': {
+    extra: ['lifting', 'college-sports', 'fantasy-sports', 'house-parties'],
+    survey: { idealDates: ['drinks', 'activity', 'late-night'], budgetLevel: 2, drinks: 'happy-to',
+      going_out: 'out-out', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'either', conversation: 'light' },
+  },
+  'p-chloe': {
+    extra: ['painting', 'museums', 'poetry', 'plants'],
+    survey: { idealDates: ['coffee', 'walk', 'live'], budgetLevel: 1, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'one-on-one', texting: 'texter', conversation: 'deep' },
+  },
+  'p-andre': {
+    extra: ['making-music', 'karaoke', 'sushi', 'road-trips'],
+    survey: { idealDates: ['live', 'dinner', 'late-night'], budgetLevel: 3, drinks: 'happy-to',
+      going_out: 'out-out', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'texter', conversation: 'light' },
+  },
+  'p-riley': {
+    extra: ['climbing', 'national-parks', 'photography', 'foodie'],
+    survey: { idealDates: ['outdoors', 'activity', 'brunch'], budgetLevel: 2, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'early', planning: 'planner',
+      group_size: 'either', texting: 'either', conversation: 'either' },
+  },
+  'p-grace': {
+    extra: ['volunteering', 'baking', 'true-crime', 'cats'],
+    survey: { idealDates: ['coffee', 'dessert', 'walk'], budgetLevel: 1, drinks: 'never',
+      going_out: 'homebody', chronotype: 'early', planning: 'planner',
+      group_size: 'one-on-one', texting: 'texter', conversation: 'deep' },
+  },
+  'p-omar': {
+    extra: ['debate', 'history', 'languages', 'trivia'],
+    survey: { idealDates: ['dinner', 'games', 'coffee'], budgetLevel: 3, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'night', planning: 'planner',
+      group_size: 'either', texting: 'in-person', conversation: 'deep' },
+  },
+  'p-hana': {
+    extra: ['dance', 'edm', 'fashion', 'boba'],
+    survey: { idealDates: ['live', 'dessert', 'activity'], budgetLevel: 2, drinks: 'happy-to',
+      going_out: 'out-out', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'texter', conversation: 'light' },
+  },
+  'p-eli': {
+    extra: ['woodworking', 'diy', 'bbq', 'dogs'],
+    survey: { idealDates: ['outdoors', 'dinner', 'walk'], budgetLevel: 2, drinks: 'sometimes',
+      going_out: 'homebody', chronotype: 'early', planning: 'either',
+      group_size: 'one-on-one', texting: 'in-person', conversation: 'either' },
+  },
+  'p-zoe': {
+    extra: ['yoga', 'meditation', 'farmers-market', 'journaling'],
+    survey: { idealDates: ['walk', 'coffee', 'outdoors'], budgetLevel: 1, drinks: 'never',
+      going_out: 'homebody', chronotype: 'early', planning: 'either',
+      group_size: 'one-on-one', texting: 'either', conversation: 'deep' },
+  },
+  'p-marisol': {
+    extra: ['cooking', 'spicy-food', 'dance', 'comedy'],
+    survey: { idealDates: ['dinner', 'live', 'dessert'], budgetLevel: 3, drinks: 'happy-to',
+      going_out: 'out-out', chronotype: 'night', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'texter', conversation: 'light' },
+  },
+  'p-nate': {
+    extra: ['intramurals', 'arcade', 'gaming', 'pickleball'],
+    survey: { idealDates: ['activity', 'games', 'fun'], budgetLevel: 1, drinks: 'sometimes',
+      going_out: 'either', chronotype: 'either', planning: 'spontaneous',
+      group_size: 'big-group', texting: 'either', conversation: 'light' },
+  },
+}
+
+/**
+ * The demo campus, with its survey answers folded in. Anyone without an entry
+ * above simply has no answers — which is a state the engine has to handle
+ * anyway, so having one or two of them here is a feature.
+ */
+export const PEOPLE = PEOPLE_BASE.map((p) => ({
+  ...p,
+  interests: Array.from(new Set([...(p.interests ?? []), ...(SURVEYS[p.id]?.extra ?? [])])),
+  survey: SURVEYS[p.id]?.survey ?? {},
+}))
+
 export const personById = (id) => PEOPLE.find((p) => p.id === id)
 
 /** The signed-in demo user. */
@@ -454,5 +587,17 @@ export const CURRENT_USER = {
     interestedIn: ['women'],
     ageRange: [18, 24],
     intentions: ['relationship', 'dating', 'seeing'],
+  },
+  survey: {
+    idealDates: ['coffee', 'walk', 'dinner'],
+    budgetLevel: 2,
+    maxWalkMinutes: 20,
+    drinks: 'sometimes',
+    going_out: 'either',
+    chronotype: 'night',
+    planning: 'spontaneous',
+    group_size: 'one-on-one',
+    texting: 'texter',
+    conversation: 'deep',
   },
 }

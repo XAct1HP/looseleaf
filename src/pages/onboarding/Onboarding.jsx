@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StepShell from './StepShell'
 import { SelectChip, Chip } from '../../components/ui/Chip'
+import { InterestPicker, SurveyStep } from '../../components/profile/MatchingFields'
 import Portrait, { SCENE_KEYS } from '../../components/brand/Portrait'
 import Sheet from '../../components/ui/Sheet'
 import { IconCheck } from '../../components/ui/Icons'
@@ -9,10 +10,10 @@ import PhotoSlot from '../../components/profile/PhotoSlot'
 import { isDemo } from '../../services/backend'
 import { ageFrom } from '../../services/live/profiles'
 import { Star, HandHeart } from '../../components/brand/Doodles'
-import { INTENTIONS, INTERESTS, PROMPT_CATEGORIES, UNIVERSITY } from '../../data/catalog'
+import { INTENTIONS, PROMPT_CATEGORIES, UNIVERSITY } from '../../data/catalog'
 import { useStore } from '../../state/store'
 
-const TOTAL = 8
+const TOTAL = 9
 
 /* ------------------------------------------------------------- step 1 -- */
 
@@ -445,32 +446,18 @@ function Prompts({ draft, set }) {
 /* ------------------------------------------------------------- step 7 -- */
 
 function Interests({ draft, set }) {
-  const toggle = (id) =>
-    set({
-      interests: draft.interests.includes(id)
-        ? draft.interests.filter((x) => x !== id)
-        : [...draft.interests, id],
-    })
-
   return (
     <>
-      <div className="flex flex-wrap gap-2">
-        {INTERESTS.map((i) => (
-          <SelectChip key={i.id} selected={draft.interests.includes(i.id)} onClick={() => toggle(i.id)}>
-            <span aria-hidden="true">{i.emoji}</span>
-            {i.label}
-          </SelectChip>
-        ))}
-      </div>
+      <InterestPicker value={draft.interests} onChange={(interests) => set({ interests })} />
       <p className="mt-6 flex items-center gap-2 px-1 text-[13px] text-mist">
         <HandHeart size={15} className="text-coral" />
-        {draft.interests.length} picked — shared ones get highlighted on profiles.
+        {draft.interests.length} picked — these are the biggest single thing we match on.
       </p>
     </>
   )
 }
 
-/* ------------------------------------------------------------- step 8 -- */
+/* ------------------------------------------------------------- step 9 -- */
 
 function Review({ draft }) {
   // If the photo can't be shown for any reason, this falls back to the
@@ -546,6 +533,7 @@ export default function Onboarding() {
     photos: me.photos ?? [],
     prompts: me.prompts ?? [],
     interests: me.interests ?? [],
+    survey: me.survey ?? {},
   })
 
   const set = (patch) => setDraft((d) => ({ ...d, ...patch }))
@@ -629,11 +617,17 @@ export default function Onboarding() {
     },
     7: {
       title: 'What are you into?',
-      subtitle: 'Pick whatever’s true. Shared interests show up as overlap.',
+      subtitle: 'Pick whatever’s true. This is the biggest single thing we match on.',
       node: <Interests draft={draft} set={set} />,
       can: draft.interests.length >= 3,
     },
     8: {
+      title: 'What does a good date look like?',
+      subtitle: 'This is what we use to pick who you see, and where we suggest you go.',
+      node: <SurveyStep survey={draft.survey} set={(survey) => set({ survey })} />,
+      can: true,
+    },
+    9: {
       title: 'Here’s how you look.',
       subtitle: null,
       node: <Review draft={draft} />,
@@ -655,7 +649,7 @@ export default function Onboarding() {
       nextLabel={
         step === TOTAL ? (saving ? `${saving}…` : isDemo ? 'Meet your campus' : 'Finish') : 'Continue'
       }
-      skip={step === 4 || step === 7 ? { label: 'Skip', onClick: next } : null}
+      skip={step === 4 || step === 7 || step === 8 ? { label: 'Skip', onClick: next } : null}
     >
       {current.node}
       {saveError && (

@@ -10,6 +10,7 @@ import RailCard from '../components/common/RailCard'
 import { useRail } from '../components/nav/AppLayout'
 import { useStore } from '../state/store'
 import { intentionById } from '../data/catalog'
+import { surveyCompleteness } from '../lib/compatibility'
 import { IconEye, IconChevron, IconSettings, IconShield, IconPeople, IconSpark } from '../components/ui/Icons'
 import * as staff from '../services/staff'
 import * as mutualsApi from '../services/mutuals'
@@ -96,6 +97,39 @@ function PassesRow() {
       {live > 0 && (
         <span className="rounded-full bg-moss px-2 py-0.5 text-[11px] font-bold text-white">{live}</span>
       )}
+      <IconChevron size={16} className="text-mist" />
+    </Link>
+  )
+}
+
+/**
+ * ── Finish the bit that does the matching ───────────────────────────────────
+ *
+ * The survey is skippable during signup, which is the right call — it is the
+ * tenth screen of a signup flow and nobody should lose a profile over it. This
+ * is where it gets asked for the second time, once somebody has seen what
+ * Discover actually is, and it says what it is for rather than nagging.
+ *
+ * It disappears the moment the answers are in, and it never appears at all for
+ * somebody who answered during signup.
+ */
+function MatchingNudge({ me }) {
+  const done = surveyCompleteness(me)
+  if (done >= 0.6) return null
+
+  return (
+    <Link
+      to="/app/profile/edit#matching"
+      className="mt-3 flex items-center gap-3 rounded-card border border-coral/25 bg-coral-wash/60 px-5 py-4 text-[15px] font-medium text-navy hover:bg-coral-wash"
+    >
+      <IconSpark size={20} className="text-coral" />
+      <span className="flex-1">
+        {done === 0 ? 'Get better matches' : 'Finish your match questions'}
+        <span className="mt-0.5 block text-[12.5px] font-normal leading-relaxed text-graphite">
+          A few quick questions about how you like to date. They decide who Discover shows you, and
+          where we suggest the two of you go.
+        </span>
+      </span>
       <IconChevron size={16} className="text-mist" />
     </Link>
   )
@@ -310,6 +344,7 @@ export default function Profile() {
         </Section>
       </div>
 
+      <MatchingNudge me={me} />
       <MutualsRow />
       <PassesRow />
 

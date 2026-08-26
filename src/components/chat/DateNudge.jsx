@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { IconX } from '../ui/Icons'
 import { Star } from '../brand/Doodles'
 import DateSpotCard from '../dates/DateSpotCard'
 import * as dates from '../../services/dates'
+import { coupleContext } from '../../lib/compatibility'
+import { useStore } from '../../state/store'
 
 /**
  * ── "You two might like this 👀" ────────────────────────────────────────────
@@ -24,7 +26,10 @@ import * as dates from '../../services/dates'
  *     is nothing good to suggest. A card that pops in mid-scroll and shoves the
  *     messages down is the exact texture of an ad.
  */
-export default function DateNudge({ conversationId, reason, onPlan, onDismiss, onShown }) {
+export default function DateNudge({ conversationId, person, reason, onPlan, onDismiss, onShown }) {
+  const { state: store } = useStore()
+  const couple = useMemo(() => coupleContext(store.me, person), [store.me, person])
+
   const [spot, setSpot] = useState(null)
   const [pool, setPool] = useState([])
   const [state, setState] = useState('loading')
@@ -32,7 +37,7 @@ export default function DateNudge({ conversationId, reason, onPlan, onDismiss, o
   useEffect(() => {
     let live = true
     dates
-      .recommend({ conversationId, surface: 'chat', limit: 4 })
+      .recommend({ conversationId, surface: 'chat', limit: 4, ...couple })
       .then((list) => {
         if (!live) return
         if (!list.length) {
@@ -55,7 +60,7 @@ export default function DateNudge({ conversationId, reason, onPlan, onDismiss, o
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId])
+  }, [conversationId, couple])
 
   if (state !== 'ready' || !spot) return null
 

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { DATA_MODE, isDemo, loadDemo, supabase, auth, profiles as profileApi } from '../services/backend'
 import { PEOPLE, personById } from '../data/people'
+import { compatibility } from '../lib/compatibility'
 
 /**
  * One store, two modes.
@@ -34,6 +35,10 @@ const EMPTY = {
   me: null,
   campus: null,
   seen: [],
+  // Today's assignment, mirroring `deck_views` + `deck_size_for()`. Kept in
+  // state rather than recomputed on every render, because a deck that
+  // recomputes is a deck that refills itself — see `ensureDeck` below.
+  deck: { date: null, assignedCount: 0, ids: [] },
   outgoing: [],
   incoming: [],
   matches: [],
@@ -69,6 +74,9 @@ function reducer(state, action) {
 
     case 'prefs':
       return { ...state, me: { ...state.me, prefs: { ...state.me.prefs, ...action.patch } } }
+
+    case 'deck-assign':
+      return { ...state, deck: action.deck }
 
     case 'pass':
       return { ...state, seen: [...state.seen, action.personId] }
@@ -328,6 +336,7 @@ export function StoreProvider({ children }) {
                 photos: (draft.photos ?? []).filter(Boolean),
                 prompts: (draft.prompts ?? []).filter((p) => p?.a?.trim()),
                 interests: draft.interests,
+                survey: draft.survey ?? {},
                 intention: draft.intentions?.[0] ?? 'seeing',
                 prefs: {
                   interestedIn: draft.interestedIn,
@@ -381,6 +390,60 @@ export function StoreProvider({ children }) {
       },
 
       /* ---- discovery (demo only for now) ---- */
+
+      /**
+       * Hand out today's people, once.
+       *
+       * The demo's counterpart to `get_deck()` writing `deck_views`, and it
+       * exists for the same reason: a deck that is recomputed from "everyone
+       * left, best first" every render is not a deck, it is an infinite scroll
+       * with a slice on the end — pass on somebody and the next-best person
+       * simply slides up to take their place, and the day never ends.
+       *
+       * So the day's people are chosen once and remembered. Unacted ones roll
+       * over rather than expiring, and the top-up is what is capped per day,
+       * not the pile.
+       */
+      ensureDeck: () => {
+        if (!isDemo || !state.me) return
+        const today = new Date().toISOString().slice(0, 10)
+        const size = DEMO_DECK_SIZE
+
+        const decided = new Set([
+          ...state.seen,
+          ...state.blocked,
+          ...state.matches.map((m) => m.personId),
+        ])
+        const pending = (state.deck.ids ?? []).filter((id) => !decided.has(id))
+        const assignedToday = state.deck.date === today ? state.deck.assignedCount ?? 0 : 0
+        const room = Math.min(size - assignedToday, size - pending.length)
+
+        if (room <= 0) {
+          if (state.deck.date === today && pending.length === state.deck.ids.length) return
+          dispatch({
+            type: 'deck-assign',
+            deck: { date: today, assignedCount: assignedToday, ids: pending },
+          })
+          return
+        }
+
+        const held = new Set(pending)
+        const fresh = eligibleFor(state)
+          .filter((p) => !held.has(p.id))
+          .map((p) => ({ id: p.id, fit: compatibility(state.me, p).fit }))
+          .sort((a, b) => b.fit - a.fit)
+          .slice(0, room)
+          .map((p) => p.id)
+
+        dispatch({
+          type: 'deck-assign',
+          deck: {
+            date: today,
+            assignedCount: assignedToday + fresh.length,
+            ids: [...pending, ...fresh],
+          },
+        })
+      },
 
       pass: (personId) => {
         if (!isDemo) return notLiveYet('Discover')
@@ -531,22 +594,92 @@ export function useStore() {
  * Returning the demo people here would put invented students in front of a
  * real person, which is the one thing this must never do.
  */
+/**
+ * How many people a day. Ten percent of the campus, capped at ten — the same
+ * arithmetic as `deck_size_for()` in 20260828120000.
+ *
+ * The demo campus is eighteen invented people standing in for a real one, and
+ * ten percent of eighteen is two, which would demonstrate the pacing rule by
+ * making the product look broken. So the demo floors at five: five is what a
+ * real campus actually shows on the day it opens at fifty, which is the
+ * behaviour worth demonstrating.
+ */
+export const DECK_SIZE_CAP = 10
+export function deckSizeFor(members) {
+  return Math.max(1, Math.min(DECK_SIZE_CAP, Math.round(members / 10)))
+}
+const DEMO_DECK_SIZE = Math.max(5, deckSizeFor(PEOPLE.length))
+
+/**
+ * Everyone this person could ever be shown — preferences, blocks and what has
+ * already been decided about. A filter, never a score. Mirrors
+ * `deck_candidates()`, minus the half about *their* preferences, which the
+ * invented campus has no answers for.
+ */
+function eligibleFor(state) {
+  const decided = new Set([
+    ...state.seen,
+    ...state.blocked,
+    ...state.matches.map((m) => m.personId),
+  ])
+  const wants = state.me?.prefs?.interestedIn ?? []
+  const [minAge, maxAge] = state.me?.prefs?.ageRange ?? [18, 30]
+  const genderOk = (p) =>
+    wants.length === 0 ||
+    wants.includes('everyone') ||
+    (wants.includes('women') && p.gender === 'woman') ||
+    (wants.includes('men') && p.gender === 'man') ||
+    (wants.includes('nonbinary') && p.gender === 'nonbinary')
+
+  return PEOPLE.filter(
+    (p) => !decided.has(p.id) && genderOk(p) && p.age >= minAge && p.age <= maxAge
+  )
+}
+
+/**
+ * Today's deck: the people already assigned, scored and in order. It reads the
+ * assignment rather than choosing — `actions.ensureDeck()` chooses, once, the
+ * same way `get_deck()` does.
+ */
 export function useDeck() {
   const { state } = useStore()
   return useMemo(() => {
     if (!isDemo) return []
-    const excluded = new Set([...state.seen, ...state.blocked, ...state.matches.map((m) => m.personId)])
-    const wants = state.me?.prefs?.interestedIn ?? []
-    const [minAge, maxAge] = state.me?.prefs?.ageRange ?? [18, 30]
-    const genderOk = (p) =>
-      wants.length === 0 ||
-      wants.includes('everyone') ||
-      (wants.includes('women') && p.gender === 'woman') ||
-      (wants.includes('men') && p.gender === 'man') ||
-      (wants.includes('nonbinary') && p.gender === 'nonbinary')
+    const decided = new Set([
+      ...state.seen,
+      ...state.blocked,
+      ...state.matches.map((m) => m.personId),
+    ])
+    return (state.deck.ids ?? [])
+      .filter((id) => !decided.has(id))
+      .map((id) => personById(id))
+      .filter(Boolean)
+      .map((p) => ({ ...p, ...compatibility(state.me, p) }))
+      .sort((a, b) => b.fit - a.fit)
+  }, [state.deck, state.seen, state.blocked, state.matches, state.me])
+}
 
-    return PEOPLE.filter((p) => !excluded.has(p.id) && genderOk(p) && p.age >= minAge && p.age <= maxAge)
-  }, [state.seen, state.blocked, state.matches, state.me])
+/**
+ * What the Discover page needs to say something true when it is empty —
+ * "that's everyone for today" and "there is nobody left on this campus for
+ * you" are different sentences, and saying the first when the second is true
+ * sends somebody back tomorrow to the same empty screen. Mirrors
+ * `deck_status()`.
+ */
+export function useDeckStatus() {
+  const { state } = useStore()
+  return useMemo(() => {
+    if (!isDemo) {
+      return { dailySize: 0, shownToday: 0, poolLeft: 0, members: state.campus?.members ?? 0 }
+    }
+    return {
+      dailySize: DEMO_DECK_SIZE,
+      shownToday: Math.min(state.deck.assignedCount ?? 0, DEMO_DECK_SIZE),
+      // What is left to *assign* — the question the empty state is asking.
+      poolLeft: eligibleFor(state).filter((p) => !(state.deck.ids ?? []).includes(p.id)).length,
+      members: PEOPLE.length,
+    }
+  }, [state.deck, state.seen, state.blocked, state.matches, state.me, state.campus])
 }
 
 export function useIncoming() {

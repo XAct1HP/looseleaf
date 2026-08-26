@@ -1655,5 +1655,343 @@ begin
                  'and nothing was created trying');
 end $$;
 
+-- ═════════════════════════════════════════════════════════════════════════
+--  18. the compatibility engine
+-- ═════════════════════════════════════════════════════════════════════════
+--
+--  20260828120000. Discover is five people a day on a campus of fifty, and a
+--  person you passed on never returns — so the *ordering* is the product, and
+--  an ordering nobody checks is a rumour.
+--
+--  This section builds its own campus rather than borrowing the partner one,
+--  because deck size is a function of how many people are on it.
+
+do $$
+declare
+  v_campus uuid;
+  v_uid uuid;
+  i int;
+begin
+  insert into universities (name, short_name, city, email_domains, areas, is_live, open_threshold)
+  values ('Deck U', 'DU', 'Deckville', array['deck.edu'], array['North','South'], true, 50)
+  returning id into v_campus;
+  perform set_config('test.deck_campus', v_campus::text, false);
+
+  --  Fifty people, alternating gender, all of them looking for everyone, so
+  --  the pool is the whole campus and the arithmetic is the only variable.
+  for i in 1..50 loop
+    insert into auth.users (email) values ('deck' || i || '@deck.edu') returning id into v_uid;
+    insert into profiles (id, university_id, first_name, gender, grad_year, major, age,
+                          area, orgs, intention, onboarded_at)
+    values (v_uid, v_campus, 'Person' || i,
+            case when i % 2 = 0 then 'woman' else 'man' end,
+            (2026 + (i % 4))::text, 'Major' || (i % 7), 19 + (i % 4),
+            case when i % 2 = 0 then 'North' else 'South' end,
+            case when i % 5 = 0 then array['Rowing'] else '{}'::text[] end,
+            case when i % 3 = 0 then 'relationship'::intention else 'seeing'::intention end,
+            now());
+    insert into profile_preferences (profile_id, interested_in, min_age, max_age)
+    values (v_uid, array['everyone'], 18, 30);
+    --  Interests spread so that some pairs overlap and some don't.
+    insert into profile_interests (profile_id, interest_id)
+    select v_uid, id from interests where sort in (10 + (i % 5) * 10, 90, 130 + (i % 3));
+    if i = 1 then perform set_config('test.deck_me', v_uid::text, false); end if;
+    if i = 2 then perform set_config('test.deck_her', v_uid::text, false); end if;
+  end loop;
+end $$;
+
+--  18a. how many people a day
+do $$
+declare
+  v_campus uuid := current_setting('test.deck_campus')::uuid;
+  v_uid uuid;
+  i int;
+begin
+  perform assert(campus_member_count(v_campus) = 50, 'the test campus has fifty people on it');
+  perform assert(deck_size_for(v_campus) = 5, 'a campus of fifty shows five people a day');
+
+  for i in 51..60 loop
+    insert into auth.users (email) values ('deck' || i || '@deck.edu') returning id into v_uid;
+    insert into profiles (id, university_id, first_name, gender, grad_year, major, age, onboarded_at)
+    values (v_uid, v_campus, 'Extra' || i, 'woman', '2027', 'Major', 20, now());
+    insert into profile_preferences (profile_id, interested_in) values (v_uid, array['everyone']);
+  end loop;
+  perform assert(deck_size_for(v_campus) = 6, 'sixty people, six a day');
+
+  for i in 61..100 loop
+    insert into auth.users (email) values ('deck' || i || '@deck.edu') returning id into v_uid;
+    insert into profiles (id, university_id, first_name, gender, grad_year, major, age, onboarded_at)
+    values (v_uid, v_campus, 'Extra' || i, 'man', '2027', 'Major', 20, now());
+    insert into profile_preferences (profile_id, interested_in) values (v_uid, array['everyone']);
+  end loop;
+  perform assert(deck_size_for(v_campus) = 10, 'a hundred people, ten a day');
+
+  for i in 101..180 loop
+    insert into auth.users (email) values ('deck' || i || '@deck.edu') returning id into v_uid;
+    insert into profiles (id, university_id, first_name, gender, grad_year, major, age, onboarded_at)
+    values (v_uid, v_campus, 'Extra' || i, 'woman', '2027', 'Major', 20, now());
+    insert into profile_preferences (profile_id, interested_in) values (v_uid, array['everyone']);
+  end loop;
+  perform assert(deck_size_for(v_campus) = 10,
+                 'and ten is the ceiling however big the campus gets');
+
+  --  Back to fifty for everything below: the extras were only ever arithmetic.
+  delete from profiles where university_id = v_campus and first_name like 'Extra%';
+  perform assert(deck_size_for(v_campus) = 5, 'back to five a day');
+end $$;
+
+--  18b. the deck itself
+do $$
+declare
+  v_me uuid := current_setting('test.deck_me')::uuid;
+  n int; m int;
+  first_call uuid[];
+  second_call uuid[];
+begin
+  perform act_as(v_me);
+
+  select array_agg(id order by id) into first_call from get_deck();
+  perform assert(cardinality(first_call) = 5, 'the first look hands you exactly five people');
+
+  select array_agg(id order by id) into second_call from get_deck();
+  perform assert(first_call = second_call,
+                 'and asking again the same day is the same five, not five more');
+  select count(*) into n from deck_views where profile_id = v_me;
+  perform assert(n = 5, 'five assignments written, once');
+
+  --  Acting on one and coming back does not top the day up: the day's ration
+  --  is what was handed out, not what is left in your hand.
+  perform mark_deck_acted(first_call[1]);
+  select count(*) into n from get_deck();
+  perform assert(n = 4, 'deciding about somebody takes them out of the deck');
+  select count(*) into m from deck_views where profile_id = v_me;
+  perform assert(m = 5, 'and does not pull a replacement in the same day');
+
+  --  Tomorrow. Backdating today's rows is exactly what tomorrow looks like
+  --  from here, and it does not need the clock to move.
+  update deck_views set seen_at = seen_at - interval '1 day' where profile_id = v_me;
+  select count(*) into n from get_deck();
+  perform assert(n = 5, 'the next day tops you back up to five');
+  select count(*) into m from deck_views where profile_id = v_me;
+  perform assert(m = 6, 'by adding exactly the one you decided about');
+
+  --  And the person you passed on never comes back.
+  perform assert(not exists (select 1 from get_deck() g where g.id = first_call[1]),
+                 'somebody you passed on is not offered again');
+
+  --  An untouched pile does not grow without limit either.
+  update deck_views set seen_at = seen_at - interval '2 days' where profile_id = v_me;
+  select count(*) into n from get_deck();
+  perform assert(n = 5, 'a day you never opened does not stack up to ten tomorrow');
+end $$;
+
+--  18c. preferences are checked both ways
+do $$
+declare
+  v_me  uuid := current_setting('test.deck_me')::uuid;
+  v_her uuid := current_setting('test.deck_her')::uuid;
+  ok boolean;
+begin
+  perform act_as(v_me);
+  update profile_preferences set interested_in = array['woman'] where profile_id = v_me;
+  update deck_views set acted_at = now() where profile_id = v_me;
+
+  perform assert(not exists (select 1 from deck_candidates() c where c.gender <> 'woman'),
+                 'you are only shown people you asked for');
+
+  --  She is looking for women; he is not one. The old deck showed her to him
+  --  anyway and spent a fifth of his day doing it.
+  update profile_preferences set interested_in = array['woman'] where profile_id = v_her;
+  perform assert(not exists (select 1 from deck_candidates() c where c.id = v_her),
+                 'and never shown somebody whose own settings rule you out');
+
+  update profile_preferences set interested_in = array['everyone'] where profile_id = v_her;
+  perform assert(exists (select 1 from deck_candidates() c where c.id = v_her),
+                 'once she is open to everyone, she is back');
+
+  --  Age is checked both ways too.
+  update profile_preferences set min_age = 30, max_age = 40 where profile_id = v_her;
+  perform assert(not exists (select 1 from deck_candidates() c where c.id = v_her),
+                 'and the same for an age range that excludes you');
+  update profile_preferences set min_age = 18, max_age = 30 where profile_id = v_her;
+end $$;
+
+--  18d. scoring
+do $$
+declare
+  v_me  uuid := current_setting('test.deck_me')::uuid;
+  v_her uuid := current_setting('test.deck_her')::uuid;
+  v_third uuid;
+  a int; b int; c int;
+begin
+  perform act_as(v_me);
+
+  perform assert(compatibility(v_me, v_her) = compatibility(v_her, v_me),
+                 'compatibility means the same thing from either side');
+
+  --  Nobody has filled the survey in yet, and it still produces a real answer
+  --  rather than zero — the unanswered half leaves the denominator too.
+  a := compatibility(v_me, v_her);
+  perform assert(a between 1 and 99, 'a pair with no survey between them still scores');
+
+  --  Give her every answer he has. It can only go up.
+  insert into profile_survey (profile_id, ideal_dates, budget_level, drinks,
+                              going_out, chronotype, planning, group_size, texting, conversation)
+  values (v_me,  array['coffee','walk'], 2, 'sometimes',
+          'homebody', 'night', 'planner', 'one-on-one', 'texter', 'deep'),
+         (v_her, array['coffee','walk'], 2, 'sometimes',
+          'homebody', 'night', 'planner', 'one-on-one', 'texter', 'deep');
+
+  b := compatibility(v_me, v_her);
+  perform assert(b > a, 'answering the survey the same way raises the score');
+
+  --  Somebody who answered it the opposite way scores below both.
+  select id into v_third from profiles
+   where university_id = current_setting('test.deck_campus')::uuid
+     and id not in (v_me, v_her) limit 1;
+  insert into profile_survey (profile_id, ideal_dates, budget_level,
+                              going_out, chronotype, planning, group_size, texting, conversation)
+  values (v_third, array['clubbing-not-a-real-token'], 4,
+          'out-out', 'early', 'spontaneous', 'big-group', 'in-person', 'light');
+  c := compatibility(v_me, v_third);
+  perform assert(c < b, 'and answering it the opposite way lowers it');
+
+  --  A middle answer is compatible with both ends, not a shrug.
+  perform assert(trait_agreement('night', 'night') = 2, 'two night owls agree completely');
+  perform assert(trait_agreement('night', 'either') = 1, 'an "either" is halfway to both');
+  perform assert(trait_agreement('night', 'early') = 0, 'the two ends do not');
+  perform assert(trait_agreement('night', null) is null,
+                 'and an unanswered question is not a disagreement');
+
+  --  Someone who skipped the survey entirely is not buried beneath everyone
+  --  who filled it in. This is the whole reason the score is a percentage of
+  --  what was achievable rather than a raw total.
+  perform assert(compatibility(v_me, (select id from profiles
+                                       where university_id = current_setting('test.deck_campus')::uuid
+                                         and id not in (v_me, v_her, v_third)
+                                       limit 1)) > 1,
+                 'skipping the survey does not park you at the bottom forever');
+end $$;
+
+--  18e. ordering people has no price
+do $$
+declare src text := '';
+declare f text;
+begin
+  foreach f in array array['get_deck', 'deck_candidates', 'compatibility',
+                           'compatibility_reasons', 'deck_size_for', 'deck_status']
+  loop
+    select src || string_agg(pg_get_functiondef(p.oid), ' ') into src
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = f;
+  end loop;
+
+  perform assert(src !~* 'partner_plans|partner_subscriptions|partner_credit|date_spots|partner_offers',
+                 'nothing that orders people mentions a table with a price on it');
+  perform assert(src ~* 'profile_interests', 'and it does read what people said they like');
+end $$;
+
+--  18f. somewhere for the two of them to go
+do $$
+declare
+  v_campus uuid := current_setting('test.campus')::uuid;
+  v_ada uuid := current_setting('test.ada')::uuid;
+  v_bo  uuid := current_setting('test.bo')::uuid;
+  v_conv uuid := current_setting('test.conv')::uuid;
+  v_coffee uuid;
+  v_bar uuid;
+  n int;
+begin
+  --  A coffee place and a bar, both perfectly ordinary, neither a partner.
+  insert into date_spots (university_id, name, kind, date_types, vibes, price_level,
+                          walk_minutes, is_published)
+  values (v_campus, 'Quiet Cup', 'Coffee', array['coffee','first-date','study'],
+          array['cozy','quiet'], 1, 4, true)
+  returning id into v_coffee;
+
+  insert into date_spots (university_id, name, kind, date_types, vibes, price_level,
+                          walk_minutes, is_published, min_age)
+  values (v_campus, 'The Tap', 'Bar', array['drinks','late-night'],
+          array['social'], 2, 6, true, 21)
+  returning id into v_bar;
+
+  --  Ada is 20. The bar is 21+, and nothing had ever read that column.
+  perform act_as(v_ada);
+  perform assert(not exists (
+    select 1 from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20) r
+    where r.spot_id = v_bar),
+    'a twenty-one-plus place is not suggested to somebody who is twenty');
+
+  update profiles set age = 22 where id in (v_ada, v_bo);
+  perform assert(exists (
+    select 1 from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20) r
+    where r.spot_id = v_bar),
+    'and is suggested once they are old enough');
+
+  --  Ada does not drink. A drinks-only place stops being a suggestion for her.
+  insert into profile_survey (profile_id, ideal_dates, budget_level, drinks)
+  values (v_ada, array['coffee','walk'], 1, 'never')
+  on conflict (profile_id) do update set drinks = 'never';
+
+  perform assert(not exists (
+    select 1 from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20) r
+    where r.spot_id = v_bar),
+    'and not suggested at all to somebody who said no to drinks');
+
+  --  What the two of them agree on beats what only one of them said. Bo says
+  --  coffee too, so "surprise us" in their conversation puts the coffee place
+  --  in front of everything else on this campus.
+  insert into profile_survey (profile_id, ideal_dates, budget_level, drinks)
+  values (v_bo, array['coffee','dinner'], 2, 'sometimes')
+  on conflict (profile_id) do update set ideal_dates = array['coffee','dinner'];
+
+  perform assert(
+    (select r.spot_id from recommend_date_spots(null, '{}', null, null, now(), v_conv, 'planner', 20) r
+     limit 1) = v_coffee,
+    'asking for nothing in particular suggests what they both said they liked');
+
+  --  And the couple's own answers never lift a business past a place that
+  --  actually fits: the ceiling on what money moves is unchanged.
+  perform assert(exists (
+    select 1 from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
+    where ns.nspname = 'public' and p.proname = 'recommend_date_spots'
+      and pg_get_functiondef(p.oid) ~ 'k_partner_cap int := 10'),
+    'and the entire commercial contribution is still capped at ten');
+
+  perform set_config('test.coffee_spot', v_coffee::text, false);
+end $$;
+
+--  18g. a partner saying who they are good for can only narrow
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_ada uuid := current_setting('test.ada')::uuid;
+  before_n int;
+  after_n int;
+begin
+  perform act_as(v_ada);
+  select count(*) into before_n
+  from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20);
+
+  perform act_as(current_setting('test.biz')::uuid);
+  update partner_targeting set interests = array['motorcycles'] where partner_id = v_partner;
+
+  perform act_as(v_ada);
+  select count(*) into after_n
+  from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20);
+  perform assert(after_n <= before_n,
+                 'a business naming who it suits can only remove itself from suggestions');
+
+  --  Give Ada that interest and it comes back — but never higher than it was.
+  insert into profile_interests (profile_id, interest_id) values (v_ada, 'motorcycles')
+  on conflict do nothing;
+  perform assert((select count(*) from recommend_date_spots(null, '{}', null, null, now(), null, 'discovery', 20))
+                 >= after_n,
+                 'and matching it puts the business back where it already was');
+
+  perform act_as(current_setting('test.biz')::uuid);
+  update partner_targeting set interests = '{}' where partner_id = v_partner;
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'

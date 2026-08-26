@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Sheet from '../ui/Sheet'
 import Button from '../ui/Button'
 import DateSpotCard from '../dates/DateSpotCard'
@@ -7,6 +7,8 @@ import { SelectChip } from '../ui/Chip'
 import { IconBack } from '../ui/Icons'
 import { PLAN_CHOICES, VIBE_TAGS } from '../../data/partnerCatalog'
 import * as dates from '../../services/dates'
+import { coupleContext } from '../../lib/compatibility'
+import { useStore } from '../../state/store'
 
 /**
  * ── Plan a Date ─────────────────────────────────────────────────────────────
@@ -40,6 +42,9 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
   const [when, setWhen] = useState(null)
   const [day, setDay] = useState('')
 
+  const { state } = useStore()
+  const couple = useMemo(() => coupleContext(state.me, person), [state.me, person])
+
   const [results, setResults] = useState([])
   const [chosen, setChosen] = useState(null)
   const [pass, setPass] = useState(null)
@@ -67,7 +72,11 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
       const list = await dates.recommend({
         dateType: type,
         vibes,
-        maxPrice: budget,
+        // The couple, worked out client-side for the demo campus. In live mode
+        // `recommend_date_spots` does this itself from the conversation — it
+        // has both profiles and this client has one.
+        ...couple,
+        maxPrice: budget ?? couple.maxPrice,
         conversationId,
         surface: 'planner',
         limit: 6,
@@ -87,7 +96,7 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
     } finally {
       setLoading(false)
     }
-  }, [type, vibes, budget, conversationId])
+  }, [type, vibes, budget, conversationId, couple])
 
   function finish(spot, issuedPass) {
     dates.logRecommendation(spot.id, {
