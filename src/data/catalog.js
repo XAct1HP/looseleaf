@@ -414,93 +414,15 @@ export const UNIVERSITY = {
   areas: ['Central Campus', 'North Campus', 'Off Campus', 'Medical Campus'],
 }
 
-export const DATE_SPOTS = [
-  {
-    id: 'vertex',
-    name: 'Vertex Coffee',
-    kind: 'Coffee',
-    tags: ['Quiet', '$'],
-    walk: '8 minute walk',
-    note: 'Good for a first date',
-    sponsored: false,
-  },
-  {
-    id: 'roos',
-    name: "Roos Roast",
-    kind: 'Coffee',
-    tags: ['Bright', '$'],
-    walk: '11 minute walk',
-    note: 'Big tables, easy to talk',
-    sponsored: false,
-  },
-  {
-    id: 'sava',
-    name: "Sava's",
-    kind: 'Food',
-    tags: ['Lively', '$$'],
-    walk: '6 minute walk',
-    note: 'Never a bad brunch',
-    sponsored: false,
-  },
-  {
-    id: 'blank',
-    name: 'Blank Slate Creamery',
-    kind: 'Something fun',
-    tags: ['Casual', '$'],
-    walk: '14 minute walk',
-    note: 'Low stakes, high reward',
-    sponsored: false,
-  },
-  {
-    id: 'arb',
-    name: 'Nichols Arboretum',
-    kind: 'Something fun',
-    tags: ['Outdoors', 'Free'],
-    walk: '15 minute walk',
-    note: 'Best in the fall',
-    sponsored: false,
-  },
-  {
-    id: 'ugli',
-    name: 'Shapiro Library, 3rd floor',
-    kind: 'Study date',
-    tags: ['Quiet', 'Free'],
-    walk: '4 minute walk',
-    note: 'Actually get work done. Allegedly.',
-    sponsored: false,
-  },
-  {
-    id: 'ashley',
-    name: "Ashley's",
-    kind: 'Drinks',
-    tags: ['Classic', '$$'],
-    walk: '7 minute walk',
-    note: 'Two hundred beers, one decision',
-    sponsored: false,
-  },
-  {
-    id: 'pinball',
-    name: 'Pinball Pete\'s',
-    kind: 'Something fun',
-    tags: ['Loud', '$'],
-    walk: '5 minute walk',
-    note: 'Nothing kills a silence like air hockey',
-    sponsored: false,
-  },
-]
-
-/** Sponsored offers are a separate list and are never mixed into ranking. */
-export const SPONSORED_OFFERS = [
-  {
-    id: 'vertex-offer',
-    spot: 'Vertex Coffee',
-    emoji: '☕',
-    headline: 'First-date special',
-    detail: 'Two coffees for $5',
-    distance: '0.4 miles away',
-    sponsor: 'Vertex Coffee',
-  },
-]
+/*
+ *  DATE_SPOTS and SPONSORED_OFFERS used to live here: eight real Ann Arbor
+ *  businesses, one of them carrying an invented "two coffees for $5". Nothing
+ *  imported either of them — the demo campus has its own cast in
+ *  services/demoDates.js and the live one reads the database — so they were a
+ *  fixture with no screen behind it and a false claim about a real
+ *  restaurant's prices sitting in the repo. Removed 2026-08-28. If a fixture
+ *  is ever needed here again, invent the business.
+ */
 
 export const CAMPUS_EVENTS = [
   {

@@ -51,3 +51,27 @@ export async function removeEvent(id) {
   if (isDemo) return (await demo()).staffRemoveEvent(id)
   return liveEvents.removeEvent(id)
 }
+
+/* ── Date Spots we add ourselves ───────────────────────────────────────── */
+//
+//  Live only, and it says so rather than pretending. The demo campus is a
+//  fixed cast of invented places in `demoDates.js` — there is nothing there
+//  to write to, and a form that silently discarded what you typed would be
+//  worse than one that tells you which mode you're in.
+
+const LIVE_ONLY = 'Date Spots are managed in live mode. This is the demo campus.'
+
+export async function houseSpots() {
+  if (isDemo) return []
+  return live.houseSpots()
+}
+
+export async function saveHouseSpot(id, row) {
+  if (isDemo) throw new Error(LIVE_ONLY)
+  return live.saveHouseSpot(id, row)
+}
+
+export async function removeHouseSpot(id, coverPath) {
+  if (isDemo) throw new Error(LIVE_ONLY)
+  return live.removeHouseSpot(id, coverPath)
+}

@@ -2,11 +2,11 @@
  * ── Somewhere to go, on the demo campus ─────────────────────────────────────
  *
  * A fictional Ann Arbor: eight Date Spots, one of which is a Loose Leaf
- * Partner with a real-looking offer. Everything here is invented, including
- * the business — the rule about only ever labelling a *real* agreement as an
- * offer applies to real businesses, and the way to respect it in a demo is to
- * use a place that doesn't exist rather than to put words in a real
- * restaurant's mouth about its own prices.
+ * Partner with a real-looking offer. Every business here is invented, and
+ * that is the whole point — a Date Spot is a claim about somewhere real, and
+ * an offer is a claim about its prices. Neither is ours to make on behalf of
+ * a business that has never heard of us, so the demo campus is staffed by
+ * places that do not exist. Nothing here may be given a real name.
  *
  * Loaded dynamically and only in demo mode, so none of it reaches the live
  * bundle. The ranking below is a small, honest imitation of
@@ -18,8 +18,8 @@ const PARTNER_ID = 'demo-partner-lantern'
 
 export const DEMO_SPOTS = [
   {
-    id: 'vertex',
-    name: 'Vertex Coffee',
+    id: 'papercrane',
+    name: 'Paper Crane Coffee',
     kind: 'Coffee',
     note: 'Good for a first date — small tables, no music to shout over.',
     tags: ['Quiet', '$'],
@@ -46,8 +46,8 @@ export const DEMO_SPOTS = [
     featured: true,
   },
   {
-    id: 'roos',
-    name: 'Roos Roast',
+    id: 'seconddraft',
+    name: 'Second Draft Coffee',
     kind: 'Coffee',
     note: 'Big tables, easy to talk.',
     tags: ['Bright', '$'],
@@ -59,8 +59,8 @@ export const DEMO_SPOTS = [
     isPartner: false,
   },
   {
-    id: 'blank',
-    name: 'Blank Slate Creamery',
+    id: 'comet',
+    name: 'Little Comet Creamery',
     kind: 'Dessert',
     note: 'Low stakes, high reward.',
     tags: ['Casual', '$'],
@@ -72,8 +72,8 @@ export const DEMO_SPOTS = [
     isPartner: false,
   },
   {
-    id: 'arb',
-    name: 'Nichols Arboretum',
+    id: 'willowbank',
+    name: 'Willowbank Gardens',
     kind: 'Outdoors',
     note: 'Best in the fall. Free, and it gives you somewhere to walk.',
     tags: ['Outdoors', 'Free'],
@@ -85,8 +85,8 @@ export const DEMO_SPOTS = [
     isPartner: false,
   },
   {
-    id: 'pinball',
-    name: "Pinball Pete's",
+    id: 'quarter',
+    name: 'The Quarter Palace',
     kind: 'Arcade',
     note: 'Nothing kills a silence like air hockey.',
     tags: ['Loud', '$'],
@@ -98,8 +98,8 @@ export const DEMO_SPOTS = [
     isPartner: false,
   },
   {
-    id: 'ashley',
-    name: "Ashley's",
+    id: 'coppertap',
+    name: 'The Copper Tap',
     kind: 'Drinks',
     note: 'Two hundred beers, one decision.',
     tags: ['Classic', '$$'],

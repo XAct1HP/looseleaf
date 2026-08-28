@@ -14,15 +14,20 @@ still isn't.
   one.
 - **No fixture events.** `supabase/seed.sql` no longer inserts any, and the
   migration deletes any that are still there.
-- **No fake sponsorship.** The seeded "two coffees for $5" offer at Vertex
-  Coffee was invented. Advertising a real business's prices without an
-  agreement isn't placeholder content, it's a false claim about someone else's
-  shop — so date spots now seed unsponsored.
+- **No fixture date spots.** `seed.sql` used to ship eight real Ann Arbor
+  businesses, one of them advertising an invented "two coffees for $5".
+  Advertising a real business's prices without an agreement isn't placeholder
+  content, it's a false claim about someone else's shop — and listing the shop
+  at all is a claim that somebody stands behind it. `20260828130000` deletes
+  them. Date Spots now come from partners who signed up and from
+  **Backstage → Spots**, where a person adds a place they've been. A
+  hand-added spot can never carry a perk: a check constraint refuses a
+  sponsored row with no partner behind it.
 - **Campuses start closed.** A new campus opens at 50 finished profiles.
   Below that, people can sign up and build a profile, then land on a waitlist.
 
-Reference data — the campus list, the 32 prompts, the 8 real Ann Arbor date
-spots — stays in `seed.sql`. That isn't fixture content; the app doesn't work
+Reference data — the campus list and the 32 prompts — stays in `seed.sql`.
+That isn't fixture content; the app doesn't work
 without it. The interest vocabulary moved out of `seed.sql` and into
 `20260828120000_compatibility.sql` when it grew to ~110 grouped tags: an
 interest with no category is a row the matching engine cannot use, and a

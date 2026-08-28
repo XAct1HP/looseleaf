@@ -6,10 +6,11 @@
 --  campus list, the interest vocabulary, and the prompt library. It contains
 --  no people and no events — those come from real students now.
 --
---  Date spots are real Ann Arbor places, seeded unsponsored. A row may only be
---  marked is_sponsored once an actual agreement exists with that business;
---  inventing an offer for a real business is a claim about someone else's
---  prices, not placeholder content.
+--  It contains no date spots either. A Date Spot names a real business, and
+--  a seed file cannot vouch for one — they come from partners who signed up
+--  and from Backstage → Spots, where a person picked them. Inventing an offer
+--  for a real business is a claim about someone else's prices, not
+--  placeholder content.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 insert into universities (id, name, short_name, city, email_domains, areas)
@@ -65,51 +66,11 @@ insert into prompt_catalog (category, text) values
   ('plans',    'Say yes to this and I am yours:')
 on conflict (text) do nothing;
 
--- Organic date spots. `date_types` is what the recommender filters on, so a
--- spot without them is a spot that can never be suggested — these are the
--- honest tags for each place rather than everything that might apply.
-insert into date_spots (university_id, name, kind, tags, walk_minutes, distance_miles,
-                        price_level, date_types, vibes, note) values
-  ('11111111-1111-4111-8111-111111111111', 'Vertex Coffee', 'Coffee',
-   array['Quiet','$'], 8, 0.4, 1,
-   array['coffee','first-date','study'], array['quiet','cozy','low-key'],
-   'Good for a first date'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Roos Roast', 'Coffee',
-   array['Bright','$'], 11, 0.6, 1,
-   array['coffee','casual','study'], array['social','playful'],
-   'Big tables, easy to talk'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Sava''s', 'Food',
-   array['Lively','$$'], 6, 0.3, 2,
-   array['dinner','first-date','casual'], array['social','foodie'],
-   'Never a bad brunch'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Blank Slate Creamery', 'Dessert',
-   array['Casual','$'], 14, 0.7, 1,
-   array['dessert','casual','first-date'], array['playful','low-key'],
-   'Low stakes, high reward'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Nichols Arboretum', 'Outdoors',
-   array['Outdoors','Free'], 15, 0.9, 1,
-   array['outdoors','activity','first-date','casual'], array['adventurous','quiet','romantic'],
-   'Best in the fall'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Shapiro Library, 3rd floor', 'Study date',
-   array['Quiet','Free'], 4, 0.2, 1,
-   array['study','casual'], array['quiet','low-key'],
-   'Actually get work done. Allegedly.'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Ashley''s', 'Drinks',
-   array['Classic','$$'], 7, 0.4, 2,
-   array['drinks','late-night','casual'], array['social','low-key'],
-   'Two hundred beers, one decision'),
-
-  ('11111111-1111-4111-8111-111111111111', 'Pinball Pete''s', 'Arcade',
-   array['Loud','$'], 5, 0.3, 1,
-   array['fun','activity','group','late-night'], array['playful','competitive','social'],
-   'Nothing kills a silence like air hockey')
-on conflict do nothing;
+-- No date_spots here on purpose, for the same reason there are no events:
+-- a Date Spot is a claim about a real business, and this file cannot make
+-- one honestly. Partners create their own when they register. Everything
+-- else on the page is added by hand in Backstage → Spots, by somebody who
+-- has actually been there, and can be taken back off the same way.
 
 -- No campus_events here on purpose. Events are student-submitted and
 -- admin-approved (see the events policies in 20260819140000_real_users.sql).

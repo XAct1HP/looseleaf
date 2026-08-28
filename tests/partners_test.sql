@@ -178,7 +178,7 @@ declare v_campus uuid := current_setting('test.campus')::uuid; v_id uuid;
 begin
   insert into date_spots (university_id, name, kind, date_types, vibes,
                           price_level, walk_minutes, is_published)
-  values (v_campus, 'Vertex Coffee', 'Coffee', array['coffee','first-date'],
+  values (v_campus, 'Foldover Coffee', 'Coffee', array['coffee','first-date'],
           array['quiet','cozy'], 1, 8, true)
   returning id into v_id;
   perform set_config('test.organic', v_id::text, false);
@@ -186,7 +186,7 @@ end $$;
 
 -- ─── 4. relevance beats payment ───────────────────────────────────────────
 --  Ada asks for coffee. Jolly Pumpkin is a paying Date Partner with a live
---  offer and featured placement; it does not serve coffee. Vertex is free and
+--  offer and featured placement; it does not serve coffee. Foldover is free and
 --  does. The free one must win, and the paid one must not appear at all.
 
 do $$
@@ -1991,6 +1991,170 @@ begin
 
   perform act_as(current_setting('test.biz')::uuid);
   update partner_targeting set interests = '{}' where partner_id = v_partner;
+end $$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  19. Date Spots we add ourselves
+-- ═══════════════════════════════════════════════════════════════════════════
+--  20260828130000. `seed.sql` used to ship eight real Ann Arbor businesses as
+--  "organic" Date Spots — none of which had heard of Loose Leaf. They are
+--  deleted, and Backstage → Spots replaces them: ordinary `date_spots` rows
+--  with no partner behind them, added by a person who has been there.
+--
+--  Everything that keeps that honest is checked here, because all of it is
+--  one careless `create policy` away from not being true any more.
+
+do $$
+declare
+  v_staff  uuid := current_setting('test.staff')::uuid;
+  v_campus uuid := current_setting('test.campus')::uuid;
+  v_house  uuid;
+begin
+  perform act_as(v_staff);
+  set local role authenticated;
+
+  insert into date_spots (university_id, name, kind, note, date_types, vibes,
+                          price_level, walk_minutes, suggestable, added_by)
+  values (v_campus, 'The Reading Room', 'Coffee',
+          'Quiet enough to actually hear each other',
+          array['coffee', 'first-date'], array['quiet', 'cozy'], 1, 6, false, v_staff)
+  returning id into v_house;
+
+  reset role;
+  perform assert(v_house is not null,
+                 'staff can add a Date Spot with no business behind it');
+  perform set_config('test.house_spot', v_house::text, false);
+end $$;
+
+--  19a. and nobody else can
+do $$
+declare
+  ok boolean := false;
+  v_campus uuid := current_setting('test.campus')::uuid;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+  begin
+    insert into date_spots (university_id, name, kind)
+    values (v_campus, 'Ada''s Coffee Empire', 'Coffee');
+  exception when others then ok := true;
+  end;
+  reset role;
+  perform assert(ok, 'a student cannot add one');
+end $$;
+
+--  19b. Backstage reaches the spots we added and no others. A business's own
+--  card is the business's, and the policy is `partner_id is null` rather than
+--  a disabled button, so this holds however the client is rewritten.
+do $$
+declare n int;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  set local role authenticated;
+  update date_spots set note = 'edited from Backstage'
+   where id = current_setting('test.spot')::uuid;
+  get diagnostics n = row_count;
+  reset role;
+  perform assert(n = 0, 'Backstage cannot edit a partner''s own Date Spot');
+end $$;
+
+--  19c. A spot nobody signed can never be sponsored. Asserted with RLS *off*,
+--  as the table owner, so what refuses it is the check constraint and not the
+--  policy — the policy could be dropped tomorrow and this would still hold.
+do $$
+declare ok boolean := false;
+begin
+  begin
+    update date_spots
+       set is_sponsored = true, sponsor_name = 'Somebody Who Never Agreed'
+     where id = current_setting('test.house_spot')::uuid;
+  exception when others then ok := true;
+  end;
+  perform assert(ok,
+    'a spot with no business behind it cannot be marked sponsored — a constraint, not a policy');
+end $$;
+
+--  19d. It sits where somebody is browsing, and stays out of the answer to a
+--  question. Without `suggestable` this spot would rank near the top of a
+--  coffee request: it matches the date type, it is a six-minute walk, and it
+--  is on Ada's campus. So a zero here is the filter working and not an
+--  accident of scoring.
+do $$
+declare
+  v_house uuid := current_setting('test.house_spot')::uuid;
+  n int;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+
+  perform assert(exists (select 1 from date_spots where id = v_house),
+                 'a student browsing Date Spots can see it');
+
+  select count(*) into n
+  from recommend_date_spots('coffee', '{}', null, null, now(), null, 'discovery', 20) r
+  where r.spot_id = v_house;
+  perform assert(n = 0, 'but it is never an answer to "where should we go?"');
+  reset role;
+end $$;
+
+--  19e. …unless somebody deliberately turns it on, which is a row edit.
+do $$
+declare
+  v_house uuid := current_setting('test.house_spot')::uuid;
+  n int;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  set local role authenticated;
+  update date_spots set suggestable = true where id = v_house;
+  reset role;
+
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+  select count(*) into n
+  from recommend_date_spots('coffee', '{}', null, null, now(), null, 'discovery', 20) r
+  where r.spot_id = v_house;
+  reset role;
+  perform assert(n = 1, 'turning it on takes a row edit and no deploy');
+end $$;
+
+--  19f. A folder name that is not a uuid is nobody's — it must not raise.
+--  The three partner-media policies used to cast the first path segment
+--  straight to uuid, so one folder named anything else would have taken every
+--  upload in the bucket down with it, including the businesses' own.
+do $$
+begin
+  perform assert(partner_folder_admin('house') = false,
+                 'a storage folder that is not a uuid belongs to nobody, and does not raise');
+  perform assert(partner_folder_admin(null) = false, 'nor does a missing one');
+  perform assert(partner_folder_admin('00000000-0000-4000-8000-000000000000') = false,
+                 'and the house folder belongs to no business either');
+end $$;
+
+--  19g. Removing one is the fastest thing on the page, and a date somebody
+--  already planned around it survives. The foreign key had no action before
+--  this migration, which would have made the remove button fail against a
+--  plan nobody remembers making.
+do $$
+declare
+  v_house uuid := current_setting('test.house_spot')::uuid;
+  v_plan  uuid;
+  n int;
+begin
+  insert into date_plans (conversation_id, proposed_by, date_type, when_text, spot_id)
+  values (current_setting('test.conv')::uuid, current_setting('test.ada')::uuid,
+          'coffee', 'Thursday after class', v_house)
+  returning id into v_plan;
+
+  perform act_as(current_setting('test.staff')::uuid);
+  set local role authenticated;
+  delete from date_spots where id = v_house;
+  get diagnostics n = row_count;
+  reset role;
+
+  perform assert(n = 1, 'staff can remove a spot they added');
+  perform assert(exists (select 1 from date_plans where id = v_plan and spot_id is null),
+                 'and a date planned around it keeps the plan, loses the spot');
 end $$;
 
 \echo ''

@@ -34,6 +34,7 @@ import BackstageOverview from './pages/backstage/Overview'
 import BackstageReports from './pages/backstage/Reports'
 import BackstageEvents from './pages/backstage/EventQueue'
 import BackstagePartners from './pages/backstage/Partners'
+import BackstageSpots from './pages/backstage/Spots'
 import Logo from './components/brand/Logo'
 
 /**
@@ -334,6 +335,14 @@ export default function App() {
             element={
               <RequireStaff>
                 <BackstagePartners />
+              </RequireStaff>
+            }
+          />
+          <Route
+            path="backstage/spots"
+            element={
+              <RequireStaff>
+                <BackstageSpots />
               </RequireStaff>
             }
           />

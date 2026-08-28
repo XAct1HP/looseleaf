@@ -94,3 +94,15 @@ export function preload(paths = [], size = 'sm') {
     img.src = url
   }
 }
+
+/**
+ * Where the cover photo of a Backstage-added Date Spot lives.
+ *
+ * A valid uuid that belongs to no business, on purpose: the bucket's
+ * ownership check casts the first path segment to uuid, and a cast that
+ * fails inside a storage policy raises rather than returning false — a
+ * folder called "house" would have taken every upload in the bucket down
+ * with it. Staff have their own policy on exactly this folder, so Backstage
+ * can write here and nowhere else.
+ */
+export const HOUSE_FOLDER = '00000000-0000-4000-8000-000000000000'
