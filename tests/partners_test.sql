@@ -176,10 +176,14 @@ end $$;
 do $$
 declare v_campus uuid := current_setting('test.campus')::uuid; v_id uuid;
 begin
+  --  Not a partner, and since 20260828140000 that means one we added in
+  --  Backstage — there is no third kind of Date Spot any more. `suggestable`
+  --  is left at its default so the recommender sections below can still ask
+  --  "does a free spot beat a paying one"; the Backstage form writes false.
   insert into date_spots (university_id, name, kind, date_types, vibes,
-                          price_level, walk_minutes, is_published)
+                          price_level, walk_minutes, is_published, origin)
   values (v_campus, 'Foldover Coffee', 'Coffee', array['coffee','first-date'],
-          array['quiet','cozy'], 1, 8, true)
+          array['quiet','cozy'], 1, 8, true, 'backstage')
   returning id into v_id;
   perform set_config('test.organic', v_id::text, false);
 end $$;
@@ -228,9 +232,9 @@ do $$
 declare v_campus uuid := current_setting('test.campus')::uuid; v_free uuid; v_first uuid;
 begin
   insert into date_spots (university_id, name, kind, date_types, vibes,
-                          price_level, walk_minutes, is_published)
+                          price_level, walk_minutes, is_published, origin)
   values (v_campus, 'The Free Table', 'Food', array['dinner'],
-          array['cozy','quiet'], 1, 3, true)
+          array['cozy','quiet'], 1, 3, true, 'backstage')
   returning id into v_free;
 
   perform act_as(current_setting('test.ada')::uuid);
@@ -1904,15 +1908,15 @@ declare
 begin
   --  A coffee place and a bar, both perfectly ordinary, neither a partner.
   insert into date_spots (university_id, name, kind, date_types, vibes, price_level,
-                          walk_minutes, is_published)
+                          walk_minutes, is_published, origin)
   values (v_campus, 'Quiet Cup', 'Coffee', array['coffee','first-date','study'],
-          array['cozy','quiet'], 1, 4, true)
+          array['cozy','quiet'], 1, 4, true, 'backstage')
   returning id into v_coffee;
 
   insert into date_spots (university_id, name, kind, date_types, vibes, price_level,
-                          walk_minutes, is_published, min_age)
+                          walk_minutes, is_published, min_age, origin)
   values (v_campus, 'The Tap', 'Bar', array['drinks','late-night'],
-          array['social'], 2, 6, true, 21)
+          array['social'], 2, 6, true, 21, 'backstage')
   returning id into v_bar;
 
   --  Ada is 20. The bar is 21+, and nothing had ever read that column.
@@ -2014,11 +2018,15 @@ begin
   perform act_as(v_staff);
   set local role authenticated;
 
+  --  `origin` from 20260828140000: the row says who wrote it rather than
+  --  leaving it to be inferred from a null partner_id, and the policy's
+  --  with-check requires it. The client sends it on every insert.
   insert into date_spots (university_id, name, kind, note, date_types, vibes,
-                          price_level, walk_minutes, suggestable, added_by)
+                          price_level, walk_minutes, suggestable, added_by, origin)
   values (v_campus, 'The Reading Room', 'Coffee',
           'Quiet enough to actually hear each other',
-          array['coffee', 'first-date'], array['quiet', 'cozy'], 1, 6, false, v_staff)
+          array['coffee', 'first-date'], array['quiet', 'cozy'], 1, 6, false, v_staff,
+          'backstage')
   returning id into v_house;
 
   reset role;
@@ -2155,6 +2163,122 @@ begin
   perform assert(n = 1, 'staff can remove a spot they added');
   perform assert(exists (select 1 from date_plans where id = v_plan and spot_id is null),
                  'and a date planned around it keeps the plan, loses the spot');
+end $$;
+
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  20. taking a Date Spot down
+-- ═══════════════════════════════════════════════════════════════════════════
+--  20260828140000. Section 19 established that Backstage cannot *edit* a
+--  business's card. Removing one is different work — a place closes, a photo
+--  turns out to be somebody else's — and it goes through two RPCs so staff
+--  get exactly those two powers and not a policy that hands over the row.
+
+--  20a. one list, staff only
+do $$
+declare n int; ok boolean := false;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  select count(*) into n from staff_spots();
+  perform assert(n > 0, 'staff see every Date Spot in one list');
+
+  perform act_as(current_setting('test.ada')::uuid);
+  begin
+    perform count(*) from staff_spots();
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'and a student cannot call it at all');
+end $$;
+
+--  20b. off the page and back, without ever being able to rewrite the card
+do $$
+declare v_spot uuid := current_setting('test.spot')::uuid; n int;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_set_spot_published(v_spot, false);
+  perform assert(not (select is_published from date_spots where id = v_spot),
+                 'staff can take a partner''s Date Spot off the page');
+
+  set local role authenticated;
+  update date_spots set name = 'Renamed from Backstage' where id = v_spot;
+  get diagnostics n = row_count;
+  reset role;
+  perform assert(n = 0, 'and still cannot rewrite what the business wrote');
+
+  perform staff_set_spot_published(v_spot, true);
+  perform assert((select is_published from date_spots where id = v_spot),
+                 'and can put it back');
+end $$;
+
+--  20c. neither power answers anybody else
+do $$
+declare ok1 boolean := false; ok2 boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  begin
+    perform staff_set_spot_published(current_setting('test.spot')::uuid, false);
+  exception when others then ok1 := true;
+  end;
+  begin
+    perform staff_remove_spot(current_setting('test.spot')::uuid);
+  exception when others then ok2 := true;
+  end;
+  perform assert(ok1 and ok2, 'a student can neither hide nor remove a Date Spot');
+  perform assert(
+    (select is_published from date_spots where id = current_setting('test.spot')::uuid),
+    'and the spot is exactly as it was');
+end $$;
+
+--  20d. "we wrote this" is a fact the row states, not one inferred from a
+--  missing partner_id — so a staff insert that forgets it is refused rather
+--  than landing as something nobody can edit again.
+do $$
+declare ok boolean := false; v_campus uuid := current_setting('test.campus')::uuid;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  set local role authenticated;
+  begin
+    insert into date_spots (university_id, name, kind)
+    values (v_campus, 'Forgot the origin', 'Coffee');
+  exception when others then ok := true;
+  end;
+  reset role;
+  perform assert(ok, 'a staff insert that does not say origin = backstage is refused');
+end $$;
+
+--  20e. a business that is gone takes its listing with it. The foreign key
+--  used to be `on delete set null`, which left a published card with nobody
+--  behind it — unupdatable, unhonourable, and indistinguishable from one we
+--  had added ourselves.
+do $$
+declare v_p uuid; v_s uuid; v_campus uuid := current_setting('test.campus')::uuid;
+begin
+  insert into partners (name, category, status)
+  values ('Closed Cafe', 'coffee', 'active') returning id into v_p;
+  insert into date_spots (university_id, name, kind, partner_id)
+  values (v_campus, 'Closed Cafe', 'Coffee', v_p) returning id into v_s;
+
+  delete from partners where id = v_p;
+  perform assert(not exists (select 1 from date_spots where id = v_s),
+                 'deleting a business deletes its Date Spot instead of orphaning it');
+end $$;
+
+--  20f. and a card can be removed outright
+do $$
+declare v_spot uuid := current_setting('test.spot')::uuid;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_remove_spot(v_spot);
+  perform assert(not exists (select 1 from date_spots where id = v_spot),
+                 'staff can remove a partner''s Date Spot');
+end $$;
+
+--  20g. nothing is left on the page with no account behind it
+do $$
+begin
+  perform assert(
+    not exists (select 1 from date_spots where partner_id is null and origin = 'partner'),
+    'no listing survives with no account behind it');
 end $$;
 
 \echo ''

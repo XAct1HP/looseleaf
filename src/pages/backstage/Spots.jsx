@@ -17,25 +17,26 @@ import { geocode } from '../../lib/geocode'
 /**
  * ── Backstage → Spots ───────────────────────────────────────────────────────
  *
- * Places on the Date Spots page that no business is behind: somewhere you've
- * actually been, added by hand, so the page has something on it while
- * partners are still signing up. They are meant to be temporary, and the
- * fastest thing on this page is removing one.
+ * Everything on the Date Spots page, in three groups, because what you can do
+ * to a spot depends entirely on who wrote it.
  *
- * Two lines it will not cross, both held by the database rather than by this
- * form:
+ *   · **Added in Backstage** — places you've been, added by hand so the page
+ *     is worth opening while partners are still signing up. Yours to edit and
+ *     yours to remove.
+ *   · **Loose Leaf Partners** — a business's own card. You can take it off the
+ *     page or remove it; you cannot rewrite it. That isn't a disabled button,
+ *     it's the table policy: staff writes reach `origin = 'backstage'` rows
+ *     and nothing else, and the two staff powers here are RPCs that each take
+ *     one argument.
+ *   · **No account behind it** — a listing whose business was deleted. The
+ *     foreign key cascades now, so this group should stay empty; it exists
+ *     because "should" is not "does", and a card nobody can update or honour
+ *     should be visible until it's gone.
  *
- *   · **No perk, ever.** A spot with no partner cannot carry an offer or a
- *     sponsorship — there is a check constraint on the table. So this page has
- *     no field for one, and a business that hasn't agreed to anything can
- *     never appear to have.
- *   · **Not a suggestion by default.** These sit where a couple is browsing.
- *     "Where should we go?" answers with businesses that opted into being in
- *     that answer, unless you deliberately tick the box on one.
- *
- * A partner's own card is not editable here. The policy behind this page is
- * `is_admin() and partner_id is null`, so the attempt fails in Postgres, not
- * in a disabled button.
+ * Two lines the database holds, not this form: a spot with no partner can
+ * never carry a perk or a "Sponsored" label (a check constraint), and one
+ * added here is not a suggestion unless you say so (the `suggestable` column,
+ * which `recommend_date_spots` filters on).
  */
 
 const BLANK = {
@@ -88,15 +89,17 @@ function toForm(row) {
 
 export default function BackstageSpots() {
   const { actions } = useStore()
-  const [spots, setSpots] = useState([])
+  const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState(null) // a row, or 'new'
+  const [editing, setEditing] = useState(null) // 'new', or a full row
+  const [opening, setOpening] = useState(null) // id being fetched for the editor
   const [removing, setRemoving] = useState(null)
+  const [busyId, setBusyId] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setSpots(await staff.houseSpots())
+      setRows(await staff.spots())
     } catch (e) {
       actions.showToast(e.message)
     } finally {
@@ -108,10 +111,38 @@ export default function BackstageSpots() {
     load()
   }, [load])
 
+  /** The list row is narrow; the editor needs every column. */
+  const edit = async (row) => {
+    setOpening(row.id)
+    try {
+      setEditing(await staff.spotById(row.id))
+    } catch (e) {
+      actions.showToast(e.message)
+    } finally {
+      setOpening(null)
+    }
+  }
+
+  const togglePublished = async (row) => {
+    setBusyId(row.id)
+    try {
+      await staff.setSpotPublished(row.id, !row.is_published)
+      actions.showToast(row.is_published ? 'Taken off Date Spots.' : 'Back on Date Spots.')
+      load()
+    } catch (e) {
+      actions.showToast(e.message)
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   const remove = async () => {
     try {
-      await staff.removeHouseSpot(removing.id, removing.cover_path)
-      actions.showToast('Taken off Date Spots.')
+      await staff.removeSpot(removing.id, {
+        coverPath: removing.cover_path,
+        origin: removing.origin,
+      })
+      actions.showToast('Removed.')
       setRemoving(null)
       load()
     } catch (e) {
@@ -119,14 +150,15 @@ export default function BackstageSpots() {
     }
   }
 
-  const live = spots.filter((s) => s.is_published)
-  const drafts = spots.filter((s) => !s.is_published)
+  const ours = rows.filter((r) => r.origin === 'backstage')
+  const partners = rows.filter((r) => r.partner_id)
+  const orphans = rows.filter((r) => !r.partner_id && r.origin !== 'backstage')
 
   return (
     <>
       <BackstageHeader
         title="Spots"
-        subtitle="Date Spots you've added by hand. They keep the page worth opening while partners are still signing up — and they come off the same way they went on."
+        subtitle="Everything on the Date Spots page. What you can do to one depends on who wrote it."
         action={
           <Button variant="coral" size="md" onClick={() => setEditing('new')}>
             Add a spot
@@ -136,11 +168,11 @@ export default function BackstageSpots() {
 
       {loading ? (
         <p className="py-12 text-center text-[14px] text-mist">Loading…</p>
-      ) : !spots.length ? (
+      ) : !rows.length ? (
         <EmptyState
           art="coffee"
-          title="No spots added yet"
-          body="Date Spots currently shows only Loose Leaf Partners. Add a few places you'd actually send someone on a first date."
+          title="Date Spots is empty"
+          body="No partners are live yet and nothing has been added by hand. Add a few places you'd actually send someone on a first date."
           action={
             <Button variant="coral" size="md" onClick={() => setEditing('new')}>
               <IconPlus size={16} />
@@ -149,31 +181,46 @@ export default function BackstageSpots() {
           }
         />
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-9">
           <Section
-            label="On Date Spots"
-            count={live.length}
-            rows={live}
-            onEdit={setEditing}
+            label="Added in Backstage"
+            count={ours.length}
+            body="Yours to edit and yours to remove. They never carry a perk."
+            rows={ours}
+            busyId={busyId}
+            openingId={opening}
+            onEdit={edit}
+            onToggle={togglePublished}
             onRemove={setRemoving}
           />
-          {drafts.length > 0 && (
+
+          {partners.length > 0 && (
             <Section
-              label="Not published"
-              count={drafts.length}
-              rows={drafts}
-              onEdit={setEditing}
+              label="Loose Leaf Partners"
+              count={partners.length}
+              body="The business writes its own card. You can take it off the page or remove it — a live partner can put a new one back from their dashboard, so suspend the business on Partners if it needs to stay off."
+              rows={partners}
+              busyId={busyId}
+              openingId={opening}
+              onToggle={togglePublished}
               onRemove={setRemoving}
-              muted
+            />
+          )}
+
+          {orphans.length > 0 && (
+            <Section
+              label="No account behind it"
+              count={orphans.length}
+              body="The business these belonged to no longer exists, so nobody can update the details or honour anything on them. They should be removed."
+              rows={orphans}
+              busyId={busyId}
+              openingId={opening}
+              onRemove={setRemoving}
+              warn
             />
           )}
         </div>
       )}
-
-      <p className="mt-8 max-w-[62ch] text-[12.5px] leading-relaxed text-mist">
-        A spot added here can never carry a perk or a “Sponsored” label — the table refuses it. An
-        offer means a business agreed to one, and nothing on this page is an agreement.
-      </p>
 
       <SpotEditor
         open={editing !== null}
@@ -185,91 +232,149 @@ export default function BackstageSpots() {
         }}
       />
 
-      <Sheet
-        open={Boolean(removing)}
-        onClose={() => setRemoving(null)}
-        title={`Remove ${removing?.name ?? 'this spot'}?`}
-        subtitle="It comes off Date Spots straight away. Anyone who already planned a date around it keeps the plan."
-      >
-        <div className="flex gap-3">
-          <Button variant="ghost" size="lg" full onClick={() => setRemoving(null)}>
-            Keep it
-          </Button>
-          <Button variant="danger" size="lg" full onClick={remove}>
-            Remove
-          </Button>
-        </div>
-      </Sheet>
+      <RemoveSheet spot={removing} onClose={() => setRemoving(null)} onConfirm={remove} />
     </>
   )
 }
 
-function Section({ label, count, rows, onEdit, onRemove, muted = false }) {
+function Section({ label, count, body, rows, onEdit, onToggle, onRemove, busyId, openingId, warn }) {
   return (
     <section>
-      <div className="mb-3 flex items-baseline gap-2">
+      <div className="mb-1 flex items-baseline gap-2">
         <h2 className="font-display text-[17px] font-semibold text-navy">{label}</h2>
         <span className="text-[13px] tabular-nums text-mist">{count}</span>
       </div>
-      <ul className="space-y-2.5">
-        {rows.map((s) => (
-          <li
-            key={s.id}
-            className={`flex items-center gap-4 rounded-card border border-rule bg-white px-4 py-3.5 ${
-              muted ? 'opacity-75' : ''
-            }`}
-          >
-            <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-cream">
-              {s.cover_path && (
-                <img
-                  src={media.publicUrl(s.cover_path, 'sm')}
-                  alt=""
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-              )}
-            </div>
+      {body && <p className="mb-3 max-w-[68ch] text-[13px] leading-relaxed text-mist">{body}</p>}
 
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-semibold text-navy">{s.name}</p>
-              <p className="mt-0.5 truncate text-[13px] text-graphite">
-                {s.kind}
-                {s.walk_minutes != null && ` · ${s.walk_minutes} min walk`}
-                {s.suggestable && ' · in the planner'}
-              </p>
-              <p className="mt-1 truncate text-[12.5px] text-mist">
-                {(s.date_types ?? []).length
-                  ? (s.date_types ?? []).map(dateTypeLabel).join(', ')
-                  : 'No date types — it can only be found by browsing'}
-              </p>
-            </div>
+      {!rows.length ? (
+        <p className="rounded-card border border-dashed border-rule px-4 py-6 text-center text-[13.5px] text-mist">
+          Nothing here yet.
+        </p>
+      ) : (
+        <ul className="space-y-2.5">
+          {rows.map((s) => (
+            <li
+              key={s.id}
+              className={`flex items-center gap-4 rounded-card border bg-white px-4 py-3.5 ${
+                warn ? 'border-coral/30' : 'border-rule'
+              } ${s.is_published ? '' : 'opacity-70'}`}
+            >
+              <div className="h-14 w-20 shrink-0 overflow-hidden rounded-xl bg-cream">
+                {s.cover_path && (
+                  <img
+                    src={media.publicUrl(s.cover_path, 'sm')}
+                    alt=""
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => onEdit(s)}>
-                Edit
-              </Button>
-              <button
-                type="button"
-                onClick={() => onRemove(s)}
-                aria-label={`Remove ${s.name}`}
-                className="press focus-ring flex h-9 w-9 items-center justify-center rounded-full text-mist transition hover:bg-coral-wash hover:text-coral-deep"
-              >
-                <IconTrash size={16} />
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center gap-2 truncate text-[15px] font-semibold text-navy">
+                  {s.name}
+                  {!s.is_published && (
+                    <span className="shrink-0 rounded-full bg-cream px-2 py-0.5 text-[10.5px] font-medium uppercase tracking-[0.06em] text-mist">
+                      Off the page
+                    </span>
+                  )}
+                </p>
+                <p className="mt-0.5 truncate text-[13px] text-graphite">
+                  {s.kind}
+                  {s.walk_minutes != null && ` · ${s.walk_minutes} min walk`}
+                  {s.suggestable && s.origin === 'backstage' && ' · in the planner'}
+                  {s.partner_name && s.partner_name !== s.name && ` · ${s.partner_name}`}
+                  {s.partner_status && s.partner_status !== 'active' && ` (${s.partner_status})`}
+                </p>
+                <p className="mt-1 truncate text-[12.5px] text-mist">
+                  {s.partner_id && s.people === 0
+                    ? 'Nobody is on this account'
+                    : (s.date_types ?? []).length
+                      ? (s.date_types ?? []).map(dateTypeLabel).join(', ')
+                      : 'No date types — it can only be found by browsing'}
+                </p>
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {onToggle && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busyId === s.id}
+                    onClick={() => onToggle(s)}
+                  >
+                    {s.is_published ? 'Take off page' : 'Put back'}
+                  </Button>
+                )}
+                {onEdit && (
+                  <Button variant="ghost" size="sm" disabled={openingId === s.id} onClick={() => onEdit(s)}>
+                    {openingId === s.id ? 'Opening…' : 'Edit'}
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => onRemove(s)}
+                  aria-label={`Remove ${s.name}`}
+                  className="press focus-ring flex h-9 w-9 items-center justify-center rounded-full text-mist transition hover:bg-coral-wash hover:text-coral-deep"
+                >
+                  <IconTrash size={16} />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   )
 }
 
 /**
- * The form. The card students will see sits at the top of it and updates as
- * you type, for the same reason the partner-side editor has one: the date-type
- * tags are the thing that decides where this place can ever appear, and seeing
- * the card change is what makes that legible.
+ * The confirm says a different true thing for each kind of spot. "Are you
+ * sure?" is not a warning, it's a speed bump — what staff need to know is
+ * whether this is permanent, and for a live partner it isn't.
+ */
+function RemoveSheet({ spot, onClose, onConfirm }) {
+  const kind = !spot
+    ? null
+    : spot.origin === 'backstage'
+      ? 'ours'
+      : spot.partner_id
+        ? 'partner'
+        : 'orphan'
+
+  const subtitle = {
+    ours: 'It comes off Date Spots straight away. Anyone who already planned a date around it keeps the plan.',
+    partner:
+      'This deletes the card the business wrote. They can make a new one from their dashboard the next time they save — to keep them off Date Spots for good, suspend the business on Partners instead.',
+    orphan:
+      'There is no account behind this any more, so nothing will bring it back and nobody can honour anything on it.',
+  }[kind]
+
+  return (
+    <Sheet
+      open={Boolean(spot)}
+      onClose={onClose}
+      title={`Remove ${spot?.name ?? 'this spot'}?`}
+      subtitle={subtitle}
+    >
+      <div className="flex gap-3">
+        <Button variant="ghost" size="lg" full onClick={onClose}>
+          Keep it
+        </Button>
+        <Button variant="danger" size="lg" full onClick={onConfirm}>
+          Remove
+        </Button>
+      </div>
+    </Sheet>
+  )
+}
+
+/**
+ * The form, for spots we add ourselves. The card students will see sits at the
+ * top of it and updates as you type, for the same reason the partner-side
+ * editor has one: the date-type tags decide where this place can ever appear,
+ * and seeing the card change is what makes that legible.
  */
 function SpotEditor({ open, row, onClose, onSaved }) {
   const { actions } = useStore()
@@ -398,7 +503,7 @@ function SpotEditor({ open, row, onClose, onSaved }) {
 
         <Group title="The basics">
           <Field label="Name" htmlFor="h-name" required>
-            <TextInput id="h-name" value={form.name} onChange={(v) => set({ name: v })} placeholder="The Lantern Room" />
+            <TextInput id="h-name" value={form.name} onChange={(v) => set({ name: v })} placeholder="The Reading Room" />
           </Field>
           <Field label="Kind of place" htmlFor="h-kind">
             <Select id="h-kind" value={form.category} onChange={(v) => set({ category: v })} options={PARTNER_CATEGORIES} />
@@ -413,7 +518,7 @@ function SpotEditor({ open, row, onClose, onSaved }) {
               value={form.note}
               onChange={(v) => set({ note: v })}
               maxLength={90}
-              placeholder="Booths, long menu, nobody rushes you out."
+              placeholder="Quiet enough to actually hear each other."
             />
           </Field>
           {/* Same width as the preview above it, and for the same reason:

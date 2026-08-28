@@ -52,7 +52,7 @@ export async function removeEvent(id) {
   return liveEvents.removeEvent(id)
 }
 
-/* ── Date Spots we add ourselves ───────────────────────────────────────── */
+/* ── Date Spots ────────────────────────────────────────────────────────── */
 //
 //  Live only, and it says so rather than pretending. The demo campus is a
 //  fixed cast of invented places in `demoDates.js` — there is nothing there
@@ -61,9 +61,14 @@ export async function removeEvent(id) {
 
 const LIVE_ONLY = 'Date Spots are managed in live mode. This is the demo campus.'
 
-export async function houseSpots() {
+export async function spots() {
   if (isDemo) return []
-  return live.houseSpots()
+  return live.spots()
+}
+
+export async function spotById(id) {
+  if (isDemo) throw new Error(LIVE_ONLY)
+  return live.spotById(id)
 }
 
 export async function saveHouseSpot(id, row) {
@@ -71,7 +76,12 @@ export async function saveHouseSpot(id, row) {
   return live.saveHouseSpot(id, row)
 }
 
-export async function removeHouseSpot(id, coverPath) {
+export async function setSpotPublished(id, published) {
   if (isDemo) throw new Error(LIVE_ONLY)
-  return live.removeHouseSpot(id, coverPath)
+  return live.setSpotPublished(id, published)
+}
+
+export async function removeSpot(id, opts) {
+  if (isDemo) throw new Error(LIVE_ONLY)
+  return live.removeSpot(id, opts)
 }

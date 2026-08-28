@@ -68,43 +68,63 @@ export async function setPaused(profileId, paused) {
   if (error) throw new Error(error.message)
 }
 
-/* ── Date Spots we add ourselves ───────────────────────────────────────── */
+/* ── Date Spots ────────────────────────────────────────────────────────── */
 //
-//  A hand-added spot is an ordinary `date_spots` row with no partner behind
-//  it, so there is no new table and nothing new for the Date Spots page to
-//  learn — it already renders every row it can read. What is new is who may
-//  write one: the policy is `is_admin() and partner_id is null`, which is
-//  also why none of this needs an RPC. The database refuses a Backstage edit
-//  to a business's own card by itself.
+//  Backstage sees every spot on the page, and can do two different things to
+//  them depending on where they came from:
 //
-//  Columns are returned raw, the same way `partners.spotForLocation` does, so
-//  the editor form and the SQL row read alike and there is one less mapping
-//  to keep honest.
+//   · **Ones we added** (`origin = 'backstage'`) are ordinary `date_spots`
+//     rows with no business behind them, written straight to the table under
+//     the `is_admin() and origin = 'backstage'` policy. No RPC needed — the
+//     database already refuses everything else.
+//   · **A partner's own card** can be taken off the page or removed, and not
+//     edited. Row-level security cannot restrict columns, so those two powers
+//     are functions that take one argument rather than a policy that would
+//     have handed over the whole row.
+//
+//  The list comes from `staff_spots()` so the join to the business — its
+//  name, its status, and how many people are on the account — happens once,
+//  in one place, behind `is_admin()`.
 
-const HOUSE_SPOT_COLUMNS = `
+const SPOT_COLUMNS = `
   id, name, kind, note, tags, date_types, vibes, price_level, walk_minutes,
   distance_miles, latitude, longitude, address_line, website, phone, hours,
   cover_path, gallery_paths, indoor_outdoor, reservations, min_age,
-  is_published, suggestable, added_by, created_at
+  is_published, suggestable, origin, partner_id, added_by, created_at
 `
 
-/** Everything on this campus that no business is behind. Newest first. */
-export async function houseSpots() {
-  const { data, error } = await supabase
-    .from('date_spots')
-    .select(HOUSE_SPOT_COLUMNS)
-    .is('partner_id', null)
-    .order('created_at', { ascending: false })
+/** Every Date Spot, with just enough about the business behind each one. */
+export async function spots() {
+  const { data, error } = await supabase.rpc('staff_spots')
   if (error) throw new Error(error.message)
   return data ?? []
 }
 
 /**
- * Create or update one. `id` null means create.
+ * One spot, every column, for the editor. Deliberately a second read rather
+ * than fattening `staff_spots()`: a list of forty cards does not need forty
+ * sets of opening hours.
+ */
+export async function spotById(id) {
+  const { data, error } = await supabase
+    .from('date_spots')
+    .select(SPOT_COLUMNS)
+    .eq('id', id)
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+/**
+ * Create or update one of ours. `id` null means create.
  *
- * `is_sponsored` is never written here and cannot be: a check constraint on
- * the table refuses a sponsored row with no partner, so the promise that a
- * "Sponsored" label means a real agreement survives this form existing.
+ * `origin` is written explicitly on insert and the policy's `with check`
+ * requires it, so a caller that forgets is refused rather than quietly
+ * creating a row nobody can edit again.
+ *
+ * `is_sponsored` is never written here and cannot be: a check constraint
+ * refuses a sponsored row with no partner, so the promise that a "Sponsored"
+ * label means a real agreement survives this form existing.
  */
 export async function saveHouseSpot(id, row) {
   if (id) {
@@ -117,7 +137,7 @@ export async function saveHouseSpot(id, row) {
   const uid = me?.user?.id ?? null
   const { data, error } = await supabase
     .from('date_spots')
-    .insert({ ...row, university_id: await myCampusId(), added_by: uid })
+    .insert({ ...row, university_id: await myCampusId(), added_by: uid, origin: 'backstage' })
     .select('id')
     .single()
   if (error) throw new Error(error.message)
@@ -125,15 +145,27 @@ export async function saveHouseSpot(id, row) {
 }
 
 /**
- * Gone, not hidden. A date plan that pointed at it keeps the plan and loses
- * the spot — the migration changed that foreign key to `on delete set null`
- * for exactly this. The photo goes too; leaving it behind would cost storage
- * forever for a row nobody can reach.
+ * On or off the Date Spots page. Reversible, and for a live partner only
+ * half a lever — publishing their own card is theirs, so they can put it
+ * back. Suspending the business is what holds.
  */
-export async function removeHouseSpot(id, coverPath = null) {
-  const { error } = await supabase.from('date_spots').delete().eq('id', id)
+export async function setSpotPublished(id, published) {
+  const { error } = await supabase.rpc('staff_set_spot_published', {
+    p_spot: id,
+    p_published: published,
+  })
   if (error) throw new Error(error.message)
-  if (coverPath) await media.remove(coverPath).catch(() => {})
+}
+
+/**
+ * Gone, not hidden. A date plan that pointed at it keeps the plan and loses
+ * the spot. The cover photo goes too when it was ours — a partner's photo
+ * belongs to their account and is left alone.
+ */
+export async function removeSpot(id, { coverPath = null, origin = null } = {}) {
+  const { error } = await supabase.rpc('staff_remove_spot', { p_spot: id })
+  if (error) throw new Error(error.message)
+  if (coverPath && origin === 'backstage') await media.remove(coverPath).catch(() => {})
 }
 
 /** The campus the signed-in staff member belongs to. */
