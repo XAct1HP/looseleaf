@@ -75,19 +75,19 @@ const TRUST = [
     Icon: IconEye,
     title: 'Relevance comes first.',
     body:
-      'You cannot buy your way into a conversation you do not belong in. Ask Loose Leaf for coffee and it will not offer you a brewery, whatever that brewery pays. Paying moves a place a little; fitting the ask moves it a lot.',
+      'Suggestions start from what the two of them asked for. Ask Loose Leaf for coffee and coffee places come back, whoever is paying. Being right for the ask moves a place a lot; being a partner moves it a little.',
   },
   {
     Icon: IconLock,
-    title: 'You get attribution, not their data.',
+    title: 'You see the visit, not the people.',
     body:
-      'A scanned pass tells you a real Loose Leaf date is at your table. It does not tell you who they are, what they talked about, or why we suggested you. That line is enforced in the database, not by policy.',
+      'A scanned pass tells you a real Loose Leaf date is at your table. It does not tell you who they are or what they talked about — that would be their evening, not your data. The line is built into the database rather than promised in a policy.',
   },
   {
     Icon: IconShield,
-    title: 'It never looks like an ad.',
+    title: 'It never interrupts.',
     body:
-      'No banners, no interstitials, no popups between two people mid-conversation. A suggestion arrives once, politely, and can be waved away — and once someone waves yours away, it does not come back.',
+      'No banners, no popups, nothing landing between two people mid-conversation. A suggestion arrives once, quietly, and can be waved away — and once someone waves yours away, it stays away.',
   },
 ]
 
@@ -118,7 +118,7 @@ const FAQ = [
   },
   {
     q: 'What stops a surprise bill?',
-    a: 'Two things. Every offer carries daily and monthly caps you set, so you decide the most redemptions you will ever hand out. And your dashboard shows the running total live — the same list your invoice is built from, line for line.',
+    a: 'Two things. Every offer carries the caps you set — a monthly ceiling, an optional daily one, and how often the same person can come back — so you decide the most redemptions you could ever hand out. And your dashboard shows the running total as it happens, from the same list your invoice is built from, line for line.',
   },
   {
     q: 'Can I stop?',
@@ -270,12 +270,12 @@ export default function PartnersLanding() {
               The Date Pass
             </span>
             <h2 className="mt-6 font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] sm:text-[40px]">
-              Finally, a number that means something.
+              A number that means somebody showed up.
             </h2>
             <p className="mt-5 max-w-[52ch] text-[16px] leading-relaxed text-graphite">
-              Most local marketing ends at the impression. Loose Leaf ends at the table. When a couple
-              picks you, they get a Date Pass with a code on it. Your staff scan it, it turns green,
-              and that becomes one verified date in your dashboard — not an estimate, not a
+              Marketing usually stops at the impression. Loose Leaf carries on to the table. When a
+              couple picks you, they get a Date Pass with a code on it. Your staff scan it, it turns
+              green, and that becomes one verified date in your dashboard — not an estimate or a
               modelled attribution, an actual visit somebody confirmed.
             </p>
 
@@ -313,12 +313,12 @@ export default function PartnersLanding() {
             <CoffeeDoodle className="hidden shrink-0 text-navy/35 sm:block" size={72} />
             <div>
               <h2 className="max-w-[20ch] font-display text-[32px] font-semibold leading-tight tracking-[-0.02em] sm:text-[40px]">
-                What you are buying, and what you are not.
+                Why students trust what we suggest.
               </h2>
               <p className="mt-4 max-w-[58ch] text-[16px] leading-relaxed text-graphite">
-                Students trust Loose Leaf’s suggestions because those suggestions are not for sale.
-                That trust is what makes a recommendation worth anything to you, so we protect it
-                fairly aggressively.
+                A recommendation is only worth having if the person receiving it believes it. That
+                belief is the whole asset here — yours as much as ours — so these three things
+                stay true no matter who is paying.
               </p>
             </div>
           </div>
@@ -354,8 +354,8 @@ export default function PartnersLanding() {
 
         <p className="mt-8 max-w-[64ch] text-[13.5px] leading-relaxed text-mist">
           Billed once a month through Stripe, in arrears, for the redemptions that happened. A
-          month with none is an invoice for {money(0)} — we do not send it and you are not
-          charged. You add a card when you turn on your first offer, not when you sign up.
+          month with none comes to {money(0)}, and nothing is charged. You add a card when you
+          turn on your first offer, not when you sign up.
         </p>
       </section>
 
@@ -363,7 +363,7 @@ export default function PartnersLanding() {
       <section className="border-t border-rule bg-cream/40">
         <div className="mx-auto max-w-[820px] px-5 py-16 sm:px-8 lg:py-20">
           <h2 className="font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] sm:text-[34px]">
-            Reasonable questions.
+            Questions we get a lot.
           </h2>
 
           <div className="mt-9 divide-y divide-rule border-y border-rule">

@@ -346,6 +346,26 @@ export async function setOfferStatus(offerId, status) {
   bail(error)
 }
 
+/**
+ * Delete an offer outright.
+ *
+ * Goes through an RPC rather than a plain delete, even though the table
+ * policy would allow one, because `date_pass_redemptions.offer_id` cascades:
+ * an unguarded delete takes the rows a partner's invoices were built from.
+ * `delete_offer()` refuses in exactly that case and says to end it instead.
+ */
+export async function deleteOffer(offerId) {
+  const { error } = await supabase.rpc('delete_offer', { p_offer: offerId })
+  bail(error)
+}
+
+/** Counts for the confirmation sheet: how many redeemed, how many live now. */
+export async function offerDeletePreview(offerId) {
+  const { data, error } = await supabase.rpc('offer_delete_preview', { p_offer: offerId })
+  bail(error)
+  return data ?? { redemptions: 0, live_passes: 0 }
+}
+
 export async function offerUsage(offerId) {
   const { data, error } = await supabase.rpc('offer_usage', { p_offer: offerId })
   bail(error)
@@ -578,6 +598,15 @@ export async function staffSetOfferStatus(offerId, status) {
     p_offer: offerId,
     p_status: status,
   })
+  bail(error)
+}
+
+/**
+ * Remove a business and everything under it. Refuses once any of its
+ * redemptions have been invoiced — see `staff_remove_partner()`.
+ */
+export async function staffRemovePartner(partnerId) {
+  const { error } = await supabase.rpc('staff_remove_partner', { p_partner: partnerId })
   bail(error)
 }
 

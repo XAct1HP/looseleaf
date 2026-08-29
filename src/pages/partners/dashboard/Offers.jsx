@@ -4,7 +4,7 @@ import Button from '../../../components/ui/Button'
 import Sheet from '../../../components/ui/Sheet'
 import { Chip } from '../../../components/ui/Chip'
 import { Field, TextInput, TextArea, Select, DayPicker, MoneyInput } from '../../../components/partners/fields'
-import { IconSpark } from '../../../components/ui/Icons'
+import { IconSpark, IconTrash } from '../../../components/ui/Icons'
 import { usePartnerAccount } from '../../../state/partnerAccount'
 import { can, limit, fee } from '../../../lib/partnerBilling'
 import { Link } from 'react-router-dom'
@@ -68,6 +68,7 @@ export default function Offers() {
   const [list, setList] = useState([])
   const [usage, setUsage] = useState({})
   const [editing, setEditing] = useState(null)
+  const [deleting, setDeleting] = useState(null)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
 
@@ -123,26 +124,57 @@ export default function Offers() {
         <div className="rounded-card border border-notebook/40 bg-notebook-soft/60 px-6 py-8">
           <IconSpark size={24} className="text-[#2F5C99]" />
           <h2 className="mt-4 font-display text-[21px] font-semibold leading-tight">
-            Offers start at Featured Partner.
+            Offers aren't switched on for this account.
           </h2>
           <p className="mt-3 max-w-[54ch] text-[14.5px] leading-relaxed text-graphite">
-            On the Date Spot plan you appear where students are browsing, with your photos and your
-            hours. An offer is what turns being findable into being chosen — and it comes with the
-            control to keep that traffic on the nights you actually want it.
+            Your Date Spot is still live — students browsing for somewhere to go will find your
+            photos, hours and address as usual. Offers are the part that turns being findable into
+            being chosen, and they should be on for every partner, so if you're seeing this please
+            get in touch and we'll sort it out.
           </p>
-          <Button to="/partners/dashboard/billing" variant="coral" size="md" className="mt-6">
-            See plans
+          <Button to="/partners/dashboard/billing" variant="outline" size="md" className="mt-6">
+            Open billing
           </Button>
         </div>
       </>
     )
   }
 
-  async function save(offer) {
+  /**
+   * The one reason an offer can't go on, or null. Both cases are situations
+   * rather than mistakes, so they read as "here's the next step" — and both
+   * are checked by the database too, which is what actually decides.
+   */
+  function publishProblem(offer) {
+    if (!canPublish) {
+      return (
+        'Add a card to turn an offer on. Nothing is charged until somebody actually redeems a ' +
+        'pass — the card is there so we can bill for it when they do.'
+      )
+    }
+    if (activeCount >= maxActive && offer.status !== 'active') {
+      return `You can run ${maxActive} offer${maxActive === 1 ? '' : 's'} at a time. Pause one, then turn this on.`
+    }
+    return null
+  }
+
+  /**
+   * Save, and turn it on if that's what the button said.
+   *
+   * Publishing used to be a second trip to the list, which meant the honest
+   * answer to "have I finished?" was no, twice. It's the last step of the
+   * sheet now. If the offer can't go on yet it is still *saved* — losing what
+   * somebody typed because their card isn't on file would be a bad trade — and
+   * the message says which of the two things happened.
+   */
+  async function save(offer, { publish = false } = {}) {
     setBusy(true)
     setError(null)
     try {
-      await partners.saveOffer(partner.id, clean(offer))
+      const id = await partners.saveOffer(partner.id, clean(offer))
+      const problem = publish ? publishProblem(offer) : null
+      if (publish && !problem) await partners.setOfferStatus(id, 'active')
+      if (problem) setError(`Saved as a draft. ${problem}`)
       setEditing(null)
       await load()
     } catch (e) {
@@ -153,22 +185,41 @@ export default function Offers() {
   }
 
   async function setStatus(offer, status) {
-    if (status === 'active' && !canPublish) {
-      setError(
-        'Add a card before turning an offer on. Nothing is charged until somebody actually ' +
-          'redeems a pass — the card is there so we can bill for it when they do.'
-      )
-      return
-    }
-    if (status === 'active' && activeCount >= maxActive && offer.status !== 'active') {
-      setError(
-        `You can run ${maxActive} offer${maxActive === 1 ? '' : 's'} at a time. Pause one first.`
-      )
-      return
+    if (status === 'active') {
+      const problem = publishProblem(offer)
+      if (problem) {
+        setError(problem)
+        return
+      }
     }
     setError(null)
     await partners.setOfferStatus(offer.id, status).catch((e) => setError(e.message))
     await load()
+  }
+
+  /**
+   * Delete, with the counts said out loud first. `delete_offer()` refuses
+   * anything that has ever been redeemed — those rows are the invoice — so
+   * this only ever removes an offer that cost nobody anything.
+   */
+  async function remove() {
+    setBusy(true)
+    try {
+      await partners.deleteOffer(deleting.offer.id)
+      setDeleting(null)
+      setError(null)
+      await load()
+    } catch (e) {
+      setError(e.message)
+      setDeleting(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function askDelete(offer) {
+    const counts = await partners.offerDeletePreview(offer.id).catch(() => null)
+    setDeleting({ offer, counts })
   }
 
   return (
@@ -251,6 +302,7 @@ export default function Offers() {
               usage={usage[o.id]}
               onEdit={() => setEditing(o)}
               onStatus={(s) => setStatus(o, s)}
+              onDelete={() => askDelete(o)}
             />
           ))}
         </ul>
@@ -262,11 +314,33 @@ export default function Offers() {
         onClose={() => setEditing(null)}
         onSave={save}
       />
+
+      <Sheet
+        open={Boolean(deleting)}
+        onClose={() => setDeleting(null)}
+        title={`Delete ${deleting?.offer?.title ?? 'this offer'}?`}
+        subtitle={
+          deleting?.counts?.live_passes > 0
+            ? `${deleting.counts.live_passes} ${
+                deleting.counts.live_passes === 1 ? 'person is' : 'people are'
+              } holding a pass for this right now, and deleting it stops those working. Pausing takes it off your Date Spot and leaves the passes they already have alone.`
+            : 'It comes off your Date Spot straight away and nobody can unlock it again.'
+        }
+      >
+        <div className="flex gap-3">
+          <Button variant="ghost" size="lg" full onClick={() => setDeleting(null)}>
+            Keep it
+          </Button>
+          <Button variant="danger" size="lg" full onClick={remove} disabled={busy}>
+            Delete
+          </Button>
+        </div>
+      </Sheet>
     </>
   )
 }
 
-function OfferRow({ offer, usage, onEdit, onStatus }) {
+function OfferRow({ offer, usage, onEdit, onStatus, onDelete }) {
   const used = Number(usage?.this_month ?? 0)
   const cap = offer.max_monthly_redemptions
   const pct = cap ? Math.min(100, Math.round((used / cap) * 100)) : null
@@ -313,9 +387,17 @@ function OfferRow({ offer, usage, onEdit, onStatus }) {
               onClick={() => onStatus('active')}
               className="press focus-ring rounded-xl bg-navy px-3 py-2 text-[13px] font-medium text-paper hover:bg-navy-soft"
             >
-              {offer.status === 'draft' ? 'Publish' : 'Resume'}
+              {offer.status === 'draft' ? 'Turn it on' : 'Resume'}
             </button>
           )}
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label={`Delete ${offer.title}`}
+            className="press focus-ring flex h-[38px] w-[38px] items-center justify-center rounded-xl text-mist transition hover:bg-coral-wash hover:text-coral-deep"
+          >
+            <IconTrash size={16} />
+          </button>
         </div>
       </div>
 
@@ -354,6 +436,7 @@ function OfferSheet({ offer, onClose, onSave, busy }) {
 
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
   const ready = form.title.trim().length > 1
+  const live = form.status === 'active'
 
   return (
     <Sheet
@@ -554,13 +637,22 @@ function OfferSheet({ offer, onClose, onSave, busy }) {
         </Field>
       </div>
 
-      <div className="mt-7 flex gap-3">
-        <Button variant="coral" size="lg" full onClick={() => onSave(form)} disabled={!ready || busy}>
-          {busy ? 'Saving…' : 'Save offer'}
+      {/* Two ways out, and the one on the right finishes the job. Saving used
+          to be the only option, which meant every offer was created twice:
+          once here, once from the list. An offer already on is not re-turned
+          on — for that one the primary action is just "Save changes". */}
+      <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+        <Button variant="outline" size="lg" full onClick={() => onSave(form, { publish: false })} disabled={!ready || busy}>
+          {live ? 'Save as draft' : 'Save for later'}
+        </Button>
+        <Button variant="coral" size="lg" full onClick={() => onSave(form, { publish: !live })} disabled={!ready || busy}>
+          {busy ? 'Saving…' : live ? 'Save changes' : 'Save and turn it on'}
         </Button>
       </div>
       <p className="mt-3 text-center text-[12px] leading-relaxed text-mist">
-        Saving keeps the offer where it is. Publish it from the list when you’re ready.
+        {live
+          ? 'This offer is on. Changes go live as soon as you save.'
+          : 'Turning it on puts it in front of couples straight away. You can pause it any time, and you are only charged when somebody walks in.'}
       </p>
     </Sheet>
   )

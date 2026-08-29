@@ -104,19 +104,23 @@ export default function Landing() {
               Now at the University of Michigan
             </span>
 
+            {/* "Meet someone worth keeping" read as though the someone were
+                a thing to acquire — a friend called it out and they were
+                right. This is the notebook the whole brand is built on
+                instead, and it puts the reader at the centre of it rather
+                than the person they haven't met yet. */}
             <h1 className="relative mt-5 font-display text-[42px] font-semibold leading-[1.06] tracking-[-0.03em] sm:text-[54px] lg:text-[58px]">
-              Meet someone
+              Write your next
               <br />
-              worth{' '}
               <span className="relative inline-block">
-                keeping.
-                <Underline className="absolute -bottom-2 left-0 w-full text-coral" width={220} />
+                chapter.
+                <Underline className="absolute -bottom-2 left-0 w-full text-coral" width={200} />
               </span>
             </h1>
 
             <p className="mt-7 max-w-[46ch] text-[16.5px] leading-relaxed text-graphite">
-              Dating at college should be easier. Meet people from your campus, see who likes you, and actually
-              make plans. No subscriptions. No boosts. No games.
+              Meet people from your campus, see who likes you, and make actual plans. Free, and
+              nothing here is for sale.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -338,9 +342,9 @@ export default function Landing() {
               Dating features aren’t for sale.
             </h2>
             <p className="mt-6 text-[16.5px] leading-relaxed text-paper/80">
-              Nobody can pay to appear before you, send a better like, see hidden people, or unlock someone who
-              already likes them. Looseleaf is free — and the things that decide who you meet will never have a
-              price tag on them.
+              Looseleaf is free, and the things that decide who you meet will never have a price
+              tag on them. Everyone here sees the same app: the same likes, the same messages, the
+              same chance of being seen.
             </p>
 
             <ul className="mt-8 grid gap-2.5 sm:grid-cols-2">
@@ -367,7 +371,7 @@ export default function Landing() {
         <div className="rounded-sheet border border-rule bg-cream px-7 py-14 text-center sm:px-14">
           <UniversityBadge className="mb-6" />
           <h2 className="mx-auto max-w-[18ch] font-display text-[30px] font-semibold leading-tight tracking-[-0.02em] sm:text-[38px]">
-            Someone on your campus is worth keeping.
+            Your next chapter starts on your campus.
           </h2>
           <p className="mx-auto mt-4 max-w-[44ch] text-[15.5px] leading-relaxed text-graphite">
             Takes about four minutes to set up. You can pause any time, and nothing here is trying to keep you
@@ -389,7 +393,7 @@ export default function Landing() {
         <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-5 py-9 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <Logo size="sm" />
           <p className="text-[13px] text-mist">
-            Made because we were tired of dating apps. · Ann Arbor, MI
+            Made for college, in Ann Arbor, MI
           </p>
           <nav className="flex gap-5 text-[13px] text-graphite">
             <Link to="/join" className="hover:text-navy">

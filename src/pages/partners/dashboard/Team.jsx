@@ -362,7 +362,7 @@ export default function Team() {
         </p>
         {isOwner && (
           <p className="mt-3 max-w-[62ch] text-[13px] leading-relaxed text-mist">
-            Want a manager handling the subscription, or staff seeing the day's redemptions? Hand
+            Want a manager handling the billing, or staff seeing the day's redemptions? Hand
             those pages over in{' '}
             <Link
               to="/partners/dashboard/settings"

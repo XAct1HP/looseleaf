@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react'
 import BackstageHeader from './BackstageHeader'
 import StatTile from '../../components/backstage/StatTile'
 import Button from '../../components/ui/Button'
+import Sheet from '../../components/ui/Sheet'
 import { Chip } from '../../components/ui/Chip'
-import { IconPin, IconLink, IconSpark } from '../../components/ui/Icons'
+import { IconPin, IconLink, IconSpark, IconTrash } from '../../components/ui/Icons'
 import { daysText } from '../../data/partnerCatalog'
 import { money } from '../../lib/partnerBilling'
 import * as partners from '../../services/partners'
@@ -37,6 +38,7 @@ export default function Partners() {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
   const [openOffers, setOpenOffers] = useState(null)
+  const [removing, setRemoving] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -72,6 +74,29 @@ export default function Partners() {
       await load()
     } catch (e) {
       setError(e.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
+   * Gone, not suspended. Everything under the business goes with it — team,
+   * Date Spot, offers, passes, credit row — which is what makes it the right
+   * tool for a test account and the wrong one for a business that has traded.
+   * The database refuses the second case rather than trusting this button:
+   * once a redemption has been invoiced, the ledger is the evidence for that
+   * invoice and `staff_remove_partner()` says so.
+   */
+  async function remove() {
+    setBusy(removing.id)
+    try {
+      await partners.staffRemovePartner(removing.id)
+      setRemoving(null)
+      setError(null)
+      await load()
+    } catch (e) {
+      setError(e.message)
+      setRemoving(null)
     } finally {
       setBusy(null)
     }
@@ -226,6 +251,15 @@ export default function Partners() {
                       Reinstate
                     </Button>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setRemoving(p)}
+                    disabled={busy === p.id}
+                    aria-label={`Remove ${p.name}`}
+                    className="press focus-ring flex h-9 w-9 items-center justify-center rounded-full text-mist transition hover:bg-coral-wash hover:text-coral-deep disabled:opacity-40"
+                  >
+                    <IconTrash size={16} />
+                  </button>
                 </div>
               </div>
 
@@ -234,6 +268,26 @@ export default function Partners() {
           ))}
         </ul>
       )}
+
+      <Sheet
+        open={Boolean(removing)}
+        onClose={() => setRemoving(null)}
+        title={`Remove ${removing?.name ?? 'this business'}?`}
+        subtitle="Their team, Date Spot, offers and any passes people are holding all go with them. There is no undo, and it is not the same as suspending — a suspended business keeps everything and simply stops being shown."
+      >
+        <div className="flex gap-3">
+          <Button variant="ghost" size="lg" full onClick={() => setRemoving(null)}>
+            Keep it
+          </Button>
+          <Button variant="danger" size="lg" full onClick={remove} disabled={busy === removing?.id}>
+            Remove for good
+          </Button>
+        </div>
+        <p className="mt-4 text-center text-[12.5px] leading-relaxed text-mist">
+          A business whose redemptions have been invoiced can't be removed — those rows are what
+          the invoice was built from. Suspend that one instead.
+        </p>
+      </Sheet>
 
       <section className="mt-8 rounded-card border border-rule bg-cream/60 px-6 py-6">
         <div className="flex items-start gap-4">

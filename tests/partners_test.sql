@@ -2281,5 +2281,133 @@ begin
     'no listing survives with no account behind it');
 end $$;
 
+
+-- ═══════════════════════════════════════════════════════════════════════════
+--  21. deleting an offer, removing a business
+-- ═══════════════════════════════════════════════════════════════════════════
+--  20260829120000. Both used to be pause-only. What makes them more than a
+--  `delete` is that `date_pass_redemptions` cascades from both offer and
+--  partner — so an unguarded delete takes the rows an invoice was built from,
+--  including ones somebody has already paid. Each function refuses in exactly
+--  that case, and these assertions are the only thing standing between a
+--  tidy-up and a deleted ledger.
+
+--  21a. an offer nobody ever used just goes
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_offer uuid;
+begin
+  insert into partner_offers (partner_id, title, offer_type, percent_off, status,
+                              days_of_week, per_person_rule, requires_date)
+  values (v_partner, 'Typo Tuesday', 'percent_off', 10, 'draft',
+          array[0,1,2,3,4,5,6], 'unlimited', false)
+  returning id into v_offer;
+
+  perform act_as(current_setting('test.biz')::uuid);
+  perform delete_offer(v_offer);
+  perform assert(not exists (select 1 from partner_offers where id = v_offer),
+                 'a partner can delete an offer that was never redeemed');
+end $$;
+
+--  21b. one that has been is part of a bill, and says so
+do $$
+declare
+  v_offer uuid := current_setting('test.offer')::uuid;
+  ok boolean := false;
+begin
+  perform assert(exists (select 1 from date_pass_redemptions where offer_id = v_offer),
+                 'the fixture offer has been redeemed, so the next assertion means something');
+
+  perform act_as(current_setting('test.biz')::uuid);
+  begin
+    perform delete_offer(v_offer);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'an offer that has been redeemed cannot be deleted');
+  perform assert(exists (select 1 from partner_offers where id = v_offer),
+                 'and it is still there afterwards');
+end $$;
+
+--  21c. and it is the business's own power, not anybody's
+do $$
+declare ok boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  begin
+    perform delete_offer(current_setting('test.offer')::uuid);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a student cannot delete a business''s offer');
+end $$;
+
+--  21d. the confirmation sheet gets counts and nothing else
+do $$
+declare v jsonb;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  v := offer_delete_preview(current_setting('test.offer')::uuid);
+  perform assert((v ->> 'redemptions')::int >= 1, 'the preview counts redemptions');
+  perform assert(v ? 'live_passes', 'and passes somebody is holding right now');
+  perform assert(
+    (select count(*) from jsonb_object_keys(v)) = 2,
+    'and nothing else — a partner reads counts, never a pass, a code or a person');
+end $$;
+
+--  21e. removing a business is staff work
+do $$
+declare ok boolean := false;
+begin
+  perform act_as(current_setting('test.ada')::uuid);
+  begin
+    perform staff_remove_partner(current_setting('test.partner')::uuid);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a student cannot remove a business');
+end $$;
+
+--  21f. …and refuses once an invoice has been built on its redemptions.
+--  This is the assertion that matters: the failure it prevents is silent,
+--  permanent, and only noticed when somebody disputes a charge.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  ok boolean := false;
+begin
+  update date_pass_redemptions set bill_status = 'paid' where partner_id = v_partner;
+
+  perform act_as(current_setting('test.staff')::uuid);
+  begin
+    perform staff_remove_partner(v_partner);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a business whose redemptions have been invoiced cannot be removed');
+  perform assert(exists (select 1 from partners where id = v_partner),
+                 'and it is still there, to be suspended instead');
+end $$;
+
+--  21g. with nothing billed, it goes, and everything under it goes too
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_offers int;
+begin
+  update date_pass_redemptions set bill_status = 'waived' where partner_id = v_partner;
+  select count(*) into v_offers from partner_offers where partner_id = v_partner;
+  perform assert(v_offers > 0, 'the business still has offers, so the cascade means something');
+
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_remove_partner(v_partner);
+
+  perform assert(not exists (select 1 from partners where id = v_partner),
+                 'staff can remove a business that has never been invoiced');
+  perform assert(not exists (select 1 from partner_offers where partner_id = v_partner),
+                 'and its offers go with it');
+  perform assert(not exists (select 1 from partner_members where partner_id = v_partner),
+                 'and its team');
+  perform assert(exists (select 1 from partner_users where id = current_setting('test.biz')::uuid),
+                 'but the person''s login survives — it is theirs, not the business''s');
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'

@@ -434,21 +434,56 @@ and your own card; the whole run costs $1.50 and you refund it at the end.
    select bill_status, fee_cents from date_pass_redemptions
     order by redeemed_at desc limit 1;   -- pending, 150
    ```
-5. **Fire the metering worker by hand** rather than waiting a quarter of an hour:
-   ```bash
-   curl -X POST "https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions" -H "x-worker-token: <METER_WORKER_TOKEN>"
+5. **Fire the metering worker by hand** rather than waiting a quarter of an
+   hour. Best done from the **SQL editor**, because it exercises the exact path
+   the cron job uses — same `net.http_post`, same header, same Vault lookup —
+   rather than a shell that happens to work:
+
+   ```sql
+   select net.http_post(
+     url     := 'https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions',
+     headers := jsonb_build_object(
+                  'Content-Type',  'application/json',
+                  'x-worker-token',
+                  (select decrypted_secret from vault.decrypted_secrets
+                    where name = 'meter_worker_token')),
+     body    := '{}'::jsonb);
+
+   -- wait five seconds, then:
+   select status_code, left(content, 200) from net._http_response
+    order by created desc limit 1;
    ```
-   → `{"reported":1,...}`, the row goes to `metered`, and the meter in Stripe
-   shows one event under that customer. (One line on purpose. In PowerShell call
-   `curl.exe`, and never break the line with a `\`.)
+
+   → `200`, `{"reported":1,...}`, the row goes to `metered`, and the meter in
+   Stripe shows one event under that customer. A `401` means the Vault value
+   and `METER_WORKER_TOKEN` on the function have drifted apart.
+
+   From a terminal instead, mind that **Windows PowerShell 5.1 aliases `curl`
+   to `Invoke-WebRequest`**, which doesn't understand `-X` or `-H` and fails
+   with *"Cannot bind parameter 'Headers'"*. Call the real binary, on one line:
+
+   ```powershell
+   curl.exe -X POST "https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions" -H "x-worker-token: PASTE-TOKEN"
+   ```
+
+   Or use PowerShell's own, which parses the JSON reply for you:
+
+   ```powershell
+   Invoke-RestMethod -Method Post -Uri "https://<project-ref>.supabase.co/functions/v1/partner-meter-redemptions" -Headers @{ 'x-worker-token' = 'PASTE-TOKEN' }
+   ```
 6. **Finalise the draft invoice by hand.** Billing → Invoices → the draft on that
    customer → Finalise, then Charge. → a $1.50 invoice paid by your own card;
    `invoice.finalized` stamps `stripe_invoice_id` onto the redemption,
    `invoice.paid` flips it to `paid`, and the partner moves to **Established**.
 7. **Refund it** and delete the test offer. Then clear the run so it isn't in
-   your first real month's numbers:
+   your first real month's numbers. In the SQL editor you are `postgres` with
+   no signed-in user, so do the update rather than calling the staff RPC (see
+   the note below §9 for why):
    ```sql
-   select staff_waive_redemption('<redemption-uuid>');
+   update date_pass_redemptions
+      set bill_status = 'waived'
+    where id = '<redemption-uuid>'
+      and bill_status in ('pending','metered','invoiced','failed');
    ```
 8. **Check the cron job is actually running in live**, because it is the thing
    most likely to have been left pointing at nothing:
@@ -466,8 +501,40 @@ and your own card; the whole run costs $1.50 and you refund it at the end.
 
 ## 9 · The first fortnight
 
+> ### Staff RPCs don't work in the SQL editor as-is
+>
+> `is_admin()` is `select is_admin from profiles where id = auth.uid()`, and in
+> the SQL editor there is no signed-in user — `auth.uid()` is null, so it
+> returns false and every `staff_*` function raises **`Not authorised`**. This
+> is correct behaviour (the RPCs exist to gate the app, where a staff member's
+> JWT is present) and it catches everybody once.
+>
+> Two ways round it. For a one-off write, skip the function: in the SQL editor
+> you are already past every gate it enforces, so do the `update` directly.
+>
+> To actually call the RPCs — which is how you read the two below, since
+> Backstage has no screen for them yet — hand Postgres an identity for the
+> transaction:
+>
+> ```sql
+> -- your own profile id, once:
+> select id, first_name from profiles where is_admin;
+>
+> begin;
+> select set_config('request.jwt.claims',
+>                   json_build_object('sub', '<your-profile-uuid>')::text, true);
+> select staff_partner_revenue();
+> commit;
+> ```
+>
+> `auth.uid()` reads `request.jwt.claims ->> 'sub'`, so this makes you yourself
+> for exactly one transaction. `set_config(..., true)` is transaction-local, so
+> the `set_config` and the call have to run **together** — select the whole
+> block and run it, don't run the lines one at a time.
+
 Three things can be wrong for a week without anything on any screen looking
-wrong. All three are one query.
+wrong. The first is a plain query; the last two are staff RPCs, so wrap them as
+above.
 
 ```sql
 -- 1. Is the metering worker alive? If the oldest pending row is more than a
