@@ -219,19 +219,38 @@ live in two places:
 | `PARTNER_SITE_URL` | same | `https://hellolooseleaf.com` first in the list |
 | `METER_WORKER_TOKEN` | same **and** the cron job / Vault | rotate it — a new long random string |
 
-```bash
-supabase secrets set \
-  STRIPE_SECRET_KEY=sk_live_xxx \
-  STRIPE_WEBHOOK_SECRET=whsec_xxx \
-  PARTNER_SITE_URL=https://hellolooseleaf.com \
-  METER_WORKER_TOKEN=<new long random string>
+Set them from the env file rather than from the command line. It already
+exists with these four keys in it, it is gitignored by name — the repo is
+public, and `sk_live_` in a shell history is one `history | grep` away from
+being somewhere it shouldn't be.
 
+Open `supabase/functions/.env`, replace the four values, then:
+
+```powershell
+supabase secrets set --env-file supabase/functions/.env
+```
+
+Then redeploy, one command per line:
+
+```powershell
 supabase functions deploy partner-billing-setup
 supabase functions deploy partner-billing-sync
 supabase functions deploy partner-portal
 supabase functions deploy partner-meter-redemptions --no-verify-jwt
-supabase functions deploy stripe-webhook            --no-verify-jwt
+supabase functions deploy stripe-webhook --no-verify-jwt
 ```
+
+> **On Windows, don't paste a multi-line command with `\` at the end of each
+> line.** That is a bash line continuation and PowerShell has never heard of
+> it — it hands the backslash to the program as an argument and runs each line
+> as its own command. And `<like this>` is worse than a placeholder here: `<`
+> and `>` are reserved redirection operators, so PowerShell refuses the line
+> before it gets as far as noticing the value is fake. If you do want it
+> inline, put it on **one** line with real values:
+>
+> ```powershell
+> supabase secrets set STRIPE_SECRET_KEY=sk_live_xxx STRIPE_WEBHOOK_SECRET=whsec_xxx PARTNER_SITE_URL=https://hellolooseleaf.com METER_WORKER_TOKEN=paste-the-token-here
+> ```
 
 **Nothing changes on Vercel.** There is no Stripe key in the front end, not even
 a publishable one — the whole reason the edge functions exist. Don't go looking
@@ -263,13 +282,43 @@ in two different places. If you rotate it in one and not the other, metering
 401s and the ledger stops draining while everything else looks perfect. Update
 the Vault secret in the same sitting:
 
+The secret is almost certainly already there from the sandbox, and
+`create_secret` on a name that exists fails with `duplicate key value violates
+unique constraint "secrets_name_idx"` — it is a create, not an upsert. Look
+first, then take the branch you're on:
+
 ```sql
-select vault.create_secret('<new token>', 'meter_worker_token');
--- if it already exists:
+select id, name from vault.secrets where name = 'meter_worker_token';
+```
+
+```sql
+-- it exists → update it in place
 select vault.update_secret(
   (select id from vault.secrets where name = 'meter_worker_token'),
-  '<new token>');
+  'paste-the-new-token-here');
+
+-- no row → create it
+select vault.create_secret('paste-the-new-token-here', 'meter_worker_token');
 ```
+
+Then confirm the value that landed is the one you think it is:
+
+```sql
+select name, decrypted_secret = 'paste-the-new-token-here' as matches
+from vault.decrypted_secrets where name = 'meter_worker_token';
+```
+
+And confirm the cron job actually *reads* Vault rather than carrying the old
+token as literal text — if it does, updating Vault changes nothing:
+
+```sql
+select jobname, command from cron.job where jobname = 'meter-date-pass-redemptions';
+```
+
+The command should contain a `select decrypted_secret from
+vault.decrypted_secrets` subquery. If instead you can read the token with your
+own eyes, re-run `cron.schedule` with the Vault version from
+STRIPE-PAY-PER-REDEMPTION §5 — same job name overwrites.
 
 The cron job itself doesn't change if it already reads from Vault (see
 STRIPE-PAY-PER-REDEMPTION §5). If it has the old token inline as literal text,
