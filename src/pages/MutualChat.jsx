@@ -59,6 +59,18 @@ export default function MutualChat() {
     load()
   }, [load])
 
+  // Their message, without a reload. The guard matters: your own insert comes
+  // back down this channel too, and the refresh after sending has usually put
+  // it on screen a moment earlier — so an id we already hold is dropped rather
+  // than appended twice.
+  useEffect(
+    () =>
+      mutuals.subscribeToThread(id, (message) => {
+        setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
+      }),
+    [id]
+  )
+
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' })
   }, [messages.length])

@@ -7,6 +7,7 @@ import { can } from '../../../lib/partnerBilling'
 import RoleAccess from '../../../components/partners/RoleAccess'
 import { InterestPicker } from '../../../components/profile/MatchingFields'
 import { InstallLink } from '../../../components/partners/InstallNudge'
+import LeavingSection from '../../../components/partners/LeavingSection'
 import * as partners from '../../../services/partners'
 import { DATE_TYPE_TAGS, VIBE_TAGS } from '../../../data/partnerCatalog'
 
@@ -280,6 +281,12 @@ export default function Settings() {
           </div>
         </section>
       )}
+
+      {/* Last on the page on purpose — everything above it is a reason not to
+          need it, and a close-the-account control that sits above the settings
+          somebody actually came here to change is a control that gets clicked
+          by accident. */}
+      <LeavingSection partner={partner} onClosed={refresh} />
 
       {/* what we don't share */}
       <section className="mt-6 rounded-card border border-rule bg-cream/60 px-6 py-6">

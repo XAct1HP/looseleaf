@@ -11,6 +11,7 @@ import { isDemo } from '../services/backend'
 import { INTENTIONS, UNIVERSITY } from '../data/catalog'
 import { IconChevron, IconShield, IconLock, IconBell, IconHeart, IconPerson } from '../components/ui/Icons'
 import * as mutualsApi from '../services/mutuals'
+import * as account from '../services/live/account'
 
 function Group({ title, Icon, children }) {
   return (
@@ -86,6 +87,63 @@ export default function Settings() {
     mutuals: true,
     activity: false,
   })
+
+  /* ── Leaving ────────────────────────────────────────────────────────────
+   *
+   * This button called `actions.resetDemo()`, which in live mode is an
+   * optional-chain onto a null demo module — a no-op — and then navigated
+   * home. The account stayed. Somebody who wanted out was shown a
+   * confirmation, given a redirect, and kept everything.
+   *
+   * So the live path now goes all the way through `services/live/account`,
+   * and nothing here reports success on its own: the redirect is the last
+   * line of `confirmDelete`, after the deletion resolved, and an error keeps
+   * the sheet open with the reason on it. A delete button that lies is worse
+   * than no delete button.
+   */
+  const [deleteCounts, setDeleteCounts] = useState(null)
+  const [deleteError, setDeleteError] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const openDelete = async () => {
+    setDeleteError(null)
+    setDeleteCounts(null)
+    setSheet('delete')
+    if (isDemo) return
+    // Best-effort. The sheet is honest without the numbers and it should not
+    // wait on a round trip to open.
+    try {
+      setDeleteCounts(await account.deletePreview())
+    } catch {
+      /* no numbers, same sheet */
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (isDemo) {
+      actions.resetDemo()
+      navigate('/')
+      return
+    }
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const { keptPartnerLogin } = await account.deleteAccount()
+      // Said out loud rather than quietly: the same email can hold a Loose
+      // Leaf Partner login, and that one survives on purpose so a business is
+      // never left without an owner. Somebody who thinks they have removed
+      // every trace of themselves should not find out otherwise by signing in.
+      if (keptPartnerLogin) {
+        actions.showToast(
+          'Your Looseleaf account is gone. Your Loose Leaf Partner login is separate and still works.'
+        )
+      }
+      navigate('/')
+    } catch (err) {
+      setDeleteError(err.message)
+      setDeleting(false)
+    }
+  }
 
   return (
     <>
@@ -173,7 +231,7 @@ export default function Settings() {
           />
           {isDemo && <Row label="Reset demo data" onClick={() => setSheet('reset')} />}
           <Row label="Log out" onClick={async () => { await actions.signOut(); navigate('/') }} />
-          <Row label="Delete account" danger onClick={() => setSheet('delete')} />
+          <Row label="Delete account" danger onClick={openDelete} />
         </Group>
 
         <p className="px-2 text-center text-[12.5px] leading-relaxed text-mist">
@@ -211,15 +269,43 @@ export default function Settings() {
 
       <Sheet
         open={sheet === 'delete'}
-        onClose={() => setSheet(null)}
+        onClose={() => (deleting ? null : setSheet(null))}
         title="Delete your account?"
-        subtitle="This removes your profile, matches, and messages. It can’t be undone — pausing is usually what people actually want."
+        subtitle="It can’t be undone — pausing is usually what people actually want."
       >
         <div className="flex flex-col gap-2">
+          {/* What is about to go, counted. The sheet used to describe deletion
+              in general terms — "your profile, matches, and messages" — which
+              is true of everybody and checkable by nobody. These are this
+              account's own numbers, and the live passes line is the one that
+              earns its place: a pass in hand is a promise to a business too,
+              and it is better to learn it is about to be void here than at a
+              counter. */}
+          {deleteCounts && (
+            <ul className="mb-1 rounded-2xl border border-rule bg-cream/60 px-4 py-3 text-[13.5px] leading-relaxed text-graphite">
+              <li>{deleteCounts.matches ?? 0} match{deleteCounts.matches === 1 ? '' : 'es'}, and everything said in them</li>
+              <li>{deleteCounts.photos ?? 0} photo{deleteCounts.photos === 1 ? '' : 's'}</li>
+              <li>{deleteCounts.mutuals ?? 0} mutual{deleteCounts.mutuals === 1 ? '' : 's'}</li>
+              {deleteCounts.live_passes > 0 && (
+                <li className="mt-1 font-medium text-coral-deep">
+                  {deleteCounts.live_passes} Date Pass{deleteCounts.live_passes === 1 ? '' : 'es'} you
+                  are holding right now — deleting voids {deleteCounts.live_passes === 1 ? 'it' : 'them'}.
+                </li>
+              )}
+            </ul>
+          )}
+
+          {deleteError && (
+            <p className="mb-1 rounded-2xl border border-coral/30 bg-coral-wash px-4 py-3 text-[13.5px] leading-relaxed text-coral-deep">
+              {deleteError}
+            </p>
+          )}
+
           <Button
             variant="soft"
             size="lg"
             full
+            disabled={deleting}
             onClick={() => {
               setSheet(null)
               actions.setPaused(true)
@@ -227,16 +313,8 @@ export default function Settings() {
           >
             Pause instead
           </Button>
-          <Button
-            variant="danger"
-            size="lg"
-            full
-            onClick={() => {
-              actions.resetDemo()
-              navigate('/')
-            }}
-          >
-            Delete permanently
+          <Button variant="danger" size="lg" full disabled={deleting} onClick={confirmDelete}>
+            {deleting ? 'Deleting…' : 'Delete permanently'}
           </Button>
         </div>
       </Sheet>

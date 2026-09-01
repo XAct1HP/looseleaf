@@ -21,3 +21,9 @@ verify_jwt = false
 
 [functions.partner-meter-redemptions]
 verify_jwt = false
+
+# Deleting an account is only ever the signed-in person deleting their own,
+# so the platform's own token check is the first gate and the RPCs are the
+# second.
+[functions.delete-account]
+verify_jwt = true

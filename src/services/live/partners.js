@@ -359,6 +359,46 @@ export async function deleteOffer(offerId) {
   bail(error)
 }
 
+/**
+ * ── Closing the business itself ───────────────────────────────────────────
+ *
+ * The same shape as deleting an offer and for the same reason: the delete is
+ * an RPC because `date_pass_redemptions.partner_id` cascades, and the RPC
+ * refuses once anything has been invoiced. What is different is who may call
+ * it — owner only, not `partner_can(…, 'billing')`. A manager who can fix a
+ * declined card should not be able to end the account.
+ *
+ * It is not the same act as deleting your login, and the screen keeps them
+ * apart: a business can outlive the person who set it up, and a person can
+ * outlive the business.
+ */
+export async function partnerDeletePreview(partnerId) {
+  const { data, error } = await supabase.rpc('partner_delete_preview', { p_partner: partnerId })
+  bail(error)
+  return data ?? { billed: 0, unbilled: 0, offers: 0, team: 0, live_passes: 0 }
+}
+
+export async function deleteBusiness(partnerId) {
+  const { data, error } = await supabase.rpc('delete_partner_business', { p_partner: partnerId })
+  bail(error)
+
+  // Logos and Date Spot covers live under <partner-id>/ in a public bucket and
+  // are not a foreign key, so the row going does not take them. The bucket's
+  // policy is a path check against team membership, which the delete has just
+  // ended — so this is best-effort by construction, and a stale image nothing
+  // links to is a much smaller problem than a failed close.
+  const prefix = data?.media_prefix
+  if (prefix) {
+    try {
+      const { data: files } = await supabase.storage.from('partner-media').list(prefix)
+      const keys = (files ?? []).map((f) => `${prefix}/${f.name}`)
+      if (keys.length) await supabase.storage.from('partner-media').remove(keys)
+    } catch {
+      /* the business is closed either way */
+    }
+  }
+}
+
 /** Counts for the confirmation sheet: how many redeemed, how many live now. */
 export async function offerDeletePreview(offerId) {
   const { data, error } = await supabase.rpc('offer_delete_preview', { p_offer: offerId })

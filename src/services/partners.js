@@ -125,6 +125,9 @@ export const syncBilling = gated(live.syncBilling)
 export const billingSummary = gated(live.billingSummary)
 export const billableRedemptions = gated(live.billableRedemptions)
 
+export const partnerDeletePreview = gated(live.partnerDeletePreview)
+export const deleteBusiness = gated(live.deleteBusiness)
+
 export const staffQueue = gated(live.staffQueue)
 export const staffSetStatus = gated(live.staffSetStatus)
 export const staffRemovePartner = gated(live.staffRemovePartner)

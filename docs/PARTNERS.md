@@ -105,7 +105,12 @@ supabase functions deploy partner-billing-setup
 supabase functions deploy partner-portal
 supabase functions deploy partner-meter-redemptions --no-verify-jwt
 supabase functions deploy stripe-webhook            --no-verify-jwt
+supabase functions deploy delete-account
 ```
+
+`delete-account` is not a billing function; it is here because it is the
+other thing that cannot run in the browser. Until it is deployed, both
+delete buttons fail with an error — see [ACCOUNT-DELETION.md](ACCOUNT-DELETION.md).
 
 `partner-checkout` and `partner-report-usage` are gone — delete them from the
 project so a stale deployment can't take a card for a plan that no longer

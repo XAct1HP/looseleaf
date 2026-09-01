@@ -50,7 +50,11 @@ export default function Reports() {
   const submit = async () => {
     const { report, decision } = resolving
     try {
-      if (alsoSuspend && decision === 'actioned') {
+      // `reported` can be null now: a report outlives the account it is about,
+      // so that somebody can't clear the queue by deleting themselves. There
+      // is nothing left to suspend in that case, and the checkbox below is
+      // hidden for the same reason.
+      if (alsoSuspend && decision === 'actioned' && report.reported?.id) {
         await staff.setPaused(report.reported.id, true)
       }
       await staff.resolveReport(report.id, state.session.userId, decision, note)
@@ -203,7 +207,14 @@ export default function Reports() {
           placeholder="What you found, and what you did about it."
         />
 
-        {resolving?.decision === 'actioned' && (
+        {resolving?.decision === 'actioned' && !resolving?.report?.reported && (
+          <p className="mt-4 rounded-2xl border border-rule bg-cream/60 px-4 py-3 text-[13.5px] leading-relaxed text-mist">
+            This account has been deleted. The report stays on the record; there is nothing left to
+            suspend.
+          </p>
+        )}
+
+        {resolving?.decision === 'actioned' && resolving?.report?.reported && (
           <label className="mt-4 flex items-start gap-3 rounded-2xl border border-rule bg-cream/60 px-4 py-3">
             <input
               type="checkbox"

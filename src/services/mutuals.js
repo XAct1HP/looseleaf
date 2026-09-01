@@ -71,6 +71,21 @@ export async function send(threadId, senderId, body, personRef = null) {
   return live.send(threadId, senderId, body, personRef)
 }
 
+/**
+ * Listen for messages someone else sends into this thread. Returns the
+ * unsubscribe.
+ *
+ * Demo threads have nobody to hear from — the other side is a scripted reply
+ * produced by this same browser a moment after you send — so demo mode gets a
+ * no-op rather than a branch inside the screen. Note this one is synchronous
+ * where everything else here is a promise: a React cleanup function has to be
+ * returned, not awaited.
+ */
+export function subscribeToThread(threadId, onMessage) {
+  if (isDemo) return () => {}
+  return live.subscribeToThread(threadId, onMessage)
+}
+
 /** Demo only — gives the other side of the conversation something to say. */
 export async function demoReply(threadId, seed) {
   if (!isDemo) return null

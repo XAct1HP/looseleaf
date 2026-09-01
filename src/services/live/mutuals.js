@@ -111,13 +111,75 @@ export async function readThread(conversationId) {
   const cards = refIds.length ? await references(refIds) : []
   const byId = Object.fromEntries(cards.map((c) => [c.id, c]))
 
-  return rows.map((m) => ({
-    id: m.id,
-    from: m.sender_id,
-    text: m.body,
-    card: m.person_ref ? byId[m.person_ref] ?? null : null,
-    at: m.created_at,
-  }))
+  return rows.map((m) => toMessage(m, m.person_ref ? byId[m.person_ref] ?? null : null))
+}
+
+/** One row of `messages`, in the shape both thread screens render. */
+function toMessage(row, card = null) {
+  return {
+    id: row.id,
+    from: row.sender_id,
+    text: row.body,
+    card,
+    at: row.created_at,
+  }
+}
+
+/**
+ * ── A message that arrives while you are looking at the thread ────────────
+ *
+ * `readThread` is a snapshot — it answers "what has been said" at the moment
+ * it was called. Until this existed, the only two things that ever asked again
+ * were opening the thread and sending something yourself, so the other
+ * person's reply sat in Postgres, delivered to nobody, until you happened to
+ * type. A thread that only updates when you talk makes the person on the other
+ * end look like they never answered.
+ *
+ * `messages` has been in the `supabase_realtime` publication since the init
+ * migration, and Realtime runs every row past the same RLS policy a select
+ * would hit — `in_conversation()` — so a subscriber is handed only rows they
+ * could already have read. The filter below is a bandwidth decision, not the
+ * security boundary; removing it would leak nothing, it would just wake this
+ * screen for every message on Looseleaf.
+ *
+ * A row arrives with `person_ref` as a bare id, because that is what the
+ * column holds. Resolving it to a card costs one more round trip, so it
+ * happens here rather than in the component: what the caller gets is the same
+ * shape `readThread` returns, and nothing on screen needs to know which of the
+ * two it came from.
+ *
+ * Returns the unsubscribe, and it must be called — a channel left open on a
+ * thread you have navigated away from holds a socket and keeps delivering into
+ * a component that no longer exists.
+ */
+export function subscribeToThread(conversationId, onMessage) {
+  if (!conversationId) return () => {}
+
+  const channel = supabase
+    .channel(`thread:${conversationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      async ({ new: row }) => {
+        if (!row) return
+        let card = null
+        if (row.person_ref) {
+          const [found] = await references([row.person_ref])
+          card = found ?? null
+        }
+        onMessage(toMessage(row, card))
+      }
+    )
+    .subscribe()
+
+  return () => {
+    supabase.removeChannel(channel)
+  }
 }
 
 export async function send(conversationId, senderId, body, personRef = null) {

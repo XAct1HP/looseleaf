@@ -42,36 +42,45 @@ export default function DateSpotCard({
     <article
       className={`lift-corner relative flex h-full flex-col overflow-hidden rounded-card border border-rule bg-white ${className}`}
     >
-      {!compact && (
-        <div className="relative">
-          <SpotImage
-            path={spot.coverPath}
-            alt=""
-            className="aspect-[16/9] w-full"
-            seed={spot.id ?? spot.name}
-            priority={priority}
-          />
+      {/* ── The photo, on both variants ────────────────────────────────
+          The compact card had none, which made the chat suggestion the one
+          place on Looseleaf where we propose somewhere to go without showing
+          it. "Nine minutes away, and here is what it looks like" is most of
+          what separates help from an advert, so compact gets a cover too —
+          a shallower one, because a card that arrives inside a conversation
+          should not shove the messages a full 16:9 up the screen.
 
-          {/* The perk, as a mark rather than a message: one icon, fixed size,
-              same on every card that has one. What it *is* is spelled out on
-              the footer line below, where it can't grow. */}
-          {spot.offer && (
-            <span
-              className="absolute left-3 top-3 flex h-8 w-8 items-center justify-center rounded-full border border-black/5 bg-white/95 text-margin shadow-paper backdrop-blur"
-              title={spot.offer.summary}
-            >
-              <IconTag size={15} />
-              <span className="sr-only">Loose Leaf perk: {spot.offer.summary}</span>
-            </span>
-          )}
+          The perk mark is on both: it is the thing a student is scanning
+          for. The fit badge is not, because the compact text row already
+          carries a fit chip and two of them on one small card reads as a
+          bug. */}
+      <div className="relative">
+        <SpotImage
+          path={spot.coverPath}
+          alt=""
+          className={`w-full ${compact ? 'aspect-[21/9]' : 'aspect-[16/9]'}`}
+          seed={spot.id ?? spot.name}
+          priority={priority}
+        />
 
-          {fit != null && (
-            <span className="absolute right-3 top-3 rounded-full bg-moss px-2.5 py-1 text-[11.5px] font-semibold tabular-nums text-white shadow-paper">
-              {fit}% fit
-            </span>
-          )}
-        </div>
-      )}
+        {spot.offer && (
+          <span
+            className={`absolute flex items-center justify-center rounded-full border border-black/5 bg-white/95 text-margin shadow-paper backdrop-blur ${
+              compact ? 'left-2.5 top-2.5 h-7 w-7' : 'left-3 top-3 h-8 w-8'
+            }`}
+            title={spot.offer.summary}
+          >
+            <IconTag size={compact ? 13 : 15} />
+            <span className="sr-only">Loose Leaf perk: {spot.offer.summary}</span>
+          </span>
+        )}
+
+        {!compact && fit != null && (
+          <span className="absolute right-3 top-3 rounded-full bg-moss px-2.5 py-1 text-[11.5px] font-semibold tabular-nums text-white shadow-paper">
+            {fit}% fit
+          </span>
+        )}
+      </div>
 
       <div className={`flex flex-1 flex-col ${compact ? 'px-4 py-4' : 'px-5 py-4'}`}>
         <div className="flex items-start justify-between gap-3">
