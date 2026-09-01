@@ -26,7 +26,15 @@ import { useStore } from '../../state/store'
  *     is nothing good to suggest. A card that pops in mid-scroll and shoves the
  *     messages down is the exact texture of an ad.
  */
-export default function DateNudge({ conversationId, person, reason, onPlan, onDismiss, onShown }) {
+export default function DateNudge({
+  conversationId,
+  person,
+  reason,
+  onPlan,
+  onDismiss,
+  onShown,
+  surface = 'chat',
+}) {
   const { state: store } = useStore()
   const couple = useMemo(() => coupleContext(store.me, person), [store.me, person])
 
@@ -37,7 +45,7 @@ export default function DateNudge({ conversationId, person, reason, onPlan, onDi
   useEffect(() => {
     let live = true
     dates
-      .recommend({ conversationId, surface: 'chat', limit: 4, ...couple })
+      .recommend({ conversationId, surface, limit: 4, ...couple })
       .then((list) => {
         if (!live) return
         if (!list.length) {
@@ -48,7 +56,7 @@ export default function DateNudge({ conversationId, person, reason, onPlan, onDi
         setSpot(list[0])
         setState('ready')
         dates.logRecommendation(list[0].id, {
-          surface: 'chat',
+          surface,
           conversationId,
           rank: 1,
           fit: list[0].fit,
@@ -60,12 +68,12 @@ export default function DateNudge({ conversationId, person, reason, onPlan, onDi
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, couple])
+  }, [conversationId, couple, surface])
 
   if (state !== 'ready' || !spot) return null
 
   function swap() {
-    dates.logRecommendation(spot.id, { surface: 'chat', conversationId, outcome: 'swapped' })
+    dates.logRecommendation(spot.id, { surface, conversationId, outcome: 'swapped' })
     const [next, ...remaining] = pool
     if (!next) {
       setState('empty')
@@ -73,26 +81,34 @@ export default function DateNudge({ conversationId, person, reason, onPlan, onDi
     }
     setPool(remaining)
     setSpot(next)
-    dates.logRecommendation(next.id, { surface: 'chat', conversationId, fit: next.fit })
+    dates.logRecommendation(next.id, { surface, conversationId, fit: next.fit })
   }
 
   return (
     <div className="relative animate-slide-note overflow-hidden rounded-card border border-rule bg-white px-5 py-5 shadow-paper">
-      <Star className="absolute right-12 top-3 text-margin/50" size={13} />
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss this suggestion"
-        className="press absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-mist hover:bg-navy/[0.05] hover:text-graphite"
-      >
-        <IconX size={16} />
-      </button>
+      <Star className="absolute right-16 top-1.5 text-margin/50" size={13} />
 
-      <h3 className="font-display text-[19px] font-semibold leading-tight">
-        {reason === 'they’re already trying to make a plan'
-          ? 'Sounds like you’re working this out 👀'
-          : 'Looks like this is going somewhere 👀'}
-      </h3>
+      {/* The heading and the ✕ share a row rather than the ✕ floating over the
+          corner the heading grows into. Out of flow, a long heading ran under
+          it; padded away from it, the trailing emoji wrapped to a line of its
+          own. In flow, the text simply stops where the button starts. */}
+      <div className="flex items-start justify-between gap-2">
+        {/* Balanced, so a heading that doesn't fit one line breaks into two
+            even ones rather than a full line and an orphaned 👀. */}
+        <h3 className="font-display text-[19px] font-semibold leading-tight [text-wrap:balance]">
+          {reason === 'they’re already trying to make a plan'
+            ? 'Sounds like you’re working this out 👀'
+            : 'Looks like this is going somewhere 👀'}
+        </h3>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss this suggestion"
+          className="press -mr-1.5 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-mist hover:bg-navy/[0.05] hover:text-graphite"
+        >
+          <IconX size={16} />
+        </button>
+      </div>
       <p className="mt-1.5 max-w-[40ch] text-[14px] text-graphite">
         Ready to take it off Looseleaf? We think this one would suit you two.
       </p>

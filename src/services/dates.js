@@ -33,7 +33,19 @@ export async function recommend(opts = {}) {
   return live.recommend(opts)
 }
 
+/**
+ * `surface: 'test'` is the staff test thread in `data/testThread.js`. It gets
+ * real recommendations — that is what it is for — but it is not a student, so
+ * it must not turn into a real business's numbers or a real business's money.
+ * Both refusals live here rather than in the components, because a choke point
+ * one function wide is a rule and a check in three components is a hope.
+ */
+const isTestSurface = (opts) => opts?.surface === 'test'
+
 export async function unlockOffer(offerId, opts = {}) {
+  if (isTestSurface(opts)) {
+    throw new Error('This is a test conversation — it can’t unlock a real Date Pass.')
+  }
   if (isDemo) return (await demo()).unlockOffer(offerId, opts)
   return live.unlockOffer(offerId, opts)
 }
@@ -49,6 +61,7 @@ export function logSpotView(spotId) {
 }
 
 export function logRecommendation(spotId, opts) {
+  if (isTestSurface(opts)) return
   if (isDemo) {
     if (opts?.outcome === 'dismissed') demoDismissed = [...demoDismissed, spotId]
     return

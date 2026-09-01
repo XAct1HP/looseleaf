@@ -20,7 +20,15 @@ export function Chip({ children, tone = 'default', className = '', ...props }) {
   )
 }
 
-/** InterestChip — highlights when it's something you both picked. */
+/**
+ * InterestChip — tinted coral when it's something you both picked.
+ *
+ * The tint is the whole signal. It used to also append the word "both" to
+ * every shared chip, which meant a profile with nine shared interests said
+ * "both" nine times, and — because previewing your own profile compares you to
+ * yourself — said it on *every* chip there. Whatever groups these now
+ * (`InterestGroups`) says it once, in a heading.
+ */
 export function InterestChip({ id, shared = false, className = '' }) {
   const interest = interestById(id) || { label: id, emoji: '·' }
   return (
@@ -35,7 +43,6 @@ export function InterestChip({ id, shared = false, className = '' }) {
         {interest.emoji}
       </span>
       {interest.label}
-      {shared && <span className="ml-0.5 text-[11px] font-semibold uppercase tracking-wide opacity-70">both</span>}
     </span>
   )
 }

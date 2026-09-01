@@ -105,6 +105,24 @@ export default function Chat() {
 
   const hideNudge = () => setNudge({ show: false, reason: 'waved away' })
 
+  /**
+   * ── Where the test thread stops being pretend ─────────────────────────────
+   *
+   * Everything about Avery is invented, but the suggestion in this thread is
+   * not: it comes back from the same `recommend_date_spots` a real couple
+   * gets, ranked by the same weights, filtered the same way. What must not
+   * cross over is anything that leaves a mark — an impression counted against
+   * a business's funnel, a Date Pass spent out of their monthly cap, or a
+   * conversation id that doesn't exist being handed to Postgres as a uuid.
+   *
+   * So the crossing is made once, here, rather than being remembered in each
+   * component: a null conversation and a surface of 'test', which
+   * `services/dates.js` refuses to log and refuses to issue a pass for.
+   */
+  const isTest = Boolean(convo?.isTest)
+  const surface = isTest ? 'test' : 'chat'
+  const spotConversationId = isTest ? null : convo?.id ?? null
+
   if (!convo || !person) {
     return (
       <div className="px-4 py-10">
@@ -148,7 +166,13 @@ export default function Chat() {
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-[16px] font-medium leading-tight text-navy">{person.firstName}</span>
-              <IconVerified size={13} className="shrink-0 text-notebook-deep" />
+              {isTest ? (
+                <span className="shrink-0 rounded-full border border-notebook/50 bg-notebook-soft px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#2F5C99]">
+                  Test
+                </span>
+              ) : (
+                <IconVerified size={13} className="shrink-0 text-notebook-deep" />
+              )}
             </span>
             <span className="block truncate text-[12.5px] text-mist">
               {person.major} ’{person.gradYear} · Michigan
@@ -213,6 +237,36 @@ export default function Chat() {
             You found each other {matchedAgo}.
           </p>
 
+          {isTest && (
+            <div className="!mb-5 rounded-card border border-notebook/50 bg-notebook-soft px-5 py-4">
+              <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-[#2F5C99]">
+                Test conversation
+              </p>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-[#22406E]">
+                {person.firstName} isn’t real and this thread lives only in this browser. Send three
+                messages and the Date Spot suggestion arrives the way it would in a real
+                conversation — real places, real ranking, but not counted for those businesses and
+                it can’t unlock a pass.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  actions.resetTestThread()
+                  // Otherwise the card you were trying to watch arrive again
+                  // is still sitting there — the nudge is held in state
+                  // precisely so it can't be torn off the screen mid-scroll,
+                  // which means putting the thread back has to put this back
+                  // too. The effect below then re-decides from the fresh
+                  // conversation, and says no until you have talked again.
+                  hideNudge()
+                }}
+                className="press focus-ring mt-3 rounded-full border border-notebook/50 bg-white px-3.5 py-2 text-[13px] font-medium text-[#22406E]"
+              >
+                Start it over
+              </button>
+            </div>
+          )}
+
           {convo.messages.map((m) => (
             <ChatBubble key={m.id} message={m} person={person} />
           ))}
@@ -241,7 +295,8 @@ export default function Chat() {
           {nudge.show && (
             <div className="!mt-7">
               <DateNudge
-                conversationId={convo.id}
+                conversationId={spotConversationId}
+                surface={surface}
                 person={person}
                 reason={nudge.reason}
                 onShown={() => actions.noteNudgeShown(convo.id)}
@@ -292,7 +347,8 @@ export default function Chat() {
         open={planning}
         dateType={dateType}
         person={person}
-        conversationId={convo.id}
+        conversationId={spotConversationId}
+        surface={isTest ? 'test' : 'planner'}
         onClose={() => {
           setPlanning(false)
           setDateType(null)

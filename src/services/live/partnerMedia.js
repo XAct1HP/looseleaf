@@ -81,17 +81,34 @@ export async function remove(path) {
 }
 
 /**
- * Ask the browser to fetch these now, so they're in cache by the time a card
- * or a sheet renders them. Fire-and-forget; a failure here costs nothing.
+ * Ask the browser to fetch these, so they're in cache by the time a card or a
+ * sheet renders them. Fire-and-forget; a failure here costs nothing.
+ *
+ * Deliberately *not* now. Firing a dozen requests the instant a list mounts
+ * puts them in the same queue as the two or three covers somebody is actually
+ * looking at, and a phone on campus wifi has a handful of connections to
+ * share — so the warming made the visible cards slower, which is the opposite
+ * of the point. Scheduling it for the first idle moment means the cards above
+ * the fold get the connection to themselves and the rest arrive while the
+ * filters are being read.
  */
 export function preload(paths = [], size = 'sm') {
   if (typeof window === 'undefined') return
-  for (const p of paths.slice(0, 12)) {
-    const url = publicUrl(p, size)
-    if (!url) continue
-    const img = new Image()
-    img.decoding = 'async'
-    img.src = url
+  const wanted = paths.slice(0, 12)
+  const run = () => {
+    for (const p of wanted) {
+      const url = publicUrl(p, size)
+      if (!url) continue
+      const img = new Image()
+      img.decoding = 'async'
+      img.loading = 'eager'
+      img.src = url
+    }
+  }
+  if (typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(run, { timeout: 2500 })
+  } else {
+    window.setTimeout(run, 400)
   }
 }
 

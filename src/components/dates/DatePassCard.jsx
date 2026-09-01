@@ -12,6 +12,21 @@ import { passUrl } from '../../lib/site'
  * So: dark stock, a perforated tear line, the code set wide like a booking
  * reference, and the QR sitting on paper rather than in a white box. Loose
  * Leaf's own binder holes down the left edge, because a pass is still a sheet.
+ *
+ * ── Why the gutter is on one side and the centring is on neither ────────────
+ *
+ * The binder holes need room, so the *stub* is padded away from them on the
+ * left only — the text there is left-aligned, and an asymmetric gutter is what
+ * makes it look like a bound sheet rather than a box.
+ *
+ * The code half is centred, and a one-sided gutter there is a lie: everything
+ * inside it centres on the padded box, which sits 48px right of the card's
+ * real middle. On the wide student wallet nobody notices; in the 340px column
+ * on the Partners landing page the QR is visibly off to the right, because
+ * Tailwind's `sm:` reads the *viewport*, not this card — so a narrow card on a
+ * wide screen gets a desktop-sized gutter it has no room for. Hence `sm:px-12`
+ * rather than `sm:pl-12`: the same clearance from the holes, applied to both
+ * sides, so centred means centred at every width.
  */
 export default function DatePassCard({ pass, compact = false }) {
   const expired = pass.status === 'expired' || new Date(pass.expiresAt) < new Date()
@@ -56,7 +71,7 @@ export default function DatePassCard({ pass, compact = false }) {
       </div>
 
       {/* the code */}
-      <div className="relative px-7 pb-8 pt-5 text-center sm:pl-12">
+      <div className="relative px-7 pb-8 pt-5 text-center sm:px-12">
         {dead ? (
           <div className="py-6">
             <p className="font-display text-[22px] font-semibold text-paper/70">
@@ -75,6 +90,10 @@ export default function DatePassCard({ pass, compact = false }) {
                 value={passUrl(pass.code)}
                 size={compact ? 132 : 168}
                 label={`Date Pass ${pass.code}`}
+                // Block, or the svg sits on a text baseline and the white
+                // plate gains a descender's worth of extra room along the
+                // bottom edge — which reads as a QR that isn't quite centred.
+                className="block"
               />
             </div>
 

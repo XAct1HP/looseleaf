@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { DATA_MODE, isDemo, loadDemo, supabase, auth, profiles as profileApi } from '../services/backend'
 import { PEOPLE, personById } from '../data/people'
+import { TEST_CONVERSATION_ID, testReply, testSeed } from '../data/testThread'
 import { compatibility } from '../lib/compatibility'
 
 /**
@@ -51,6 +52,16 @@ const EMPTY = {
   doubleDate: { partnerId: null },
   formals: [],
 }
+
+/**
+ * A message built in the browser, for the one thread that has no server. The
+ * demo's `buildMessage` does the same thing, but it lives in the demo module,
+ * which is dynamically imported and therefore absent in live mode — which is
+ * exactly where the test thread has to work.
+ */
+let localSeq = 0
+const nextLocalId = () => `test-m${(localSeq += 1)}-${Date.now().toString(36)}`
+const localMessage = (text, from = 'me') => ({ id: nextLocalId(), from, text, at: Date.now() })
 
 function reducer(state, action) {
   switch (action.type) {
@@ -126,6 +137,45 @@ function reducer(state, action) {
         conversations: {
           ...state.conversations,
           [action.conversationId]: { ...convo, ...action.patch },
+        },
+      }
+    }
+
+    /**
+     * The staff test thread, added or put back to its seed. Kept apart from
+     * 'match' because it must be idempotent — booting twice, or resetting it,
+     * replaces the one thread rather than stacking up another Avery — and
+     * because it deliberately writes no notification: nothing happened.
+     */
+    case 'test-thread': {
+      const { match, conversation } = action.payload
+      return {
+        ...state,
+        matches: [match, ...state.matches.filter((m) => m.id !== match.id)],
+        conversations: { ...state.conversations, [conversation.id]: conversation },
+      }
+    }
+
+    /**
+     * Avery's next line. The reducer picks it, because only the reducer knows
+     * how many she has already sent — everything else about the message came
+     * in on the action.
+     */
+    case 'test-reply': {
+      const convo = state.conversations[action.conversationId]
+      if (!convo) return state
+      const alreadySent = convo.messages.filter((m) => m.from === 'them').length - 1
+      const message = {
+        id: action.id,
+        from: 'them',
+        at: action.at,
+        text: testReply(Math.max(alreadySent, 0)),
+      }
+      return {
+        ...state,
+        conversations: {
+          ...state.conversations,
+          [action.conversationId]: { ...convo, messages: [...convo.messages, message] },
         },
       }
     }
@@ -227,6 +277,19 @@ export function StoreProvider({ children }) {
     if (!isDemo || state.boot !== 'ready' || !demoRef.current) return
     demoRef.current.saveState(state)
   }, [state])
+
+  /**
+   * The staff test thread — one invented match, in this browser only, for
+   * looking at the inside of a conversation without needing two real students
+   * to have got there first. `is_admin` and nothing else. See
+   * `data/testThread.js` for why it is safe on a live campus.
+   */
+  useEffect(() => {
+    if (state.boot !== 'ready' || !state.me?.isAdmin) return
+    if (state.conversations[TEST_CONVERSATION_ID]) return
+    const { match, conversation } = testSeed()
+    dispatch({ type: 'test-thread', payload: { match, conversation } })
+  }, [state.boot, state.me?.isAdmin, state.conversations])
 
   /**
    * Turns a Supabase session into app state: who you are, whether you've
@@ -504,6 +567,27 @@ export function StoreProvider({ children }) {
       dismissMatch: () => setNewMatch(null),
 
       send: (conversationId, text) => {
+        // The staff test thread is the one conversation that works in live
+        // mode, because it is not a conversation: nothing here is written
+        // anywhere, and the person on the other end is a list of sentences in
+        // `data/testThread.js`. She answers in order rather than at random, so
+        // the thread walks towards a plan and the suggestion card can be
+        // watched arriving at the moment it is supposed to.
+        if (conversationId === TEST_CONVERSATION_ID) {
+          dispatch({ type: 'message', conversationId, message: localMessage(text) })
+          // Which line she says next depends on how many she has already
+          // said, and `actions` is memoised on things that are not the
+          // messages — so the count is worked out in the reducer, where the
+          // conversation is current, rather than from a closure that may be
+          // two messages behind. The id and the clock are passed in so the
+          // reducer stays a pure function of its action.
+          const t = setTimeout(() => {
+            dispatch({ type: 'test-reply', conversationId, id: nextLocalId(), at: Date.now() })
+          }, 1600)
+          timers.current.push(t)
+          return
+        }
+
         const d = demo()
         if (!d) return notLiveYet('Messaging')
         dispatch({ type: 'message', conversationId, message: d.buildMessage(text) })
@@ -515,6 +599,16 @@ export function StoreProvider({ children }) {
           })
         }, 2200)
         timers.current.push(t)
+      },
+
+      /**
+       * Put the test thread back to its opening line. It is held in memory
+       * only, so a reload does this too — this is for when you want to watch
+       * the suggestion card arrive twice without losing where you were.
+       */
+      resetTestThread: () => {
+        const { match, conversation } = testSeed()
+        dispatch({ type: 'test-thread', payload: { match, conversation } })
       },
 
       dismissNudge: (conversationId) =>

@@ -5,7 +5,15 @@ import { connectionById } from '../data/people'
  * "Your overlap" — the social context shown on a profile.
  * Only ever derived from things both people chose to share.
  */
+const NO_OVERLAP = { lines: [], sharedInterests: [], mutuals: [] }
+
 export function overlapWith(person, me) {
+  // Previewing your own profile compares you to yourself, and every answer
+  // comes back yes: every interest "shared", "both graduating in '27", "both
+  // here for something real". Overlap is a fact about two people, so when
+  // there is only one there isn't any.
+  if (person?.id && me?.id && person.id === me.id) return NO_OVERLAP
+
   const sharedInterests = (person.interests || []).filter((i) => me.interests?.includes(i))
 
   // An intersection, not their list. "You two both know" has to mean people

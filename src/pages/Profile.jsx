@@ -5,7 +5,8 @@ import ProfileCard from '../components/profile/ProfileCard'
 import Portrait from '../components/brand/Portrait'
 import Button from '../components/ui/Button'
 import UniversityBadge from '../components/common/UniversityBadge'
-import { InterestChip, Chip } from '../components/ui/Chip'
+import { Chip } from '../components/ui/Chip'
+import InterestGroups from '../components/profile/InterestGroups'
 import RailCard from '../components/common/RailCard'
 import { useRail } from '../components/nav/AppLayout'
 import { useStore } from '../state/store'
@@ -304,11 +305,7 @@ export default function Profile() {
         </Section>
 
         <Section title="Interests" editTo="/app/profile/edit#interests">
-          <div className="flex flex-wrap gap-2">
-            {me.interests?.map((i) => (
-              <InterestChip key={i} id={i} />
-            ))}
-          </div>
+          <InterestGroups interests={me.interests ?? []} />
         </Section>
 
         <Section title="Campus life" editTo="/app/profile/edit#campus">

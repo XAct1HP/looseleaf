@@ -34,7 +34,15 @@ const BUDGETS = [
   { id: null, label: 'Any' },
 ]
 
-export default function DatePlanner({ open, dateType, person, conversationId, onClose, onConfirm }) {
+export default function DatePlanner({
+  open,
+  dateType,
+  person,
+  conversationId,
+  surface = 'planner',
+  onClose,
+  onConfirm,
+}) {
   const [step, setStep] = useState('what')
   const [type, setType] = useState(dateType?.id ?? null)
   const [vibes, setVibes] = useState([])
@@ -78,13 +86,13 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
         ...couple,
         maxPrice: budget ?? couple.maxPrice,
         conversationId,
-        surface: 'planner',
+        surface,
         limit: 6,
       })
       setResults(list)
       list.forEach((s, i) =>
         dates.logRecommendation(s.id, {
-          surface: 'planner',
+          surface,
           conversationId,
           rank: i + 1,
           fit: s.fit,
@@ -96,11 +104,11 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
     } finally {
       setLoading(false)
     }
-  }, [type, vibes, budget, conversationId, couple])
+  }, [type, vibes, budget, conversationId, couple, surface])
 
   function finish(spot, issuedPass) {
     dates.logRecommendation(spot.id, {
-      surface: 'planner',
+      surface,
       conversationId,
       fit: spot.fit,
       outcome: 'chosen',
@@ -125,7 +133,7 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
     }
     setLoading(true)
     try {
-      const issued = await dates.unlockOffer(spot.offer.id, { conversationId, surface: 'planner' })
+      const issued = await dates.unlockOffer(spot.offer.id, { conversationId, surface })
       setPass({
         ...issued,
         offerSummary: spot.offer.summary,
@@ -278,7 +286,7 @@ export default function DatePlanner({ open, dateType, person, conversationId, on
                 onChoose={choose}
                 onDismiss={(s) => {
                   dates.logRecommendation(s.id, {
-                    surface: 'planner',
+                    surface,
                     conversationId,
                     outcome: 'dismissed',
                   })

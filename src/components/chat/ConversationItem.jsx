@@ -25,7 +25,16 @@ export default function ConversationItem({ conversation, person, active = false 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="truncate text-[15.5px] font-medium text-navy">{person.firstName}</span>
-          <IconVerified size={13} className="shrink-0 text-notebook-deep" />
+          {conversation.isTest ? (
+            // Labelled in the list as well as inside the thread. A staff
+            // member who forgets which of these is invented is exactly the
+            // person this row is for.
+            <span className="shrink-0 rounded-full border border-notebook/50 bg-notebook-soft px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#2F5C99]">
+              Test
+            </span>
+          ) : (
+            <IconVerified size={13} className="shrink-0 text-notebook-deep" />
+          )}
           <span className="ml-auto shrink-0 text-[12px] text-mist">{last ? ago(last.at) : ''}</span>
         </div>
         <p className="mt-0.5 truncate text-[13.5px] text-graphite">

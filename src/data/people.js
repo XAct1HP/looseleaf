@@ -5,6 +5,8 @@
  *            + profile_interests + connections
  */
 
+import { TEST_PERSON, TEST_PERSON_ID } from './testThread'
+
 /**
  * People who exist only as mutual connections / friends, not in Discover.
  *
@@ -553,7 +555,18 @@ export const PEOPLE = PEOPLE_BASE.map((p) => ({
   survey: SURVEYS[p.id]?.survey ?? {},
 }))
 
-export const personById = (id) => PEOPLE.find((p) => p.id === id)
+/**
+ * Anywhere that renders a person from an id — a chat header, a match tile, a
+ * conversation row — resolves through here.
+ *
+ * The staff test thread's Avery is looked up as a deliberate special case
+ * rather than by being added to `PEOPLE`, because `PEOPLE` is what the deck,
+ * the mutual search and the campus surfaces iterate. An invented student in
+ * that array is exactly the leak this codebase has had to fix before. She is
+ * reachable by her own id and by nothing that enumerates.
+ */
+export const personById = (id) =>
+  (id === TEST_PERSON_ID ? TEST_PERSON : null) ?? PEOPLE.find((p) => p.id === id)
 
 /** The signed-in demo user. */
 export const CURRENT_USER = {

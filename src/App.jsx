@@ -114,6 +114,23 @@ function RequireCampus({ children }) {
   return children
 }
 
+/**
+ * Matches and the thread inside it, plus the one exception to the closed-campus
+ * rule: staff.
+ *
+ * A campus that hasn't opened yet has no matches and no conversations — in live
+ * mode `useDeck()` returns nothing and both lists are empty by construction —
+ * so what a staff member actually reaches here is an empty page and the test
+ * thread in `data/testThread.js`. Which is the point: the founder of a campus
+ * that hasn't opened is precisely the person who needs to be able to look
+ * inside a conversation. No student sees anything different.
+ */
+function RequireCampusOrStaff({ children }) {
+  const { state } = useStore()
+  if (state.me?.isAdmin) return <RequireProfile>{children}</RequireProfile>
+  return <RequireCampus>{children}</RequireCampus>
+}
+
 /** Signed in and onboarded, but usable whether or not the campus is open. */
 function RequireProfile({ children }) {
   const { state } = useStore()
@@ -243,12 +260,16 @@ export default function App() {
               </RequireCampus>
             }
           />
+          {/* Same exception, same reason: "See profile" from the staff test
+              thread has to lead somewhere. In live mode `personById` resolves
+              the demo cast and Avery and nothing else — it reads no rows — so
+              a closed campus still shows a student nobody. */}
           <Route
             path="person/:id"
             element={
-              <RequireCampus>
+              <RequireCampusOrStaff>
                 <PersonPage />
-              </RequireCampus>
+              </RequireCampusOrStaff>
             }
           />
           <Route
@@ -262,17 +283,17 @@ export default function App() {
           <Route
             path="matches"
             element={
-              <RequireCampus>
+              <RequireCampusOrStaff>
                 <Matches />
-              </RequireCampus>
+              </RequireCampusOrStaff>
             }
           />
           <Route
             path="chat/:id"
             element={
-              <RequireCampus>
+              <RequireCampusOrStaff>
                 <Chat />
-              </RequireCampus>
+              </RequireCampusOrStaff>
             }
           />
           <Route path="campus" element={<Campus />} />

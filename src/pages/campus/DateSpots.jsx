@@ -20,6 +20,14 @@ import { preload } from '../../services/live/partnerMedia'
  * cannot return a brewery no matter who is paying. What a partner buys shows up
  * as *what is on the card*, never as *which card is at the top*.
  */
+/**
+ * How many covers load eagerly. Below `sm` this list is a single column, so
+ * anything past the second card is off the bottom of a phone — loading four at
+ * full priority meant the one being looked at waited behind two nobody had
+ * scrolled to yet.
+ */
+const EAGER_COVERS = 2
+
 export default function DateSpots() {
   const [spots, setSpots] = useState([])
   const [offers, setOffers] = useState({})
@@ -35,9 +43,16 @@ export default function DateSpots() {
         if (!live) return
         setSpots(s)
         setOffers(o)
-        // Warm the covers now rather than when each card scrolls into view;
-        // by the time somebody has read the filters, they're in cache.
-        preload(s.map((x) => x.coverPath).filter(Boolean))
+        // Warm the covers of the cards *below* the fold. The ones above it
+        // are already being fetched by their own <img> at high priority, and
+        // asking for them twice only puts them behind the rest of the queue
+        // on a phone. `preload` waits for an idle moment before it starts.
+        preload(
+          s
+            .slice(EAGER_COVERS)
+            .map((x) => x.coverPath)
+            .filter(Boolean)
+        )
       })
       .catch((e) => live && setError(e.message))
       .finally(() => live && setLoading(false))
@@ -115,7 +130,7 @@ export default function DateSpots() {
             <li key={s.id}>
               <DateSpotCard
                 spot={s}
-                priority={i < 4}
+                priority={i < EAGER_COVERS}
                 onChoose={() => {
                   setOpenSpot(s)
                   dates.logSpotView(s.id)

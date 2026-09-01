@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import ProfilePhoto from './ProfilePhoto'
 import PromptCard from './PromptCard'
 import OverlapCard from './OverlapCard'
@@ -6,7 +6,8 @@ import NoteSheet from './NoteSheet'
 import MutualsSheet from './MutualsSheet'
 import ReportSheet from '../safety/ReportSheet'
 import UniversityBadge from '../common/UniversityBadge'
-import { InterestChip, Chip } from '../ui/Chip'
+import { Chip } from '../ui/Chip'
+import InterestGroups from './InterestGroups'
 import { IconMore, IconX } from '../ui/Icons'
 import Button, { IconButton } from '../ui/Button'
 import { intentionById } from '../../data/catalog'
@@ -82,6 +83,16 @@ export default function ProfileCard({
         onLike={onLike ? () => askLike({ type: 'prompt', index: i }, 'this answer', prompts[i].a) : undefined}
       />
     ) : null
+
+  // Photos and prompts from index 3 on, alternating, so nothing a person
+  // added is silently dropped off the end of their own profile.
+  const tail = []
+  for (let i = 3; i < Math.max(photos.length, prompts.length); i += 1) {
+    const photo = photoAt(i)
+    const prompt = promptAt(i)
+    if (photo) tail.push(<Fragment key={`photo-${i}`}>{photo}</Fragment>)
+    if (prompt) tail.push(<Fragment key={`prompt-${i}`}>{prompt}</Fragment>)
+  }
 
   return (
     <article className={`space-y-4 ${className}`}>
@@ -173,11 +184,7 @@ export default function ProfileCard({
       {person.interests?.length > 0 && (
         <section className="rounded-card border border-rule bg-white px-6 py-5">
           <h3 className="mb-3.5 text-[13px] font-medium uppercase tracking-[0.06em] text-mist">Into</h3>
-          <div className="flex flex-wrap gap-2">
-            {person.interests.map((i) => (
-              <InterestChip key={i} id={i} shared={overlap.sharedInterests.includes(i)} />
-            ))}
-          </div>
+          <InterestGroups interests={person.interests} shared={overlap.sharedInterests} />
         </section>
       )}
 
@@ -218,7 +225,13 @@ export default function ProfileCard({
         )}
       </section>
 
-      {photoAt(3)}
+      {/* Everything past the scripted opening. The first three photos and the
+          first three prompts are placed by hand above because they carry the
+          page; a fourth, fifth and sixth photo simply continue the same
+          alternation. Slicing them off — which is what this used to do — meant
+          somebody could upload six photos, see all six in Edit Profile, and
+          have two of them appear nowhere. */}
+      {tail}
 
       {/* ── footer ──────────────────────────────────────────────── */}
       {showPass && onPass && (
