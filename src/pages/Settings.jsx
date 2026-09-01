@@ -60,9 +60,17 @@ function Toggle({ label, description, on, onChange }) {
           on ? 'bg-coral' : 'bg-navy/15'
         }`}
       >
+        {/* `left-0.5` is doing real work. Without a horizontal anchor an
+            absolutely positioned box falls back to its static position — and a
+            <button> keeps the UA's `text-align: center`, which puts that
+            position at the middle of the track (22px). The translate was then
+            added to 22 rather than to 0, so "off" sat flush against the right
+            end and "on" landed twenty pixels past it, outside the track
+            entirely. Anchored at 2px, the travel is the arithmetic it looks
+            like: 44 track − 20 knob − 2 inset either side = 20px. */}
         <span
-          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-            on ? 'translate-x-[22px]' : 'translate-x-0.5'
+          className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            on ? 'translate-x-5' : 'translate-x-0'
           }`}
         />
       </button>
