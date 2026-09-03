@@ -153,8 +153,8 @@ export default function HostHome() {
  */
 function SignIn() {
   return (
-    <HostShell>
-      <div className="mx-auto max-w-[440px] py-6 text-center">
+    <HostShell narrow>
+      <div className="py-6 text-center">
         <h1 className="relative inline-block font-display text-[34px] font-semibold leading-tight tracking-[-0.02em]">
           Run a live event.
           <Underline className="absolute -bottom-1 left-0 text-coral/60" width={240} />
@@ -202,8 +202,9 @@ function Register({ onDone }) {
     <HostShell
       title="Who’s running this?"
       subtitle="Two things, and then you can build your first event."
+      narrow
     >
-      <form onSubmit={submit} className="max-w-[440px]">
+      <form onSubmit={submit}>
         <label htmlFor="host-name" className="label">
           Your name
         </label>

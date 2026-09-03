@@ -83,8 +83,13 @@ export default function EventEditor() {
 
   if (isNew) {
     return (
-      <HostShell title="A new event" subtitle="Three things now; the rest on the next screen." back="/host">
-        <form onSubmit={create} className="max-w-[460px]">
+      <HostShell
+        title="A new event"
+        subtitle="Three things now; the rest on the next screen."
+        back="/host"
+        narrow
+      >
+        <form onSubmit={create}>
           <label htmlFor="ev-title" className="label">
             What’s it called?
           </label>

@@ -15,7 +15,15 @@ import { IconBack } from '../../components/ui/Icons'
  * might also be a member — which is precisely the ambiguity the partner
  * platform's founding invariant exists to prevent.
  */
-export default function HostShell({ title, subtitle, action, back, children, wide = false }) {
+export default function HostShell({
+  title,
+  subtitle,
+  action,
+  back,
+  children,
+  wide = false,
+  narrow = false,
+}) {
   const { pathname } = useLocation()
   const atHome = pathname === '/host'
 
@@ -26,6 +34,17 @@ export default function HostShell({ title, subtitle, action, back, children, wid
   //  left of everything under it. Nothing is centred by accident; if the bar
   //  and the body disagree about where the page starts, they are both wrong.
   const shell = wide ? 'max-w-[1100px]' : 'max-w-[760px]'
+
+  //  `narrow` is the one deliberate exception, and it exists because a short
+  //  form — sign in, register, three fields to start an event — inside a 760px
+  //  column is not a page, it's a form stranded against a left edge with half
+  //  the screen empty beside it. So the column collapses to the form's own
+  //  width and sits in the middle, and the title sits over it rather than over
+  //  the empty space to its right.
+  //
+  //  The top bar keeps the full width: the wordmark belongs in the corner
+  //  where it is on every other page, not dragged inward to chaperone a form.
+  const column = narrow ? 'max-w-[460px]' : shell
 
   return (
     <div className="min-h-[100dvh] bg-paper">
@@ -50,25 +69,35 @@ export default function HostShell({ title, subtitle, action, back, children, wid
         </div>
       </header>
 
-      <main className={`mx-auto ${shell} px-5 py-8 sm:px-8 sm:py-12`}>
+      <main className={`mx-auto ${column} px-5 py-8 sm:px-8 sm:py-12`}>
         {(title || back) && (
-          <header className="mb-8">
+          <header className={narrow ? 'mb-7 text-center' : 'mb-8'}>
             {back && (
               <Link
                 to={back}
-                className="press focus-ring -ml-2 mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] font-medium text-graphite hover:text-navy"
+                className={`press focus-ring mb-4 inline-flex items-center gap-1.5 rounded-full px-2 py-1.5 text-[14px] font-medium text-graphite hover:text-navy ${
+                  narrow ? '' : '-ml-2'
+                }`}
               >
                 <IconBack size={18} />
                 Back
               </Link>
             )}
-            <div className="flex flex-wrap items-end justify-between gap-4">
+            <div
+              className={
+                narrow ? '' : 'flex flex-wrap items-end justify-between gap-4'
+              }
+            >
               <div>
                 <h1 className="font-display text-[28px] font-semibold leading-tight tracking-[-0.02em] md:text-[34px]">
                   {title}
                 </h1>
                 {subtitle && (
-                  <p className="mt-2.5 max-w-[58ch] text-[14.5px] leading-relaxed text-graphite">
+                  <p
+                    className={`mt-2.5 text-[14.5px] leading-relaxed text-graphite ${
+                      narrow ? '' : 'max-w-[58ch]'
+                    }`}
+                  >
                     {subtitle}
                   </p>
                 )}
