@@ -2,6 +2,36 @@
 
 *Planned and built 2026-09-02. M0–M2 are in the tree; M3–M4 are not.*
 
+> ### Amended 2026-09-03, after a real host looked at it
+>
+> Two things changed, both because somebody who would actually run one of
+> these said so:
+>
+> **1. There is no login at the door.** A name, and nothing else. The
+> verified-email step was solving a problem the room already solves — the QR
+> is printed on paper and taped inside a building on campus, so the set of
+> people who can scan it is the set of people standing there. Identity is now
+> a token minted server-side and kept in that browser. Everything about the
+> door, the OTP rate-limit risk, and pre-registration below is **superseded**:
+> the only person who still signs in is the host. Somebody who wants a
+> Looseleaf profile afterwards claims their night from the same browser
+> (`claim_event_participation`).
+>
+> **2. There is a second format: stations.** "Meet the members" was built as
+> speed dating with different words on it, and that is not how a club runs a
+> rush night. There are tables, a member sits at each one, and everybody else
+> rotates around them — and that member is staff for the night, usually not
+> signed up at all. So a station is a row the host types: a label, a name, an
+> optional line. Everyone is spread across the tables each round and
+> **nobody ever sits out**. `live_events.format` is `pairs` or `stations`.
+>
+> One honest limit found while testing the pairs engine: a room running its
+> round-robin to *completion* comes out perfect about nine times in ten; the
+> rest end with one or two pairs re-meeting in the final round. That is the
+> price of choosing each round without knowing what the later ones need, which
+> is the same property that lets somebody arrive at round three. Real events
+> do not run to completion.
+>
 > **Status.** Everything below describes the design. What exists now:
 > `supabase/migrations/20260902120000_live_events.sql` (schema, RLS, the
 > pairing engine, every RPC), `tests/live_events_test.sql` (**110 assertions**,

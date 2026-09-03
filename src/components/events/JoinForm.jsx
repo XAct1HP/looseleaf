@@ -8,14 +8,21 @@ import { accentOf } from '../../lib/liveEvent'
 /**
  * ── A name, and whatever the host asked ─────────────────────────────────────
  *
- * The shortest form in Looseleaf, on purpose. Somebody has ninety seconds
- * between the poster and the first bell, and every field between them and the
- * room is a person who doesn't join.
+ * The shortest form in Looseleaf, and now genuinely short: **there is no
+ * account**. No email, no code, no waiting on a university mail server while
+ * forty people queue behind you. A name, the host's questions if they asked
+ * any, and in.
  *
- * A member who is already signed in gets their first name filled in and, if
- * the host asked nothing, a single button.
+ * The earlier version made everybody verify an email first. The reasoning was
+ * that a verified campus address proves a real student — but the QR is printed
+ * on paper and taped to a door inside a building on campus, so the room was
+ * already proving it. We were charging every attendee a minute for a guarantee
+ * we already had.
+ *
+ * What comes back is a token, which the page stores and which *is* the
+ * identity for the rest of the night.
  */
-export default function JoinForm({ event, code, onJoined }) {
+export default function JoinForm({ event, code, token, onJoined }) {
   const { state } = useStore()
   const accent = accentOf(event?.accent)
   const fields = event?.fields ?? []
@@ -44,8 +51,8 @@ export default function JoinForm({ event, code, onJoined }) {
     setBusy(true)
     setError('')
     try {
-      await events.join(code, name.trim(), answers)
-      await onJoined()
+      const res = await events.join(code, name.trim(), answers, token)
+      await onJoined(res?.token)
     } catch (err) {
       setError(err.message)
       setBusy(false)
@@ -83,7 +90,9 @@ export default function JoinForm({ event, code, onJoined }) {
         className="field"
       />
       <p className="mt-2 text-[12.5px] text-mist">
-        This is what the person across the table sees. Nothing else is.
+        {event?.format === 'stations'
+          ? 'Just so whoever’s running your table knows who they’re talking to.'
+          : 'This is what the person across the table sees. Nothing else is.'}
       </p>
 
       {fields.map((f) => (
@@ -166,11 +175,9 @@ export default function JoinForm({ event, code, onJoined }) {
         {busy ? 'Joining…' : 'I’m here'}
       </Button>
 
-      {event?.status === 'approved' && (
-        <p className="mt-4 text-center text-[13px] text-mist">
-          Joined early? Good — you’ll walk straight in.
-        </p>
-      )}
+      <p className="mt-4 text-center text-[13px] leading-relaxed text-mist">
+        No account, no email, no app. Free.
+      </p>
     </form>
   )
 }

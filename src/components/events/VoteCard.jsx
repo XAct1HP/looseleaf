@@ -23,7 +23,7 @@ import * as events from '../../services/liveEvents'
  * had a bad four minutes and is holding their phone. Anywhere else is too far
  * away.
  */
-export default function VoteCard({ pending, accent, notesEnabled, onDone }) {
+export default function VoteCard({ pending, accent, notesEnabled, token, onDone }) {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -33,7 +33,7 @@ export default function VoteCard({ pending, accent, notesEnabled, onDone }) {
     setBusy(true)
     setError('')
     try {
-      await events.vote(pending.pairing_id, yes, notesEnabled ? note : null)
+      await events.vote(pending.pairing_id, yes, notesEnabled ? note : null, token)
       await onDone()
     } catch (e) {
       setError(e.message)

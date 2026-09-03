@@ -33,6 +33,7 @@ export default function EventEditor() {
 
   const [ev, setEv] = useState(null)
   const [fields, setFields] = useState([])
+  const [stations, setStations] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
@@ -51,6 +52,7 @@ export default function EventEditor() {
         if (cancelled || !data) return
         setEv(data.event)
         setFields(data.fields)
+        setStations(data.stations ?? [])
       } catch (e) {
         if (!cancelled) setError(e.message)
       }
@@ -141,8 +143,10 @@ export default function EventEditor() {
     <Editor
       ev={ev}
       fields={fields}
+      stations={stations}
       setEv={setEv}
       setFields={setFields}
+      setStations={setStations}
       error={error}
       setError={setError}
       saved={saved}
@@ -151,13 +155,17 @@ export default function EventEditor() {
   )
 }
 
-function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved }) {
+function Editor({
+  ev, fields, stations, setEv, setFields, setStations, error, setError, saved, setSaved,
+}) {
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const locked = Boolean(ev.started_at)
   const accent = accentOf(ev.accent)
 
   const patch = (p) => setEv((e) => ({ ...e, ...p }))
+
+  const isStations = ev.format === 'stations'
 
   const plan = useMemo(
     () =>
@@ -166,13 +174,21 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
         roundSeconds: ev.round_seconds,
         breakSeconds: ev.break_seconds,
         plannedRounds: ev.planned_rounds,
+        format: ev.format,
+        stations: stations.length,
       }),
-    [ev.round_seconds, ev.break_seconds, ev.planned_rounds]
+    [ev.round_seconds, ev.break_seconds, ev.planned_rounds, ev.format, stations.length]
   )
 
   const applyPreset = (preset) => {
     patch(preset.patch)
-    if (!locked) setFields(preset.fields.map((f, i) => ({ ...f, id: `new-${i}`, position: i })))
+    if (locked) return
+    setFields(preset.fields.map((f, i) => ({ ...f, id: `new-${i}`, position: i })))
+    //  A preset that switches the format has to bring its own tables, or the
+    //  host lands in an empty stations editor with no idea what goes there.
+    if (preset.patch.format === 'stations' && stations.length === 0) {
+      setStations(preset.stations.map((st, i) => ({ ...st, id: `new-${i}` })))
+    }
   }
 
   const save = async () => {
@@ -188,6 +204,7 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
         break_seconds: ev.break_seconds,
         planned_rounds: ev.planned_rounds,
         advance: ev.advance,
+        format: ev.format,
         pairing_mode: ev.pairing_mode,
         likes_enabled: ev.likes_enabled,
         reveal: ev.reveal,
@@ -196,6 +213,20 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
         accent: ev.accent,
         welcome_line: ev.welcome_line ?? '',
       })
+      if (isStations) {
+        await events.setStations(
+          ev.id,
+          stations.map((st) => ({
+            //  A brand-new row carries a placeholder id; a real one keeps its
+            //  uuid, so that renaming a table does not wipe the record of who
+            //  has already been to it. See set_event_stations.
+            id: String(st.id ?? '').startsWith('new-') ? null : st.id,
+            label: st.label,
+            host_name: st.host_name ?? '',
+            note: st.note ?? '',
+          }))
+        )
+      }
       if (!locked) {
         await events.setFields(
           ev.id,
@@ -208,8 +239,11 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
             show_to_partner: !!f.show_to_partner,
           }))
         )
+      }
+      {
         const fresh = await events.getEvent(ev.id)
         setFields(fresh.fields)
+        setStations(fresh.stations ?? [])
         setEv(fresh.event)
       }
       setSaved(true)
@@ -267,6 +301,16 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
         </div>
       </Section>
 
+      {/* ── stations ── */}
+      {isStations && (
+        <Section
+          title="The tables"
+          hint="One row per table. The name is whoever from your club is sitting there — they don’t need to be signed up for the event."
+        >
+          <StationsEditor stations={stations} setStations={setStations} />
+        </Section>
+      )}
+
       {/* ── format ── */}
       <Section title="The rotation">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -302,9 +346,10 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
              version once there are real people in the room. */}
         <p className="mt-4 rounded-card border border-rule bg-white px-4 py-3 text-[14px] leading-relaxed text-graphite">
           <span className="font-medium text-navy">With 20 people:</span>{' '}
-          {planSentence(plan, 20)}
+          {planSentence(plan, 20, ev.format)}
         </p>
 
+        {!isStations && (
         <Field label="Who meets whom" className="mt-6">
           <div className="flex flex-wrap gap-2">
             {[
@@ -328,6 +373,15 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
             </p>
           )}
         </Field>
+        )}
+
+        {isStations && (
+          <p className="mt-6 rounded-card border border-rule bg-cream/60 px-4 py-3.5 text-[13.5px] leading-relaxed text-graphite">
+            Everyone is spread across the tables each round, as evenly as the numbers allow, and
+            nobody goes to the same table twice until they’ve been to them all.{' '}
+            <span className="font-medium text-navy">Nobody ever sits out.</span>
+          </p>
+        )}
 
         <Field label="Moving between rounds" className="mt-6">
           <div className="flex flex-wrap gap-2">
@@ -350,12 +404,32 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
       {/* ── door questions ── */}
       <Section
         title="At the door"
-        hint="Up to six. Every one of these is a person deciding whether to bother, so ask less than you want to."
+        hint={
+          isStations
+            ? 'Nobody has to make an account — a name is all we ask for. Add a question only if you actually need the answer.'
+            : 'Up to six, and nobody has to make an account — a name is all we ask for. Every question is a person deciding whether to bother, so ask less than you want to.'
+        }
       >
         <FieldsEditor fields={fields} setFields={setFields} disabled={locked} />
       </Section>
 
       {/* ── modules ── */}
+      {isStations ? (
+        <Section title="Matching">
+          <p className="rounded-card border border-rule bg-white px-4 py-3.5 text-[13.5px] leading-relaxed text-graphite">
+            Off for a tables night, and not something you can switch on here. At a table somebody
+            met a group and a facilitator, not one person — “would you like to see them again” has
+            no honest answer.
+          </p>
+          <Toggle
+            className="mt-6"
+            label="Private notes"
+            hint="A box after each table that only that person ever reads."
+            value={ev.notes_enabled}
+            onChange={(v) => patch({ notes_enabled: v })}
+          />
+        </Section>
+      ) : (
       <Section title="Matching">
         <Toggle
           label="People can say yes to each other"
@@ -386,6 +460,7 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
           onChange={(v) => patch({ notes_enabled: v })}
         />
       </Section>
+      )}
 
       {/* ── the door ── */}
       <Section title="Getting in">
@@ -412,8 +487,13 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
       </Section>
 
       {/* ── brand ── */}
-      <Section title="How it looks" hint="On everyone’s phone, and on the poster.">
-        <Field label="Colour">
+      <Section
+        title="How it looks"
+        hint="On everyone’s phone for the whole event, and on everything you print."
+      >
+        <LogoField ev={ev} patch={patch} setError={setError} accent={accent} />
+
+        <Field label="Colour" className="mt-7">
           <div className="flex flex-wrap gap-2.5">
             {Object.entries(ACCENTS).map(([key, a]) => (
               <button
@@ -492,6 +572,189 @@ function Editor({ ev, fields, setEv, setFields, error, setError, saved, setSaved
         )}
       </div>
     </HostShell>
+  )
+}
+
+/* ── the tables ───────────────────────────────────────────────────────────
+ *
+ * The thing "meet the members" is actually made of, and the thing the first
+ * version was missing entirely.
+ *
+ * `host_name` is free text on purpose: the member sitting at a table is staff
+ * for the night, not an attendee, and making this a picker over registered
+ * participants would have forced every club to sign its own exec board in as
+ * guests before they could be put anywhere.
+ */
+function StationsEditor({ stations, setStations }) {
+  const update = (i, p) => setStations(stations.map((st, k) => (k === i ? { ...st, ...p } : st)))
+  const remove = (i) => setStations(stations.filter((_, k) => k !== i))
+  const add = () =>
+    setStations([
+      ...stations,
+      { id: `new-${Date.now()}`, label: `Table ${stations.length + 1}`, host_name: '', note: '' },
+    ])
+
+  const move = (i, by) => {
+    const j = i + by
+    if (j < 0 || j >= stations.length) return
+    const next = [...stations]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setStations(next)
+  }
+
+  return (
+    <div className="space-y-3">
+      {stations.map((st, i) => (
+        <div key={st.id ?? i} className="rounded-card border border-rule bg-white p-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-3 w-5 shrink-0 text-center font-display text-[15px] font-semibold text-mist">
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor={`st-l-${i}`}>
+                    What’s this table
+                  </label>
+                  <input
+                    id={`st-l-${i}`}
+                    value={st.label ?? ''}
+                    onChange={(e) => update(i, { label: e.target.value })}
+                    maxLength={60}
+                    placeholder="How to pitch"
+                    className="field"
+                  />
+                </div>
+                <div>
+                  <label className="label" htmlFor={`st-h-${i}`}>
+                    Who’s sitting there{' '}
+                    <span className="font-normal text-mist">optional</span>
+                  </label>
+                  <input
+                    id={`st-h-${i}`}
+                    value={st.host_name ?? ''}
+                    onChange={(e) => update(i, { host_name: e.target.value })}
+                    maxLength={60}
+                    placeholder="Priya"
+                    className="field"
+                  />
+                </div>
+              </div>
+              <input
+                value={st.note ?? ''}
+                onChange={(e) => update(i, { note: e.target.value })}
+                maxLength={160}
+                placeholder="A line for whoever sits down — optional"
+                className="field"
+              />
+            </div>
+            <div className="flex shrink-0 flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => move(i, -1)}
+                disabled={i === 0}
+                aria-label="Move up"
+                className="press focus-ring rounded-lg px-2 py-1 text-[13px] text-mist hover:text-navy disabled:opacity-30"
+              >
+                ↑
+              </button>
+              <button
+                type="button"
+                onClick={() => move(i, 1)}
+                disabled={i === stations.length - 1}
+                aria-label="Move down"
+                className="press focus-ring rounded-lg px-2 py-1 text-[13px] text-mist hover:text-navy disabled:opacity-30"
+              >
+                ↓
+              </button>
+              <button
+                type="button"
+                onClick={() => remove(i)}
+                className="press focus-ring rounded-lg px-2 py-1 text-[12px] font-medium text-mist hover:text-coral-deep"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {stations.length === 0 && (
+        <p className="rounded-card border border-dashed border-rule px-4 py-6 text-center text-[13.5px] text-mist">
+          No tables yet. Add one for each member who’ll be sitting down.
+        </p>
+      )}
+
+      {stations.length < 60 && (
+        <Button type="button" variant="outline" size="md" onClick={add}>
+          Add a table
+        </Button>
+      )}
+    </div>
+  )
+}
+
+/* ── the club's own mark ───────────────────────────────────────────────────
+ *
+ * Uploaded here and then used everywhere: the join screen, every screen during
+ * the event, and the printed poster. A host who has gone to the trouble of
+ * making a logo should see it doing something.
+ */
+function LogoField({ ev, patch, setError, accent }) {
+  const [busy, setBusy] = useState(false)
+  const [preview, setPreview] = useState(null)
+  const url = preview ?? events.logoUrl(ev.logo_path)
+
+  const pick = async (file) => {
+    if (!file) return
+    //  A local preview immediately, because an upload over campus wifi takes
+    //  long enough that an empty frame reads as a failure.
+    setPreview(URL.createObjectURL(file))
+    setBusy(true)
+    setError('')
+    try {
+      const path = await events.uploadLogo(ev.id, file)
+      await events.updateEvent(ev.id, { logo_path: path })
+      patch({ logo_path: path })
+    } catch (e) {
+      setError(e.message)
+      setPreview(null)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Field label="Your logo">
+      <div className="flex items-center gap-4">
+        {url ? (
+          <img src={url} alt="" className="h-20 w-20 rounded-2xl border border-rule object-cover" />
+        ) : (
+          <div
+            className="flex h-20 w-20 items-center justify-center rounded-2xl border border-dashed border-rule text-[12px] text-mist"
+            aria-hidden="true"
+            style={{ background: accent.wash }}
+          >
+            none
+          </div>
+        )}
+        <div>
+          <label className="press focus-ring inline-flex h-11 cursor-pointer items-center rounded-2xl border border-navy/15 bg-white px-5 text-[14.5px] font-medium text-navy hover:border-navy/30">
+            {busy ? 'Uploading…' : url ? 'Replace' : 'Upload one'}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              disabled={busy}
+              onChange={(e) => pick(e.target.files?.[0])}
+            />
+          </label>
+          <p className="mt-2 max-w-[36ch] text-[12.5px] leading-relaxed text-mist">
+            Square works best. It goes on the join screen, the poster and the flyers.
+          </p>
+        </div>
+      </div>
+    </Field>
   )
 }
 

@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as events from '../../services/liveEvents'
-import { useStore } from '../../state/store'
-import { accentOf, clock, clockOffset, phaseOf, secondsUntil } from '../../lib/liveEvent'
-import Logo from '../../components/brand/Logo'
+import {
+  accentOf,
+  clock,
+  clockOffset,
+  phaseOf,
+  readToken,
+  saveToken,
+  secondsUntil,
+} from '../../lib/liveEvent'
+import Logo, { LeafMark } from '../../components/brand/Logo'
 import Button from '../../components/ui/Button'
 import EventShell from '../../components/events/EventShell'
-import EventGate from '../../components/events/EventGate'
 import JoinForm from '../../components/events/JoinForm'
 import VoteCard from '../../components/events/VoteCard'
 
@@ -14,43 +20,41 @@ import VoteCard from '../../components/events/VoteCard'
  * ── One route, one screen at a time ─────────────────────────────────────────
  *
  * `/e/:code`, from the moment somebody's camera opens the poster to the moment
- * they walk out. It is a state machine rather than a set of pages because at
- * no point should a person in this room have navigation: they are looking at
- * one thing, and the app's job is to make sure it is the right thing.
+ * they walk out. A state machine rather than a set of pages because at no
+ * point should a person in this room have navigation: they are looking at one
+ * thing, and the app's job is to make sure it is the right thing.
  *
- * The clock is the whole design. Every phone works out the round and the time
- * left from the server's timestamps plus the offset between its clock and the
- * server's, taken from the same response. Never from a countdown started on
- * page load — a phone that was asleep for ninety seconds would come back two
- * rounds behind and say so with total confidence.
+ * **There is no login.** A name, and a token the server minted, kept in this
+ * browser. The QR is taped to a door inside a building on campus, so the set
+ * of people who can scan it is already the set of people in the room — an
+ * email step was buying a guarantee the room gives us for nothing, and
+ * charging forty people a minute each for it.
  *
- * Realtime is layered on top and is not load-bearing. Forty phones on a
- * basement network is exactly where a push-only design fails silently, so the
- * poll is the floor and the socket only removes the lag.
+ * The clock is the rest of the design. Every phone works out the round and the
+ * time left from the server's timestamps plus the offset between its clock and
+ * the server's, taken from the same response. Never from a countdown started
+ * on page load — a phone asleep for ninety seconds would come back two rounds
+ * behind and say so with total confidence.
  */
 
 const POLL_MS = 3000
 
 export default function LiveEventPage() {
   const { code } = useParams()
-  const { state: store } = useStore()
-  const signedIn = store.session.authed
+  const upper = String(code || '').toUpperCase()
 
+  const [token, setToken] = useState(() => readToken(upper))
   const [preview, setPreview] = useState(null)
   const [snap, setSnap] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  //  State, not a ref: this is read during render to work out the clock, and
-  //  a ref that changes without a render is a countdown that silently lies.
   const [offset, setOffset] = useState(0)
-
-  const upper = String(code || '').toUpperCase()
 
   const refresh = useCallback(async () => {
     if (!events.eventsEnabled) return
     try {
-      if (signedIn) {
-        const s = await events.state(upper)
+      if (token) {
+        const s = await events.state(upper, token)
         setOffset(clockOffset(s?.now))
         setSnap(s)
         if (s?.event) setPreview((p) => p ?? s.event)
@@ -63,7 +67,7 @@ export default function LiveEventPage() {
     } finally {
       setLoading(false)
     }
-  }, [upper, signedIn])
+  }, [upper, token])
 
   useEffect(() => {
     setLoading(true)
@@ -72,8 +76,6 @@ export default function LiveEventPage() {
 
   const joined = Boolean(snap?.me)
 
-  //  Poll only while there is a room to be in. A page sitting on the join
-  //  form does not need to ask the server anything three times a second.
   useEffect(() => {
     if (!joined) return undefined
     const t = setInterval(refresh, POLL_MS)
@@ -85,6 +87,18 @@ export default function LiveEventPage() {
     if (!id || !joined) return undefined
     return events.subscribe(id, refresh)
   }, [snap?.event?.id, joined, refresh])
+
+  const onJoined = useCallback(
+    (newToken) => {
+      if (newToken) {
+        saveToken(upper, newToken)
+        setToken(newToken)
+      } else {
+        refresh()
+      }
+    },
+    [upper, refresh]
+  )
 
   if (!events.eventsEnabled) return <Offline />
   if (loading) return <Loading />
@@ -101,46 +115,26 @@ export default function LiveEventPage() {
   const ev = snap?.event ?? preview
   const accent = accentOf(ev?.accent)
 
-  //  Signed out: the poster, and a way in. This is the pre-registration
-  //  surface as much as the door — somebody tapping the link from a group
-  //  chat on Tuesday lands here.
-  if (!signedIn) {
-    return (
-      <EventShell event={ev}>
-        <EventGate event={preview} />
-      </EventShell>
-    )
-  }
-
+  //  Straight to the name. No email, no code, no account.
   if (!joined) {
     return (
       <EventShell event={ev}>
-        <JoinForm event={preview ?? ev} code={upper} onJoined={refresh} />
+        <JoinForm event={preview ?? ev} code={upper} token={token} onJoined={onJoined} />
       </EventShell>
     )
   }
 
-  return (
-    <Room
-      snap={snap}
-      accent={accent}
-      offset={offset}
-      onChange={refresh}
-      error={error}
-    />
-  )
+  return <Room snap={snap} accent={accent} offset={offset} onChange={refresh} error={error} token={token} />
 }
 
 /* ══ the room ═════════════════════════════════════════════════════════════ */
 
-function Room({ snap, accent, offset, onChange, error }) {
+function Room({ snap, accent, offset, onChange, error, token }) {
   const ev = snap.event
   const round = snap.round
   const phase = phaseOf(round, offset, ev.break_seconds)
+  const stations = ev.format === 'stations'
 
-  //  A local tick so the countdown moves every second without asking the
-  //  server every second. The *value* still comes from the server's
-  //  timestamps; this only re-renders.
   const [, setTick] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 1000)
@@ -148,8 +142,7 @@ function Room({ snap, accent, offset, onChange, error }) {
   }, [])
 
   //  A transition has to be felt, not read. The host should not have to shout
-  //  "switch!" over a room of forty people, so the phone buzzes and the whole
-  //  screen changes colour at the same instant.
+  //  "switch!" over a room of forty people.
   const lastPhase = useRef(phase)
   useEffect(() => {
     if (lastPhase.current !== phase) {
@@ -180,26 +173,25 @@ function Room({ snap, accent, offset, onChange, error }) {
         <Big
           accent={accent}
           kicker={`Round ${round.index}`}
-          title={round.bye ? 'Sit this one out' : `Table ${round.station}`}
+          title={stations ? round.place?.label ?? 'Find your table' : round.bye ? 'Sit this one out' : `Table ${round.station}`}
           sub={`Starts in ${clock(s)}`}
         />
       )
     }
 
     if (phase === 'round') {
+      if (stations) return <Station round={round} accent={accent} offset={offset} />
       if (round.bye) return <Bye round={round} accent={accent} offset={offset} />
       return <Seat round={round} accent={accent} offset={offset} />
     }
 
-    // 'break' and 'between' are the same screen: time is up, and the vote
-    // card — if this event has one — is the thing to do with the next thirty
-    // seconds.
     return (
       <Between
         snap={snap}
         accent={accent}
         offset={offset}
         onChange={onChange}
+        token={token}
         waiting={phase === 'between'}
       />
     )
@@ -211,7 +203,8 @@ function Room({ snap, accent, offset, onChange, error }) {
       style={{ background: phase === 'break' ? accent.wash : '#FFFDF8' }}
     >
       <RoomHeader snap={snap} accent={accent} />
-      <div className="flex flex-1 flex-col px-5 pb-safe">{body}</div>
+      <div className="flex flex-1 flex-col px-5">{body}</div>
+
       {ev.broadcast && (
         <div className="border-t border-rule bg-white px-5 py-3">
           <p className="text-[13.5px] leading-relaxed text-navy">
@@ -219,6 +212,9 @@ function Room({ snap, accent, offset, onChange, error }) {
           </p>
         </div>
       )}
+
+      <RoomFooter />
+
       {error && (
         <p className="bg-coral-wash px-5 py-2 text-center text-[12.5px] text-coral-deep">
           Reconnecting…
@@ -228,12 +224,27 @@ function Room({ snap, accent, offset, onChange, error }) {
   )
 }
 
+/**
+ * The club's night, on Looseleaf's paper.
+ *
+ * The first version of this header carried only the event title and the org
+ * name, which meant that for the whole hour somebody was holding a screen with
+ * no idea whose product they were using — and the entire point of running these
+ * is that forty people find out what Looseleaf is. So the mark sits top-left,
+ * where a logo goes, and the club's name is the badge beside it. Their night,
+ * our paper: both, legibly, on every screen.
+ */
 function RoomHeader({ snap, accent }) {
   return (
-    <div className="flex items-center justify-between border-b border-rule px-5 py-3">
-      <div className="min-w-0">
-        <p className="truncate text-[13px] font-medium text-navy">{snap.event.title}</p>
-        <p className="text-[11.5px] text-mist">{snap.event.org_name}</p>
+    <div className="flex items-center justify-between gap-3 border-b border-rule bg-white/70 px-5 py-2.5">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <LeafMark size={26} className="shrink-0 text-navy" />
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-medium leading-tight text-navy">
+            {snap.event.title}
+          </p>
+          <p className="truncate text-[11.5px] leading-tight text-mist">{snap.event.org_name}</p>
+        </div>
       </div>
       <span
         className="shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-medium"
@@ -245,12 +256,21 @@ function RoomHeader({ snap, accent }) {
   )
 }
 
-/**
- * The lobby is not a loading state. It is where somebody sits for ten minutes
- * before the first round, and if it says nothing they assume it's broken —
- * so it says what is happening, who is here, and what this is.
- */
+/** Quiet, permanent, and the reason any of this is worth building. */
+function RoomFooter() {
+  return (
+    <div className="flex items-center justify-center gap-2 border-t border-rule px-5 py-2.5 pb-safe">
+      <LeafMark size={15} className="text-mist" />
+      <p className="text-[11.5px] text-mist">
+        Running on <span className="font-medium text-graphite">Looseleaf</span> — free dating for
+        your campus
+      </p>
+    </div>
+  )
+}
+
 function Lobby({ snap, accent }) {
+  const stations = snap.event.format === 'stations'
   return (
     <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
       <span
@@ -268,17 +288,65 @@ function Lobby({ snap, accent }) {
       </p>
       <div className="mt-10 rounded-card border border-rule bg-white px-5 py-4">
         <p className="text-[13px] leading-relaxed text-graphite">
-          Your phone will buzz and tell you which table to go to. Keep it where you can feel it.
+          {stations
+            ? 'Your phone will buzz and tell you which table to go to, and who’s running it. Keep it where you can feel it.'
+            : 'Your phone will buzz and tell you which table to go to. Keep it where you can feel it.'}
         </p>
       </div>
-      <p className="mt-auto pt-10 text-[12.5px] text-mist">
-        Looseleaf — a free dating app for your campus.
+    </div>
+  )
+}
+
+/**
+ * Stations format. The table has a name the host typed, and usually a member
+ * of the club sitting at it — that name is the single most useful thing on
+ * this screen, because it is how somebody knows they are in the right seat.
+ *
+ * What is deliberately absent: the other people at the table. Sitting near
+ * somebody is not consent to appear on their phone, and a list of four names
+ * is still a list.
+ */
+function Station({ round, accent, offset }) {
+  const left = secondsUntil(round.ends_at, offset)
+  const place = round.place
+
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center py-8 text-center">
+      <p className="text-[13px] font-medium uppercase tracking-[0.14em] text-mist">
+        Round {round.index}
+      </p>
+
+      <p
+        className="mt-3 font-display text-[46px] font-semibold leading-[1.05] tracking-[-0.02em] [text-wrap:balance]"
+        style={{ color: accent.ink }}
+      >
+        {place?.label ?? `Table ${round.station}`}
+      </p>
+
+      {place?.host_name && (
+        <p className="mt-5 text-[15px] text-graphite">
+          with <span className="font-display text-[22px] font-semibold text-navy">{place.host_name}</span>
+        </p>
+      )}
+
+      {place?.note && (
+        <p className="mt-3 max-w-[32ch] text-[14px] leading-relaxed text-graphite">{place.note}</p>
+      )}
+
+      {place?.with > 0 && (
+        <p className="mt-4 text-[13px] text-mist">
+          and {place.with} other{place.with === 1 ? '' : 's'}
+        </p>
+      )}
+
+      <p className="mt-auto pt-10 font-display text-[26px] font-semibold tabular-nums text-mist">
+        {clock(left)}
       </p>
     </div>
   )
 }
 
-/** The one screen that matters. Table number enormous, everything else quiet. */
+/** Pairs format. Table number enormous, everything else quiet. */
 function Seat({ round, accent, offset }) {
   const left = secondsUntil(round.ends_at, offset)
   const p = round.partner
@@ -323,11 +391,6 @@ function Seat({ round, accent, offset }) {
   )
 }
 
-/**
- * A bye handled well is a non-event; a bye handled badly is the thing somebody
- * remembers about the night. So it gets a real screen that says what to do and
- * exactly when they're back in.
- */
 function Bye({ round, accent, offset }) {
   const left = secondsUntil(round.ends_at, offset)
   return (
@@ -351,7 +414,7 @@ function Bye({ round, accent, offset }) {
   )
 }
 
-function Between({ snap, accent, offset, onChange, waiting }) {
+function Between({ snap, accent, offset, onChange, waiting, token }) {
   const pending = snap.pending_vote
   const round = snap.round
   const nextIn = waiting
@@ -382,6 +445,7 @@ function Between({ snap, accent, offset, onChange, waiting }) {
           key={pending.pairing_id}
           pending={pending}
           accent={accent}
+          token={token}
           notesEnabled={snap.event.notes_enabled}
           onDone={onChange}
         />
@@ -405,7 +469,7 @@ function Between({ snap, accent, offset, onChange, waiting }) {
 function Ended({ snap, accent }) {
   const matches = snap.matches ?? []
   const revealed = snap.event.revealed
-  const needsProfile = matches.some((m) => !m.both_members)
+  const stations = snap.event.format === 'stations'
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-paper">
@@ -413,12 +477,14 @@ function Ended({ snap, accent }) {
       <div className="flex flex-1 flex-col px-5 py-10">
         <p className="text-[13px] font-medium uppercase tracking-[0.14em] text-mist">That’s it</p>
         <h1 className="mt-3 font-display text-[34px] font-semibold leading-tight tracking-[-0.02em]">
-          You met {snap.met} {snap.met === 1 ? 'person' : 'people'} tonight.
+          {stations
+            ? `You got round ${snap.met} ${snap.met === 1 ? 'table' : 'tables'}.`
+            : `You met ${snap.met} ${snap.met === 1 ? 'person' : 'people'} tonight.`}
         </h1>
 
         {!snap.event.likes_enabled ? (
           <p className="mt-5 text-[15.5px] leading-relaxed text-graphite">
-            Thanks for coming. {snap.event.org_name} has your night’s notes if you wrote any.
+            Thanks for coming. Anything you wrote down is yours to keep.
           </p>
         ) : !revealed ? (
           <p className="mt-5 text-[15.5px] leading-relaxed text-graphite">
@@ -458,37 +524,25 @@ function Ended({ snap, accent }) {
           </>
         )}
 
-        {(needsProfile || !snap.me.has_profile) && revealed && matches.length > 0 && (
-          <div className="mt-8 rounded-card border border-rule bg-cream/60 p-5">
-            <h2 className="font-display text-[21px] font-semibold leading-tight">
-              {snap.me.has_profile
-                ? 'They need a profile to reply.'
-                : 'Finish your profile to say hi.'}
+        {/*  The pitch, once, at the only honest moment for it. */}
+        <div className="mt-auto pt-12">
+          <div className="rounded-card border border-rule bg-cream/60 p-6 text-center">
+            <Logo size="md" className="justify-center" />
+            <h2 className="mt-5 font-display text-[22px] font-semibold leading-tight [text-wrap:balance]">
+              {revealed && matches.length > 0
+                ? 'Make a profile to say hi.'
+                : 'Free dating for your campus.'}
             </h2>
-            <p className="mt-2.5 text-[14px] leading-relaxed text-graphite">
-              {snap.me.has_profile
-                ? 'We’ll open the conversation the moment they make one — nothing else for you to do.'
-                : 'You’re already signed in. Six questions and the conversation opens.'}
+            <p className="mx-auto mt-2.5 max-w-[34ch] text-[14px] leading-relaxed text-graphite">
+              {revealed && matches.length > 0
+                ? 'Your matches from tonight are saved on this phone. Build a profile and the conversations open.'
+                : 'See who likes you, find your overlap with people from your classes, and make actual plans. Nothing here is for sale.'}
             </p>
-            {!snap.me.has_profile && (
-              <Button to="/onboarding" variant="coral" size="lg" full className="mt-5">
-                Build my profile
-              </Button>
-            )}
-          </div>
-        )}
-
-        {!snap.me.has_profile && (!revealed || matches.length === 0) && (
-          <div className="mt-auto pt-12">
-            <p className="text-[14px] leading-relaxed text-graphite">
-              Looseleaf is a free dating app for your campus. You’re already signed in — a profile
-              takes about a minute.
-            </p>
-            <Button to="/onboarding" variant="outline" size="lg" full className="mt-4">
-              Have a look
+            <Button to="/join" variant="coral" size="lg" full className="mt-5">
+              {revealed && matches.length > 0 ? 'Build my profile' : 'Have a look'}
             </Button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
@@ -501,7 +555,7 @@ function Big({ accent, kicker, title, sub }) {
     <div className="flex flex-1 flex-col items-center justify-center py-10 text-center">
       <p className="text-[13px] font-medium uppercase tracking-[0.14em] text-mist">{kicker}</p>
       <h1
-        className="mt-3 font-display text-[46px] font-semibold leading-tight tracking-[-0.02em]"
+        className="mt-3 font-display text-[46px] font-semibold leading-[1.06] tracking-[-0.02em] [text-wrap:balance]"
         style={{ color: accent.ink }}
       >
         {title}
@@ -527,7 +581,7 @@ function Problem({ title, body }) {
       <Logo />
       <h1 className="mt-8 font-display text-[28px] font-semibold leading-tight">{title}</h1>
       <p className="mt-3 max-w-[32ch] text-[15px] leading-relaxed text-graphite">{body}</p>
-      <Button to="/e" variant="outline" size="lg" className="mt-8">
+      <Button to="/events" variant="outline" size="lg" className="mt-8">
         Try another code
       </Button>
     </div>

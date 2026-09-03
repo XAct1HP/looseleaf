@@ -4,6 +4,7 @@ import HostShell from './HostShell'
 import Button from '../../components/ui/Button'
 import { SelectChip } from '../../components/ui/Chip'
 import QrCode from '../../components/dates/QrCode'
+import { LeafMark } from '../../components/brand/Logo'
 import * as events from '../../services/liveEvents'
 import { accentOf } from '../../lib/liveEvent'
 import { eventUrl } from '../../lib/site'
@@ -57,7 +58,7 @@ export default function PrintKit() {
   const { id } = useParams()
   const [data, setData] = useState(null)
   const [sheet, setSheet] = useState('poster')
-  const [tables, setTables] = useState(10)
+  const [tables, setTables] = useState(null)
 
   useEffect(() => {
     events.getEvent(id).then(setData).catch(() => setData(null))
@@ -98,7 +99,11 @@ export default function PrintKit() {
   const link = eventUrl(ev.code)
   const logo = events.logoUrl(ev.logo_path)
 
-  const shared = { ev, accent, org, link, logo }
+  const stations = data.stations ?? []
+  //  A stations event already knows how many tables it has, and typing the
+  //  number again is a chance to get it wrong.
+  const tentCount = tables ?? (stations.length || 10)
+  const shared = { ev, accent, org, link, logo, stations }
 
   return (
     <>
@@ -127,7 +132,7 @@ export default function PrintKit() {
                 type="number"
                 min={1}
                 max={40}
-                value={tables}
+                value={tentCount}
                 onChange={(e) => setTables(Math.max(1, Math.min(40, Number(e.target.value) || 1)))}
                 className="field"
               />
@@ -150,14 +155,13 @@ export default function PrintKit() {
           </div>
 
           <p className="mt-5 max-w-[60ch] text-[13.5px] leading-relaxed text-graphite">
-            Share that link a few days early — in the group chat, on a story, on a flyer. Anyone who
-            taps it verifies their email at home, and at the door they just scan and walk in. It is
-            the difference between a queue and no queue.
+            Share that link a few days early — in the group chat, on a story, on a flyer. Nobody
+            has to make an account either way: they scan, type a first name, and they’re in.
           </p>
 
           <div className="mt-8 overflow-x-auto rounded-card border border-rule bg-[#F4F1EA] p-6">
             <div className="mx-auto w-fit bg-white shadow-lift">
-              <Sheet id={sheet} tables={tables} {...shared} />
+              <Sheet id={sheet} tables={tentCount} {...shared} />
             </div>
           </div>
         </HostShell>
@@ -165,7 +169,7 @@ export default function PrintKit() {
 
       {/* What actually goes on paper. Hidden on screen, the only thing printed. */}
       <div className="print-only">
-        <Sheet id={sheet} tables={tables} {...shared} />
+        <Sheet id={sheet} tables={tentCount} {...shared} />
       </div>
     </>
   )
@@ -211,7 +215,7 @@ function Poster({ ev, accent, org, link, logo }) {
         {ev.code}
       </p>
 
-      <Footer className="mt-auto pt-[8mm]" />
+      <LooseleafFoot className="mt-auto pt-[10mm]" />
     </article>
   )
 }
@@ -249,6 +253,7 @@ function Flyers({ ev, accent, org, link, logo }) {
             >
               {ev.code}
             </p>
+            <LooseleafFoot className="mt-[5mm] justify-start" compact />
           </div>
         </div>
       ))}
@@ -258,7 +263,7 @@ function Flyers({ ev, accent, org, link, logo }) {
 
 /* ── numbered table tents ────────────────────────────────────────────────── */
 
-function Tents({ tables, accent, org }) {
+function Tents({ tables, accent, org, stations = [] }) {
   //  Two per sheet, each folded across the middle so the number reads from
   //  both sides of the table. The top half is printed upside down, which is
   //  what makes the fold work and is the sort of thing you only discover by
@@ -281,10 +286,10 @@ function Tents({ tables, accent, org }) {
                 }`}
               >
                 <div className="flex flex-1 rotate-180 items-center justify-center">
-                  <TentFace n={n} accent={accent} org={org} />
+                  <TentFace n={n} accent={accent} org={org} label={stations[n - 1]?.label} />
                 </div>
                 <div className="flex flex-1 items-center justify-center">
-                  <TentFace n={n} accent={accent} org={org} />
+                  <TentFace n={n} accent={accent} org={org} label={stations[n - 1]?.label} />
                 </div>
               </div>
             )
@@ -295,17 +300,35 @@ function Tents({ tables, accent, org }) {
   )
 }
 
-function TentFace({ n, accent, org }) {
+function TentFace({ n, accent, org, label }) {
   return (
-    <div className="text-center">
+    <div className="px-[10mm] text-center">
       <p className="text-[11pt] font-medium uppercase tracking-[0.2em] text-[#8B93A3]">Table</p>
       <p
-        className="font-display text-[110pt] font-semibold leading-none"
+        className="font-display text-[100pt] font-semibold leading-none"
         style={{ color: accent.ink }}
       >
         {n}
       </p>
-      <p className="mt-[3mm] text-[10pt] text-[#8B93A3]">{org}</p>
+      {/*  The host's own name for the table, when they gave it one. A tent
+           reading "How to pitch" is worth more to somebody walking up to it
+           than a number is. */}
+      {label && (
+        <p
+          className="mt-[4mm] font-display text-[20pt] font-semibold leading-tight [text-wrap:balance]"
+          style={{ color: accent.ink }}
+        >
+          {label}
+        </p>
+      )}
+      <div className="mt-[6mm] flex items-center justify-center gap-[3mm]">
+        <span className="text-[10pt] text-[#8B93A3]">{org}</span>
+        <span className="text-[10pt] text-[#C9C2B5]">·</span>
+        <LeafMark size={16} className="text-[#8B93A3]" />
+        <span className="font-display text-[10pt] font-semibold lowercase text-[#8B93A3]">
+          looseleaf
+        </span>
+      </div>
     </div>
   )
 }
@@ -332,27 +355,82 @@ function Social({ ev, accent, org, link, logo }) {
       >
         {ev.code}
       </p>
-      <p className="mt-[4mm] text-[11pt] text-[#566070]">
-        Scan now, skip the line. Free, on Looseleaf.
-      </p>
+      <p className="mt-[4mm] text-[11pt] text-[#566070]">Scan now, skip the line.</p>
+      <LooseleafFoot className="mt-[6mm]" compact />
     </article>
   )
 }
 
 /* ── shared bits ─────────────────────────────────────────────────────────── */
 
+/**
+ * The club's mark, at a size that says whose night this is.
+ *
+ * With a real fallback rather than nothing: a host who never uploaded a logo
+ * used to get a poster with a line of small type where the branding should be,
+ * which looks like a mistake. An initial in their own accent colour looks
+ * deliberate, and most clubs will never notice they didn't upload anything.
+ */
 function Header({ org, logo, accent, compact }) {
+  const box = compact ? '14mm' : '20mm'
   return (
     <div className={`flex items-center gap-[4mm] ${compact ? '' : 'justify-center'}`}>
-      {logo && (
-        <img src={logo} alt="" className="h-[14mm] w-[14mm] rounded-[3mm] object-cover" />
+      {logo ? (
+        <img src={logo} alt="" className="rounded-[4mm] object-cover"
+             style={{ width: box, height: box }} />
+      ) : (
+        <span
+          className="flex items-center justify-center rounded-[4mm] font-display font-semibold"
+          style={{
+            width: box, height: box,
+            background: accent.wash, color: accent.ink,
+            fontSize: compact ? '15pt' : '22pt',
+          }}
+          aria-hidden="true"
+        >
+          {(org || '?').trim().charAt(0).toUpperCase()}
+        </span>
       )}
       <span
         className="font-display font-semibold"
-        style={{ color: accent.ink, fontSize: compact ? '12pt' : '15pt' }}
+        style={{ color: accent.ink, fontSize: compact ? '13pt' : '18pt' }}
       >
         {org}
       </span>
+    </div>
+  )
+}
+
+/**
+ * ── The Looseleaf half of the co-brand ─────────────────────────────────────
+ *
+ * A line of small type saying "on Looseleaf" was doing none of the work this
+ * is for. A poster is the one artefact from an event that a hundred people
+ * walk past and only forty scan, so the mark belongs on it properly — drawn,
+ * at a readable size, with the one sentence that tells a passer-by what they
+ * would be joining.
+ *
+ * Still second to the club, and deliberately at the foot rather than the head:
+ * it is their night. But present, and legible from a few feet away.
+ */
+function LooseleafFoot({ className = '', compact = false }) {
+  return (
+    <div className={`flex items-center justify-center gap-[3mm] ${className}`}>
+      <LeafMark size={compact ? 26 : 34} className="text-[#111C38]" />
+      <div className="text-left">
+        <p
+          className="font-display font-semibold lowercase leading-none tracking-[-0.02em] text-[#111C38]"
+          style={{ fontSize: compact ? '13pt' : '17pt' }}
+        >
+          looseleaf
+        </p>
+        <p
+          className="mt-[1.5mm] leading-tight text-[#566070]"
+          style={{ fontSize: compact ? '8.5pt' : '10.5pt' }}
+        >
+          Free. No app to download.
+        </p>
+      </div>
     </div>
   )
 }
@@ -375,12 +453,4 @@ function When({ ev, className = '' }) {
   return <p className={`text-[#566070] ${className}`}>{bits.join(' · ')}</p>
 }
 
-function Footer({ className = '' }) {
-  return (
-    <div className={className}>
-      <p className="text-[12pt] font-medium text-[#111C38]">
-        Free. No app to download. Speed dating on Looseleaf.
-      </p>
-    </div>
-  )
-}
+

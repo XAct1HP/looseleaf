@@ -577,6 +577,12 @@ declare
   v_repeats int;
   v_bye_cost int;
   v_forced_bye int;
+  v_pick int;
+  v_pick_avail int;
+  v_tries int;
+  v_avail int;
+  v_availa int[];
+  v_seatable int;
   v_allowed boolean;
   v_round_id uuid;
   v_index   int;
@@ -658,16 +664,21 @@ begin
   --
   --  `across` is left alone: there, leftovers are structural (four rushes and
   --  two actives leaves two people out no matter how fair you are about it).
-  v_forced_bye := 0;
-  if v_ev.pairing_mode <> 'across' and (v_n % 2) = 1 then
-    select x into v_forced_bye
-    from generate_series(1, v_n) as x
-    order by v_byes[x] asc, random()
-    limit 1;
-  end if;
-
   -- ── restarts ───────────────────────────────────────────────────────────
-  for v_k in 1..24 loop
+  --  How many restarts, and why it scales the way it does.
+  --
+  --  The hard rounds are the *last* ones, where almost everybody has met
+  --  almost everybody and only a handful of pairings are still legal — and
+  --  small rooms hit that wall hardest, because seven people over seven rounds
+  --  has to reproduce a perfect round-robin exactly or somebody repeats.
+  --
+  --  Restarts are also cheapest in precisely those rooms: the inner work is
+  --  O(n^3)-ish, so three hundred attempts at seven people costs less than
+  --  sixty at eighty. So the budget goes up as the room gets smaller. The
+  --  early exit below means the common case still stops on the first attempt.
+  v_tries := greatest(60, least(400, 2200 / greatest(v_n, 2)));
+
+  for v_k in 1..v_tries loop
     --  A fresh order each restart: people who have sat out most go first,
     --  everything else shuffled.
     select array_agg(x order by v_byes[x] desc, random()) into v_order
@@ -676,15 +687,91 @@ begin
     v_pair := array_fill(0, array[v_n]);
     v_rep  := array_fill(false, array[v_n]);
     v_repeats := 0;
-    if v_forced_bye <> 0 then v_pair[v_forced_bye] := -1; end if;
+
+    --  Chosen fresh on every restart, and that placement matters.
+    --
+    --  It used to be picked once, above the loop, which meant all sixty
+    --  restarts explored the same choice — and when *that* choice was the one
+    --  that made a perfect round impossible, no amount of reshuffling could
+    --  help. Seven people over seven rounds is where it showed: a perfect
+    --  schedule exists, but only for some choices of who sits out, and the
+    --  search was never allowed to try another.
+    --
+    --  Still only ever somebody with the fewest byes so far, so
+    --  `max(bye_count) - min(bye_count) <= 1` still holds by construction.
+    if v_ev.pairing_mode <> 'across' and (v_n % 2) = 1 then
+      select x into v_forced_bye
+      from generate_series(1, v_n) as x
+      order by v_byes[x] asc, random()
+      limit 1;
+      v_pair[v_forced_bye] := -1;
+    else
+      v_forced_bye := 0;
+    end if;
 
     --  Strict pass: never repeat a pairing, honour the split rule.
-    for v_i in 1..v_n loop
-      v_a := v_order[v_i];
-      continue when v_pair[v_a] <> 0;
+    --
+    --  Most-constrained-first, and that ordering is doing real work. Walking
+    --  the room in a fixed order and giving each person their best available
+    --  partner strands whoever is left at the end — they are the ones whose
+    --  options were spent by everybody ahead of them. Seven people over seven
+    --  rounds is the case that exposes it: a perfect schedule exists, and a
+    --  first-come greedy misses it often enough to be flaky.
+    --
+    --  So each step picks the person with the FEWEST partners still open to
+    --  them and seats that person first. Somebody with one option left gets
+    --  it before it is taken; somebody with nine can wait.
+    loop
+      v_pick := 0;
+      v_pick_avail := v_n + 1;
 
+      --  One scan, two uses: it finds the most-constrained vertex AND records
+      --  every vertex's remaining options, so choosing a partner below costs
+      --  nothing extra. Without the second use this stays O(n^3) per restart;
+      --  recomputing it per candidate would make it O(n^4).
+      v_availa := array_fill(0, array[v_n]);
+
+      for v_i in 1..v_n loop
+        v_a := v_order[v_i];
+        continue when v_pair[v_a] <> 0;
+
+        v_avail := 0;
+        for v_j in 1..v_n loop
+          v_cand := v_order[v_j];
+          continue when v_cand = v_a or v_pair[v_cand] <> 0;
+          continue when v_met[(v_a - 1) * v_n + v_cand];
+          if v_ev.pairing_mode = 'across' and v_split is not null then
+            continue when not (v_group[v_a] <> '' and v_group[v_cand] <> ''
+                               and v_group[v_a] <> v_group[v_cand]);
+          end if;
+          v_avail := v_avail + 1;
+        end loop;
+
+        v_availa[v_a] := v_avail;
+
+        if v_avail < v_pick_avail then
+          v_pick := v_a;
+          v_pick_avail := v_avail;
+        end if;
+      end loop;
+
+      exit when v_pick = 0;
+
+      --  Nobody left for them under the strict rules. Marked -2 so the loop
+      --  moves on; the relaxed pass below will still find them a seat.
+      if v_pick_avail = 0 then
+        v_pair[v_pick] := -2;
+        continue;
+      end if;
+
+      v_a := v_pick;
       v_best_cand := 0;
-      v_best_cand_score := -1;
+      --  NULL, not -1. The candidate score went negative when it started
+      --  counting a partner's remaining options, and a -1 floor silently
+      --  rejected every single candidate — the strict pass matched nobody and
+      --  the relaxed pass turned the whole round into repeats. A sentinel that
+      --  is a valid value is a sentinel waiting to do this.
+      v_best_cand_score := null;
 
       for v_j in 1..v_n loop
         v_cand := v_order[v_j];
@@ -700,17 +787,21 @@ begin
         end if;
         continue when not v_allowed;
 
-        --  Prefer whoever has sat out most, then whoever can keep their seat.
-        v_cand_score := v_byes[v_cand] * 100;
+        --  Seat the most-constrained vertex with its most-constrained
+        --  partner. Picking the right *person* to seat next and then giving
+        --  them an arbitrary partner throws away half the benefit: somebody
+        --  down to their last option should be spent on, not left for later.
+        --  Bye fairness and seat-keeping are tie-breaks underneath it.
+        v_cand_score := -v_availa[v_cand] * 100 + v_byes[v_cand] * 10;
         if v_ev.pairing_mode = 'avoid_same' and v_split is not null
            and v_group[v_a] <> '' and v_group[v_a] = v_group[v_cand] then
-          v_cand_score := v_cand_score - 500;
+          v_cand_score := v_cand_score - 5000;
         end if;
         if v_station[v_cand] <> 0 and v_station[v_cand] = v_station[v_a] then
-          v_cand_score := v_cand_score + 10;
+          v_cand_score := v_cand_score + 1;
         end if;
 
-        if v_cand_score > v_best_cand_score then
+        if v_best_cand_score is null or v_cand_score > v_best_cand_score then
           v_best_cand := v_cand;
           v_best_cand_score := v_cand_score;
         end if;
@@ -719,6 +810,8 @@ begin
       if v_best_cand <> 0 then
         v_pair[v_a] := v_best_cand;
         v_pair[v_best_cand] := v_a;
+      else
+        v_pair[v_a] := -2;
       end if;
     end loop;
 
@@ -729,10 +822,10 @@ begin
     if v_ev.pairing_mode <> 'across' then
       for v_i in 1..v_n loop
         v_a := v_order[v_i];
-        continue when v_pair[v_a] <> 0;
+        continue when v_pair[v_a] <> -2;
         for v_j in 1..v_n loop
           v_cand := v_order[v_j];
-          continue when v_cand = v_a or v_pair[v_cand] <> 0;
+          continue when v_cand = v_a or v_pair[v_cand] <> -2;
           v_pair[v_a] := v_cand;
           v_pair[v_cand] := v_a;
           v_rep[v_a] := true;
@@ -769,6 +862,12 @@ begin
       v_best_pair := v_pair;
       v_best_rep := v_rep;
     end if;
+
+    --  Everybody who could be seated is seated, nobody is repeating, and the
+    --  only person sitting out is the one we chose up front. Nothing a further
+    --  restart could find would be better.
+    v_seatable := v_n - (case when v_forced_bye = 0 then 0 else 1 end);
+    exit when v_repeats = 0 and v_matched >= v_seatable;
   end loop;
 
   -- ── commit the round ───────────────────────────────────────────────────
@@ -800,6 +899,9 @@ begin
     v_j := v_best_pair[v_i];
     continue when v_j > 0 and v_j < v_i;   -- each pair once, a<b by index
 
+    --  0 never happened, -1 is the bye we chose, -2 is somebody the strict
+    --  pass could not seat and the relaxed pass did not reach. All three end
+    --  up in the same place.
     if v_j <= 0 then
       insert into live_event_pairings (round_id, event_id, a_participant, bye)
       values (v_round_id, p_event, v_ids[v_i], true);

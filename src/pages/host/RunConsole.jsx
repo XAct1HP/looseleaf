@@ -89,11 +89,16 @@ export default function RunConsole() {
     }
   }
 
+  const stations = Number(summary.stations ?? 0)
+  const isStations = ev.format === 'stations'
+
   const plan = schedulePlan({
     people: here,
     roundSeconds: ev.round_seconds,
     breakSeconds: ev.break_seconds,
     plannedRounds: ev.planned_rounds,
+    format: ev.format,
+    stations,
   })
 
   return (
@@ -133,7 +138,7 @@ export default function RunConsole() {
                   {registered > here && ` · ${registered} registered`}
                 </p>
                 <p className="mx-auto mt-6 max-w-[40ch] text-[14px] leading-relaxed text-graphite">
-                  {planSentence(plan, here)}
+                  {planSentence(plan, here, ev.format)}
                 </p>
               </>
             ) : (
@@ -149,10 +154,12 @@ export default function RunConsole() {
                 size="lg"
                 className="sm:col-span-2"
                 style={{ background: accent.plate }}
-                disabled={busy || here < 2}
+                disabled={busy || here < (isStations ? 1 : 2)}
                 onClick={() => act(() => events.start(id))}
               >
-                {here < 2 ? 'Waiting for two people' : `Start · ${here} here`}
+                {here < (isStations ? 1 : 2)
+                  ? 'Waiting for somebody to arrive'
+                  : `Start · ${here} here`}
               </Button>
             )}
 
@@ -223,11 +230,20 @@ export default function RunConsole() {
           <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <Tile n={summary.here} label="here now" />
             <Tile n={summary.rounds} label="rounds" />
-            <Tile n={summary.conversations} label="conversations" />
-            {ev.likes_enabled ? (
-              <Tile n={summary.matches} label="matches" />
+            {isStations ? (
+              <>
+                <Tile n={summary.stations} label="tables" />
+                <Tile n={summary.seatings} label="seats filled" />
+              </>
             ) : (
-              <Tile n={summary.registered} label="registered" />
+              <>
+                <Tile n={summary.conversations} label="conversations" />
+                {ev.likes_enabled ? (
+                  <Tile n={summary.matches} label="matches" />
+                ) : (
+                  <Tile n={summary.registered} label="registered" />
+                )}
+              </>
             )}
           </div>
           <p className="mt-3 text-[12.5px] leading-relaxed text-mist">
@@ -255,10 +271,20 @@ export default function RunConsole() {
                   <span className="truncate text-[14.5px] text-navy">{p.name}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2.5">
-                  {p.station && (
-                    <span className="text-[12.5px] text-graphite">T{p.station}</span>
+                  {/*  The table by name, not by number: a host looking for
+                       somebody scans for "How to pitch", not for "3". */}
+                  {isStations
+                    ? p.place && (
+                        <span className="max-w-[9rem] truncate text-[12.5px] text-graphite">
+                          {p.place}
+                        </span>
+                      )
+                    : p.station && (
+                        <span className="text-[12.5px] text-graphite">T{p.station}</span>
+                      )}
+                  {!isStations && p.byes > 0 && (
+                    <span className="text-[12px] text-mist">{p.byes} bye</span>
                   )}
-                  {p.byes > 0 && <span className="text-[12px] text-mist">{p.byes} bye</span>}
                   {['waiting', 'active'].includes(p.state) ? (
                     <button
                       type="button"

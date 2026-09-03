@@ -561,11 +561,37 @@ export default function Onboarding() {
     []
   )
 
+  /**
+   * Somebody who went to a live event has no account — a name and a token in
+   * this browser is all they had. If they are here, they are making one now,
+   * so this is the moment those tokens are spent: their participation is
+   * attached to the new profile and any match that was only ever waiting on
+   * both sides having one opens by itself.
+   *
+   * Dynamically imported so that none of the events code lands in the bundle
+   * every student downloads, and deliberately never allowed to fail the
+   * signup — a claim that does not work is a couple of matches that stay
+   * closed, which is a far smaller problem than an onboarding that throws.
+   */
+  const claimAnyEvents = async () => {
+    try {
+      const { readWallet } = await import('../../lib/liveEvent')
+      const tokens = readWallet()
+      if (!tokens.length) return
+      const events = await import('../../services/liveEvents')
+      if (!events.eventsEnabled) return
+      await events.claim(tokens)
+    } catch {
+      /* nothing here is worth interrupting a signup for */
+    }
+  }
+
   const finish = async () => {
     setSaveError('')
     setSaving('Saving')
     try {
       await actions.finishOnboarding(draft, { onProgress: setSaving })
+      await claimAnyEvents()
       navigate(isDemo ? '/app/discover' : '/waitlist')
     } catch (err) {
       setSaveError(err.message)

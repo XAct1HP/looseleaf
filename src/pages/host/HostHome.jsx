@@ -139,19 +139,38 @@ export default function HostHome() {
   )
 }
 
+/**
+ * Signing in as a host.
+ *
+ * Centred — the content, not the wordmark. The bar keeps its logo on the left
+ * where a logo goes; it is the column underneath that used to sit hard against
+ * the left edge of a wide page with nothing beside it, which reads as a layout
+ * that gave up rather than a deliberately narrow one.
+ *
+ * Note this is the one place in live events that still asks for an email, and
+ * it should be: a host is a person we will approve, whose club's name goes on
+ * a poster, and who we may need to reach. An attendee is not.
+ */
 function SignIn() {
   return (
     <HostShell>
-      <h1 className="relative inline-block font-display text-[32px] font-semibold leading-tight tracking-[-0.02em]">
-        Run a live event.
-        <Underline className="absolute -bottom-1 left-0 text-coral/60" width={230} />
-      </h1>
-      <p className="mt-6 max-w-[46ch] text-[15.5px] leading-relaxed text-graphite">
-        Speed dating for your club, fraternity, dorm or society. We handle the rotation, the timer
-        and who sits where; you handle the room. It’s free.
-      </p>
-      <div className="mt-9 max-w-[420px]">
-        <EventGate event={null} />
+      <div className="mx-auto max-w-[440px] py-6 text-center">
+        <h1 className="relative inline-block font-display text-[34px] font-semibold leading-tight tracking-[-0.02em]">
+          Run a live event.
+          <Underline className="absolute -bottom-1 left-0 text-coral/60" width={240} />
+        </h1>
+        <p className="mx-auto mt-6 max-w-[40ch] text-[15.5px] leading-relaxed text-graphite">
+          Speed dating for your club, fraternity, dorm or society. We handle the rotation, the
+          timer and who sits where; you handle the room. It’s free.
+        </p>
+
+        <div className="mt-9 text-left">
+          <EventGate event={null} />
+        </div>
+
+        <p className="mt-8 text-[12.5px] leading-relaxed text-mist">
+          Only you need an account. The people who turn up just type a name.
+        </p>
       </div>
     </HostShell>
   )

@@ -175,3 +175,57 @@ test nobody runs.
 
 Section 17 (suspending a host) is deliberately last: it kills every event that
 host owns, so anything reading one of them has to have run already.
+
+---
+
+## `event_stations_test.sql` — 62 assertions
+
+The second pass: no login at the door, and the stations format. Same harness,
+with one difference that matters — grant the table privileges to **`anon` as
+well as `authenticated`**:
+
+```
+psql -d ll -c "grant all on all tables in schema public to authenticated, anon"
+```
+
+That is deliberate. Supabase hands `anon` those grants by default and RLS is
+what actually protects us; a harness that left them off would make the privacy
+assertions pass by permission error and prove nothing.
+
+**No account, and no loss of privacy.** Somebody joins with a name and gets a
+token back. `anon` then reads zero rows from participants, events, stations,
+seatings and votes — everything an attendee sees comes through one
+security-definer function scoped by that token. A token nobody holds is nobody,
+and is not even told how many people are inside. One person's token cannot vote
+as another or read their notes.
+
+**A token is spent once.** Two anonymous people who both said yes have a match
+and no conversation, because neither has a profile. When each builds one, their
+browser hands the token over and the thread opens — and a second account trying
+the same token claims nothing, so a shared laptop cannot walk off with the last
+person's matches.
+
+**Stations.** Eleven people over four tables, deliberately not divisible: every
+round seats all eleven, no table is ever more than one person bigger than
+another, nobody visits the same table twice, and after four rounds everybody has
+been to all four. A latecomer is seated in the very next round. The pairs engine
+never runs, so byes do not exist here. Four rushes and four actives pair off
+across the split with nobody sitting out; four and two leaves the surplus side
+taking byes rather than the constraint being quietly dropped.
+
+**What a station tells you, and what it does not.** The label, who is running it,
+and how many others are there — never their names. Sitting at the same table as
+somebody is not consent to appear on their screen.
+
+**Renaming a table keeps its id.** The subtle one: a station deleted and
+recreated gets a new id, and every seating from earlier rounds points at the old
+one — so a host fixing a typo mid-event would silently wipe the record of who had
+already been where, and the next round would send the whole room back round
+again. `set_event_stations` updates in place and the test asserts all 56 earlier
+seatings survive it.
+
+Also: a stations event with no stations refuses to start rather than showing a
+room an empty screen; one attendee and one table is a legitimate round (the other
+side of the table is a club member who was never counted); and `host_roster`
+still carries no email address and now also **never a join token** — that is
+somebody's identity.

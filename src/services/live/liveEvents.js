@@ -81,13 +81,26 @@ export async function getEvent(id) {
   const { data, error } = await supabase.rpc('host_event', { p_event: id })
   bail(error)
   if (!data) return null
-  return { event: data.event, fields: data.fields ?? [], host: data.host }
+  return {
+    event: data.event,
+    fields: data.fields ?? [],
+    stations: data.stations ?? [],
+    host: data.host,
+  }
 }
 
 export async function updateEvent(id, patch) {
   const { error } = await supabase.rpc('update_live_event', {
     p_event: id,
     p_patch: patch,
+  })
+  bail(error)
+}
+
+export async function setStations(id, stations) {
+  const { error } = await supabase.rpc('set_event_stations', {
+    p_event: id,
+    p_stations: stations,
   })
   bail(error)
 }
@@ -165,40 +178,72 @@ export async function preview(code) {
   return data ?? null
 }
 
-export async function join(code, name, answers) {
+/**
+ * Every participant call carries the token instead of a session, because
+ * there is no session — a person at a door typed a name and nothing else.
+ * The token is minted server-side on the first join and kept in localStorage
+ * by `lib/liveEvent`; see the header of 20260903120000_event_stations.sql for
+ * why the door works this way.
+ */
+export async function join(code, name, answers, token) {
   const { data, error } = await supabase.rpc('join_live_event', {
     p_code: code,
     p_name: name,
     p_answers: answers ?? {},
+    p_token: token ?? null,
   })
-  bail(error)
-  return data
-}
-
-export async function state(code) {
-  const { data, error } = await supabase.rpc('event_state', { p_code: code })
   bail(error)
   return data ?? null
 }
 
-export async function vote(pairingId, yes, note) {
+export async function state(code, token) {
+  const { data, error } = await supabase.rpc('event_state', {
+    p_code: code,
+    p_token: token ?? null,
+  })
+  bail(error)
+  return data ?? null
+}
+
+export async function vote(pairingId, yes, note, token) {
   const { error } = await supabase.rpc('cast_event_vote', {
     p_pairing: pairingId,
     p_yes: yes,
     p_note: note ?? null,
+    p_token: token ?? null,
   })
   bail(error)
 }
 
-export async function myNotes(eventId) {
-  const { data, error } = await supabase.rpc('my_event_notes', { p_event: eventId })
+export async function myNotes(eventId, token) {
+  const { data, error } = await supabase.rpc('my_event_notes', {
+    p_event: eventId,
+    p_token: token ?? null,
+  })
   bail(error)
   return data ?? []
 }
 
-export async function leave(eventId) {
-  const { error } = await supabase.rpc('leave_live_event', { p_event: eventId })
+export async function leave(eventId, token) {
+  const { error } = await supabase.rpc('leave_live_event', {
+    p_event: eventId,
+    p_token: token ?? null,
+  })
   bail(error)
+}
+
+/**
+ * Hands this browser's event tokens to a freshly-made account, and opens any
+ * match that was only ever waiting on both sides having a profile. Called once,
+ * right after somebody finishes onboarding.
+ */
+export async function claim(tokens) {
+  if (!tokens?.length) return 0
+  const { data, error } = await supabase.rpc('claim_event_participation', {
+    p_tokens: tokens,
+  })
+  bail(error)
+  return data ?? 0
 }
 
 /**
