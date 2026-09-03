@@ -4,7 +4,7 @@ import HostShell, { StatusPill } from './HostShell'
 import Button from '../../components/ui/Button'
 import * as events from '../../services/liveEvents'
 import {
-  accentOf,
+  themeOf,
   clock,
   clockOffset,
   planSentence,
@@ -70,7 +70,7 @@ export default function RunConsole() {
   if (!data) return <HostShell title="One moment…" back={`/host/${id}`} />
 
   const ev = data.event
-  const accent = accentOf(ev.accent)
+  const accent = themeOf(ev)
   const here = Number(summary.here ?? 0)
   const registered = Number(summary.registered ?? 0)
   const rounds = Number(summary.rounds ?? 0)

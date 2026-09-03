@@ -3,7 +3,8 @@ import Button from '../ui/Button'
 import { SelectChip } from '../ui/Chip'
 import * as events from '../../services/liveEvents'
 import { useStore } from '../../state/store'
-import { accentOf } from '../../lib/liveEvent'
+import { themeOf } from '../../lib/liveEvent'
+import { arm } from '../../lib/roundAlert'
 
 /**
  * ── A name, and whatever the host asked ─────────────────────────────────────
@@ -24,7 +25,7 @@ import { accentOf } from '../../lib/liveEvent'
  */
 export default function JoinForm({ event, code, token, onJoined }) {
   const { state } = useStore()
-  const accent = accentOf(event?.accent)
+  const accent = themeOf(event)
   const fields = event?.fields ?? []
 
   const [name, setName] = useState(state.me?.firstName ?? '')
@@ -48,6 +49,11 @@ export default function JoinForm({ event, code, token, onJoined }) {
   const submit = async (e) => {
     e.preventDefault()
     if (!name.trim() || missing || busy) return
+    //  The one gesture every attendee is guaranteed to make, and therefore
+    //  the only reliable moment to unlock Web Audio. Without this the chime
+    //  that stands in for vibration on an iPhone never plays.
+    arm()
+
     setBusy(true)
     setError('')
     try {

@@ -1,5 +1,5 @@
 import { logoUrl } from '../../services/liveEvents'
-import { accentOf } from '../../lib/liveEvent'
+import { themeOf } from '../../lib/liveEvent'
 import Logo, { LeafMark } from '../brand/Logo'
 
 /**
@@ -16,7 +16,7 @@ import Logo, { LeafMark } from '../brand/Logo'
  * in a dim room, and the person who suffers is a stranger holding a phone.
  */
 export default function EventShell({ event, children }) {
-  const accent = accentOf(event?.accent)
+  const accent = themeOf(event)
   const logo = logoUrl(event?.logo_path)
 
   return (

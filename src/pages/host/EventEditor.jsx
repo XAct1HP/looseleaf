@@ -8,10 +8,11 @@ import {
   ACCENTS,
   FIELD_KINDS,
   PRESETS,
-  accentOf,
+  themeOf,
   planSentence,
   schedulePlan,
 } from '../../lib/liveEvent'
+import { themeFromLogo } from '../../lib/logoTheme'
 
 /**
  * ── Setting one up ──────────────────────────────────────────────────────────
@@ -161,7 +162,7 @@ function Editor({
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
   const locked = Boolean(ev.started_at)
-  const accent = accentOf(ev.accent)
+  const accent = themeOf(ev)
 
   const patch = (p) => setEv((e) => ({ ...e, ...p }))
 
@@ -211,6 +212,7 @@ function Editor({
         notes_enabled: ev.notes_enabled,
         join_opens: ev.join_opens,
         accent: ev.accent,
+        theme: ev.theme ?? null,
         welcome_line: ev.welcome_line ?? '',
       })
       if (isStations) {
@@ -494,21 +496,53 @@ function Editor({
         <LogoField ev={ev} patch={patch} setError={setError} accent={accent} />
 
         <Field label="Colour" className="mt-7">
-          <div className="flex flex-wrap gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/*  The logo's own colours first, when there are any. They are not
+                 the logo's raw colours — they are its hues, re-fitted until
+                 they pass a contrast check, because a mark that looks good at
+                 40px is not automatically a readable round timer in a dim
+                 room. See lib/logoTheme.js. */}
+            {ev.theme && (
+              <button
+                type="button"
+                onClick={() => patch({ accent: ev.accent })}
+                aria-label="From your logo"
+                aria-pressed={Boolean(ev.theme)}
+                className="press focus-ring relative h-11 w-11 overflow-hidden rounded-full border-2 border-navy transition-transform scale-105"
+              >
+                <span className="absolute inset-0" style={{ background: ev.theme.plate }} />
+                {ev.theme.accent2 && ev.theme.accent2 !== ev.theme.ink && (
+                  <span
+                    className="absolute inset-y-0 right-0 w-1/2"
+                    style={{ background: ev.theme.accent2 }}
+                  />
+                )}
+              </button>
+            )}
+
             {Object.entries(ACCENTS).map(([key, a]) => (
               <button
                 key={key}
                 type="button"
-                onClick={() => patch({ accent: key })}
+                //  Picking a palette colour clears the derived theme, because
+                //  otherwise the swatch they just tapped would visibly not
+                //  take effect anywhere.
+                onClick={() => patch({ accent: key, theme: null })}
                 aria-label={a.label}
-                aria-pressed={ev.accent === key}
+                aria-pressed={!ev.theme && ev.accent === key}
                 className={`press focus-ring h-11 w-11 rounded-full border-2 transition-transform ${
-                  ev.accent === key ? 'border-navy scale-105' : 'border-transparent'
+                  !ev.theme && ev.accent === key ? 'border-navy scale-105' : 'border-transparent'
                 }`}
                 style={{ background: a.plate }}
               />
             ))}
           </div>
+
+          <p className="mt-2.5 text-[12.5px] leading-relaxed text-mist">
+            {ev.theme
+              ? 'Taken from your logo, adjusted so it stays readable on a phone in a dim room. Pick another to override it.'
+              : 'Upload a logo above and we’ll take the colours from it.'}
+          </p>
         </Field>
 
         <Field label="A line to welcome people" className="mt-6">
@@ -516,9 +550,13 @@ function Editor({
             value={ev.welcome_line ?? ''}
             onChange={(e) => patch({ welcome_line: e.target.value })}
             maxLength={160}
-            placeholder="Glad you came. Put your phone on vibrate."
+            placeholder="Glad you came. Grab a drink and find a seat."
             className="field"
           />
+          {/*  The placeholder is deliberately not "put your phone on vibrate".
+               Plenty of the room is on an iPhone, where a web page cannot
+               vibrate at all, and each phone is already told what it will
+               actually do — a host's welcome line should not contradict it. */}
         </Field>
 
         <Field label="What is this event?" className="mt-6">
@@ -714,8 +752,15 @@ function LogoField({ ev, patch, setError, accent }) {
     setError('')
     try {
       const path = await events.uploadLogo(ev.id, file)
-      await events.updateEvent(ev.id, { logo_path: path })
-      patch({ logo_path: path })
+
+      //  Read the colours off the file we still have in memory rather than
+      //  re-fetching the uploaded one: a cross-origin image with no CORS
+      //  header taints the canvas and `getImageData` throws, so the local File
+      //  is both faster and the only version guaranteed to be readable.
+      const theme = await themeFromLogo(file).catch(() => null)
+
+      await events.updateEvent(ev.id, { logo_path: path, ...(theme ? { theme } : {}) })
+      patch({ logo_path: path, ...(theme ? { theme } : {}) })
     } catch (e) {
       setError(e.message)
       setPreview(null)
@@ -750,7 +795,8 @@ function LogoField({ ev, patch, setError, accent }) {
             />
           </label>
           <p className="mt-2 max-w-[36ch] text-[12.5px] leading-relaxed text-mist">
-            Square works best. It goes on the join screen, the poster and the flyers.
+            Square works best. It goes on the join screen, the poster and the flyers — and the
+            event takes its colours from it.
           </p>
         </div>
       </div>

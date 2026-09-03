@@ -557,5 +557,67 @@ begin
   perform assert(v_s::text not like '%join_token%', 'event_state never echoes a token back');
 end $$;
 
+-- ═══ 8. the theme taken from a logo ═══════════════════════════════════════
+--
+--  The colours themselves are fitted and checked client-side (there is a
+--  runnable check for that in lib/logoTheme.js — every seed, including pale
+--  yellow and mid grey, has to come out legible). What the database has to get
+--  right is the patch semantics, and specifically that a theme can be
+--  *cleared*: `theme` is one of the few keys that reads a null through, so
+--  `p_patch ? 'theme'` is the test and not `p_patch ->> 'theme'`. Get that
+--  wrong and a host who picks a palette colour can never get rid of the
+--  colours their logo gave them.
+
+do $$
+declare v_ev uuid := current_setting('test.sv')::uuid; v_t jsonb;
+begin
+  perform act_as(current_setting('test.host')::uuid);
+
+  perform assert((select theme from live_events where id = v_ev) is null,
+                 'an event with no logo has no theme');
+
+  perform update_live_event(v_ev, jsonb_build_object('theme', jsonb_build_object(
+    'ink', '#0F6E4F', 'plate', '#12805C', 'wash', '#E8F5EF',
+    'accent2', '#8A5A00', 'seed', '#16A075')));
+
+  select theme into v_t from live_events where id = v_ev;
+  perform assert(v_t ->> 'ink' = '#0F6E4F', 'a derived theme is stored');
+  perform assert(v_t ->> 'accent2' = '#8A5A00', 'including the secondary');
+
+  --  A patch that says nothing about the theme must leave it alone.
+  perform update_live_event(v_ev, jsonb_build_object('welcome_line', 'Hello'));
+  perform assert((select theme from live_events where id = v_ev) ->> 'ink' = '#0F6E4F',
+                 'an unrelated edit does not disturb it');
+
+  --  ★ And a patch that explicitly sends null must clear it, which is what
+  --  happens the moment a host taps one of the six palette swatches.
+  perform update_live_event(v_ev, jsonb_build_object('accent', 'moss', 'theme', null));
+  perform assert((select theme from live_events where id = v_ev) is null,
+                 'picking a palette colour clears the logo theme');
+  perform assert((select accent from live_events where id = v_ev) = 'moss',
+                 'and the palette choice takes');
+end $$;
+
+--  Both surfaces that hand an event to a phone have to carry it, or the room
+--  renders in coral while the poster renders in the club's green.
+do $$
+declare v_ev uuid := current_setting('test.sv')::uuid; v_s jsonb; v_p jsonb;
+begin
+  perform act_as(current_setting('test.host')::uuid);
+  perform update_live_event(v_ev, jsonb_build_object('theme', jsonb_build_object(
+    'ink', '#0F6E4F', 'plate', '#12805C', 'wash', '#E8F5EF',
+    'accent2', null, 'seed', '#16A075')));
+
+  perform act_as(null);
+  v_s := event_state((select code from live_events where id = v_ev),
+                     current_setting('test.st1')::uuid);
+  perform assert(v_s -> 'event' -> 'theme' ->> 'plate' = '#12805C',
+                 'event_state carries the theme to the room');
+
+  v_p := event_preview((select code from live_events where id = v_ev));
+  perform assert(v_p -> 'theme' ->> 'plate' = '#12805C',
+                 'and event_preview carries it to the join screen');
+end $$;
+
 do $$ begin raise notice '─────────────────────────────────────'; end $$;
 do $$ begin raise notice 'stations + open door: all assertions passed.'; end $$;

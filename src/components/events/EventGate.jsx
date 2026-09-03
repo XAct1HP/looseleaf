@@ -3,7 +3,7 @@ import Button from '../ui/Button'
 import { IconMail } from '../ui/Icons'
 import { useStore } from '../../state/store'
 import { OTP_LENGTH, OTP_MIN_LENGTH } from '../../lib/supabase'
-import { accentOf } from '../../lib/liveEvent'
+import { themeOf } from '../../lib/liveEvent'
 
 /**
  * ── The door ────────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ import { accentOf } from '../../lib/liveEvent'
  */
 export default function EventGate({ event }) {
   const { actions } = useStore()
-  const accent = accentOf(event?.accent)
+  const accent = themeOf(event)
 
   const [stage, setStage] = useState('email') // email | code
   const [email, setEmail] = useState('')

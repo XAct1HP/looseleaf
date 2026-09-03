@@ -25,6 +25,37 @@ export const ACCENTS = {
 
 export const accentOf = (key) => ACCENTS[key] ?? ACCENTS.coral
 
+/**
+ * The colours an event actually renders in.
+ *
+ * A theme derived from the host's logo wins; otherwise the palette key they
+ * picked by hand; otherwise coral. Takes the whole event rather than a key so
+ * that adding a third source later touches this function and nothing else —
+ * there are a dozen call sites and they should not each have to know the
+ * precedence rule.
+ *
+ * Anything reaching here has already been contrast-checked (see
+ * `lib/logoTheme.js`), so this is a lookup, not a validation.
+ */
+export function themeOf(event) {
+  const t = event?.theme
+  if (t && t.ink && t.plate && t.wash) {
+    return {
+      ink: t.ink,
+      plate: t.plate,
+      wash: t.wash,
+      //  The secondary is optional — plenty of logos are one colour — so
+      //  everything that uses it falls back to the primary rather than
+      //  branching.
+      accent2: t.accent2 || t.ink,
+      label: 'From your logo',
+      fromLogo: true,
+    }
+  }
+  const a = accentOf(event?.accent)
+  return { ...a, accent2: a.ink, fromLogo: false }
+}
+
 /* ── the clock ───────────────────────────────────────────────────────────
  *
  * Every phone works out the round from the server's timestamps and the offset

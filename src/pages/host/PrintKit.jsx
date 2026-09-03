@@ -6,7 +6,7 @@ import { SelectChip } from '../../components/ui/Chip'
 import QrCode from '../../components/dates/QrCode'
 import { LeafMark } from '../../components/brand/Logo'
 import * as events from '../../services/liveEvents'
-import { accentOf } from '../../lib/liveEvent'
+import { themeOf } from '../../lib/liveEvent'
 import { eventUrl } from '../../lib/site'
 
 /**
@@ -94,7 +94,7 @@ export default function PrintKit() {
   if (!data) return <HostShell title="One moment…" back={`/host/${id}`} />
 
   const ev = data.event
-  const accent = accentOf(ev.accent)
+  const accent = themeOf(ev)
   const org = data.host?.org_name ?? ''
   const link = eventUrl(ev.code)
   const logo = events.logoUrl(ev.logo_path)

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as events from '../../services/liveEvents'
 import {
-  accentOf,
+  themeOf,
   clock,
   clockOffset,
   phaseOf,
@@ -10,6 +10,7 @@ import {
   saveToken,
   secondsUntil,
 } from '../../lib/liveEvent'
+import { alertPromise, arm, capability, fire } from '../../lib/roundAlert'
 import Logo, { LeafMark } from '../../components/brand/Logo'
 import Button from '../../components/ui/Button'
 import EventShell from '../../components/events/EventShell'
@@ -113,7 +114,7 @@ export default function LiveEventPage() {
   }
 
   const ev = snap?.event ?? preview
-  const accent = accentOf(ev?.accent)
+  const accent = themeOf(ev)
 
   //  Straight to the name. No email, no code, no account.
   if (!joined) {
@@ -143,19 +144,28 @@ function Room({ snap, accent, offset, onChange, error, token }) {
 
   //  A transition has to be felt, not read. The host should not have to shout
   //  "switch!" over a room of forty people.
+  //
+  //  This used to call `navigator.vibrate?.()` directly, which on an iPhone is
+  //  a no-op — Safari has never shipped the Vibration API — while the lobby
+  //  cheerfully promised a buzz. `roundAlert` vibrates where it can, chimes
+  //  where it cannot, and tells the copy which of those it is.
   const lastPhase = useRef(phase)
   useEffect(() => {
     if (lastPhase.current !== phase) {
       lastPhase.current = phase
-      if (phase === 'round' || phase === 'break') {
-        try {
-          navigator.vibrate?.(phase === 'round' ? [90, 60, 90] : 200)
-        } catch {
-          /* a browser that won't buzz is not a problem worth reporting */
-        }
-      }
+      if (phase === 'round' || phase === 'break') fire(phase)
     }
   }, [phase])
+
+  //  Web Audio has to be unlocked from a real gesture, and joining is the one
+  //  gesture every attendee makes. This is the belt to that braces: any tap
+  //  anywhere in the room re-arms it, so somebody who arrived with the page
+  //  already open still gets a sound.
+  useEffect(() => {
+    const onTap = () => arm()
+    window.addEventListener('pointerdown', onTap, { once: true, passive: true })
+    return () => window.removeEventListener('pointerdown', onTap)
+  }, [])
 
   if (ev.status === 'ended' || ev.status === 'killed') {
     return <Ended snap={snap} accent={accent} />
@@ -269,6 +279,50 @@ function RoomFooter() {
   )
 }
 
+/**
+ * What will actually happen when the round changes, written from a feature
+ * test rather than from hope — and a button to prove it.
+ *
+ * The button is not a gimmick. Somebody is about to put this phone in a pocket
+ * and trust it; letting them check takes one tap, and on the phones where the
+ * answer is "it won't buzz, it'll chime" it is the difference between hearing
+ * the first round start and missing it.
+ */
+function AlertNote({ accent, stations }) {
+  const [tested, setTested] = useState(false)
+  const how = capability()
+
+  return (
+    <div className="mt-10 w-full max-w-[34ch] rounded-card border border-rule bg-white px-5 py-4">
+      <p className="text-[13px] leading-relaxed text-graphite">
+        {alertPromise()}
+        {stations && ' It’ll tell you which table, and who’s running it.'}
+      </p>
+
+      {how !== 'screen' && (
+        <button
+          type="button"
+          onClick={() => {
+            arm()
+            fire('test')
+            setTested(true)
+          }}
+          className="press focus-ring mt-3 text-[13px] font-medium underline underline-offset-4"
+          style={{ color: accent.ink }}
+        >
+          {tested
+            ? how === 'buzz'
+              ? 'Feel that? Tap to try again'
+              : 'Hear that? Tap to try again'
+            : how === 'buzz'
+              ? 'Test the buzz'
+              : 'Test the sound'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function Lobby({ snap, accent }) {
   const stations = snap.event.format === 'stations'
   return (
@@ -286,13 +340,7 @@ function Lobby({ snap, accent }) {
         {snap.here} {snap.here === 1 ? 'person is' : 'people are'} here. {snap.event.org_name} starts
         it when everyone’s settled.
       </p>
-      <div className="mt-10 rounded-card border border-rule bg-white px-5 py-4">
-        <p className="text-[13px] leading-relaxed text-graphite">
-          {stations
-            ? 'Your phone will buzz and tell you which table to go to, and who’s running it. Keep it where you can feel it.'
-            : 'Your phone will buzz and tell you which table to go to. Keep it where you can feel it.'}
-        </p>
-      </div>
+      <AlertNote accent={accent} stations={stations} />
     </div>
   )
 }
