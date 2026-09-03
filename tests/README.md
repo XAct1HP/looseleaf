@@ -120,3 +120,58 @@ a twenty-year-old, and not suggested at all to somebody who said no to drinks.
 Asking for nothing in particular suggests what the two of them both said they
 liked. A business naming who it suits can only remove itself from suggestions,
 never lift itself up them.
+
+---
+
+## `live_events_test.sql` — 110 assertions
+
+Run the same way as `partners_test.sql`, after the same stubs and migrations:
+
+```
+psql -d ll -f tests/local-stubs.sql
+for f in supabase/migrations/*.sql; do psql -d ll -f "$f"; done
+psql -d ll -c "grant all on all tables in schema public to authenticated"
+psql -d ll -f tests/live_events_test.sql
+```
+
+The three sections worth reading first are 5, 6/10 and 8; the rest is plumbing.
+
+**No roster exists.** A participant reads exactly one participant row — their
+own — plus their own answers, their own pairings and their own votes, and an
+outsider reads none of it. What somebody learns about the person opposite comes
+from `event_state()`, which returns a first name plus only the fields the host
+marked `show_to_partner`; the test asserts a field marked shown gets through
+and an unshown one does not, by value as well as by label.
+
+**A host sees counts, never a vote, and never an email.** A host reads zero
+rows from `live_event_votes` and zero from `live_event_matches`, and is still
+told how many matches there were. `host_roster()` is asserted not to contain an
+`@` address or any answer text — the protection is a hand-written select list,
+so the test greps the JSON rather than trusting the shape.
+
+**The rotation is actually a rotation.** Ten people over nine rounds produce
+all 45 pairs, each exactly once, with no byes, no repeats, and no station used
+twice in a round. A tenth round — where there is nobody new left to meet —
+re-seats the whole room rather than stranding anybody. Seven people over seven
+rounds give exactly one bye each: bye fairness is a hard constraint, chosen
+before the search rather than scored during it, so `max - min <= 1` holds by
+construction and not by luck. `across` mode never seats two people who gave the
+same answer on the split field, and when the groups are uneven the surplus side
+takes byes rather than the constraint being quietly dropped.
+
+**A no is invisible, and a match is a promise.** One yes is not a match; a yes
+and a no is not a match; the person turned down reads nothing about it. Two
+profile-less people who match get no conversation — the row sits there until
+they both build a profile, at which point a trigger opens the thread with the
+canonical `a < b` ordering the rest of the app expects. That is the conversion
+mechanic, and it is tested rather than hoped for.
+
+**The event drives itself.** Polling `event_state()` mid-round changes nothing;
+polling it after the round and its break have elapsed starts the next round —
+so a host whose phone has locked cannot stall the room. It stops at
+`planned_rounds` rather than generating byes forever. The clock is rewound with
+an `update` rather than a `sleep`, because a test that waits four minutes is a
+test nobody runs.
+
+Section 17 (suspending a host) is deliberately last: it kills every event that
+host owns, so anything reading one of them has to have run already.

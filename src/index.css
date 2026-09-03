@@ -230,3 +230,79 @@
 @page {
   margin: 16mm;
 }
+
+/* ── The event print kit ───────────────────────────────────────────────────
+ *
+ * A different problem from the counter card above. That one is a single card
+ * inside a portalled Sheet; this is whole pages — a poster, flyers two-up, a
+ * run of numbered table tents — that have to fill a sheet edge to edge and
+ * break in the right places.
+ *
+ * Three things earn their keep here:
+ *
+ *  · `@page { margin: 0 }` under `.print-kit`, because a poster's own padding
+ *    is in millimetres and a browser margin on top of it would shrink the QR
+ *    below the size that reads reliably off a door.
+ *  · `print-color-adjust: exact`. Browsers strip background colours when
+ *    printing to save ink, which would quietly turn a host's chosen accent
+ *    into white — and the accent is the whole of the branding they were
+ *    promised.
+ *  · `.print-only` / `.no-print`, so one component renders both the on-screen
+ *    preview and the paper, and the two cannot drift apart. A preview that
+ *    lies about what will print is worse than no preview.
+ *
+ * Sizes are in mm and pt on purpose: this is the one place in Looseleaf where
+ * a physical measurement is the point.
+ */
+.print-only {
+  display: none;
+}
+
+.print-kit .page {
+  box-sizing: border-box;
+  background: #fff;
+  break-after: page;
+  overflow: hidden;
+}
+.print-kit .page:last-child {
+  break-after: auto;
+}
+
+/* US Letter, and a square for a social post. */
+.print-kit .page-letter {
+  width: 215.9mm;
+  height: 279.4mm;
+}
+.print-kit .page-square {
+  width: 200mm;
+  height: 200mm;
+}
+
+@media print {
+  .print-kit .no-print {
+    display: none !important;
+  }
+  .print-kit .print-only {
+    display: block !important;
+  }
+
+  .print-kit,
+  .print-kit body {
+    background: #fff !important;
+  }
+
+  /* Keep the host's accent on paper. */
+  .print-kit * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-kit .page {
+    box-shadow: none !important;
+    margin: 0 !important;
+  }
+}
+
+/* `@page` cannot be scoped to a class, so the margin override is injected as
+ * its own <style> element by `PrintKit` while it is mounted, and removed when
+ * it unmounts. See the note there. */

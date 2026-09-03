@@ -35,6 +35,7 @@ import BackstageReports from './pages/backstage/Reports'
 import BackstageEvents from './pages/backstage/EventQueue'
 import BackstagePartners from './pages/backstage/Partners'
 import BackstageSpots from './pages/backstage/Spots'
+import BackstageLiveEvents from './pages/backstage/LiveEvents'
 import Logo from './components/brand/Logo'
 
 /**
@@ -43,6 +44,19 @@ import Logo from './components/brand/Logo'
  * ever load a byte of it. Lazily importing it keeps all of that out of the
  * bundle a nineteen-year-old downloads on campus wifi.
  */
+/**
+ * Live events are their own lazy island, for the same reason the partner
+ * platform is: a student opening Discover should download none of the host
+ * console, and somebody scanning a poster at a door — on campus wifi, in a
+ * hurry — should download none of the dating app.
+ */
+const JoinCode = lazy(() => import('./pages/events/JoinCode'))
+const LiveEventPage = lazy(() => import('./pages/events/LiveEventPage'))
+const HostHome = lazy(() => import('./pages/host/HostHome'))
+const EventEditor = lazy(() => import('./pages/host/EventEditor'))
+const RunConsole = lazy(() => import('./pages/host/RunConsole'))
+const PrintKit = lazy(() => import('./pages/host/PrintKit'))
+
 const PartnersLanding = lazy(() => import('./pages/partners/PartnersLanding'))
 const PartnerAuth = lazy(() => import('./pages/partners/PartnerAuth'))
 const PartnerOnboarding = lazy(() => import('./pages/partners/PartnerOnboarding'))
@@ -218,6 +232,63 @@ export default function App() {
           }
         />
 
+        {/* ── Live events ──────────────────────────────────────────────
+            Outside /app entirely, and that is the point. `/app` requires an
+            onboarded `profiles` row; a participant has no dating profile and a
+            club president running a rush night may not want one either.
+
+            `/e/:code` is what a printed QR encodes, so it is deliberately
+            short — every character is another module in a grid that has to
+            read off a door, at an angle, in bad light. */}
+        <Route
+          path="/e"
+          element={
+            <Suspense fallback={<Booting />}>
+              <JoinCode />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/e/:code"
+          element={
+            <Suspense fallback={<Booting />}>
+              <LiveEventPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host"
+          element={
+            <Suspense fallback={<Booting />}>
+              <HostHome />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/:id"
+          element={
+            <Suspense fallback={<Booting />}>
+              <EventEditor />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/:id/run"
+          element={
+            <Suspense fallback={<Booting />}>
+              <RunConsole />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/host/:id/print"
+          element={
+            <Suspense fallback={<Booting />}>
+              <PrintKit />
+            </Suspense>
+          }
+        />
+
         <Route path="/join" element={<SignUp />} />
         <Route path="/login" element={<Login />} />
         <Route path="/verify" element={<Verify />} />
@@ -356,6 +427,14 @@ export default function App() {
             element={
               <RequireStaff>
                 <BackstagePartners />
+              </RequireStaff>
+            }
+          />
+          <Route
+            path="backstage/live"
+            element={
+              <RequireStaff>
+                <BackstageLiveEvents />
               </RequireStaff>
             }
           />

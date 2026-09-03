@@ -196,6 +196,44 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── live events ─────────────────────────────────────────────
+          Above the philosophy on purpose. A student who has just scanned a
+          poster and a student who has never heard of a Looseleaf event both
+          need this in the first screen and a half — the first because they
+          are trying to get into a room right now, the second because "these
+          exist" is the entire awareness job this section does. */}
+      <section className="border-y border-rule bg-navy text-paper">
+        <div className="mx-auto grid max-w-[1180px] items-center gap-8 px-5 py-14 sm:px-8 lg:grid-cols-[1.15fr_1fr] lg:py-16">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1.5 text-[12.5px] font-medium text-paper/85">
+              <span className="h-1.5 w-1.5 rounded-full bg-coral" />
+              Happening on campus
+            </span>
+            <h2 className="mt-5 max-w-[18ch] font-display text-[30px] font-semibold leading-tight tracking-[-0.02em] sm:text-[36px]">
+              Standing at a speed dating night?
+            </h2>
+            <p className="mt-4 max-w-[46ch] text-[15.5px] leading-relaxed text-paper/75">
+              Scan the code on the door and your phone tells you where to sit and for how long. No
+              profile needed — your school email and a name is the whole thing.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row lg:justify-end">
+            <Button to="/e" variant="coral" size="lg" className="sm:px-8">
+              Join a live event
+            </Button>
+            <Button
+              to="/host"
+              variant="ghost"
+              size="lg"
+              className="!text-paper/80 hover:!bg-white/10 hover:!text-paper"
+            >
+              Run one for my club
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* ── philosophy ──────────────────────────────────────────── */}
       <section className="border-y border-rule bg-cream/50">
         <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-24">

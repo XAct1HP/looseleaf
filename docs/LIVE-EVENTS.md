@@ -1,6 +1,29 @@
 # Live Events
 
-*Plan, drafted 2026-09-02. Not built yet. Approve or mark up before any code.*
+*Planned and built 2026-09-02. M0–M2 are in the tree; M3–M4 are not.*
+
+> **Status.** Everything below describes the design. What exists now:
+> `supabase/migrations/20260902120000_live_events.sql` (schema, RLS, the
+> pairing engine, every RPC), `tests/live_events_test.sql` (**110 assertions**,
+> all passing against local Postgres 16), the participant flow at `/e`, the
+> host console at `/host`, the print kit, and the Backstage queue at
+> `/app/backstage/live`.
+>
+> **Not done, and both matter:** the M0 rate-limit load test has never been run
+> against the real project, and nothing here has touched a real iPhone. See
+> Risks.
+>
+> Two things changed during the build, both because the first version was
+> wrong:
+>
+> * **Bye fairness is a hard constraint, not a scoring preference.** Ordering
+>   the greedy by bye count makes a fair round *likely*; seven people over
+>   seven rounds proved that "likely" isn't good enough, and somebody sat out
+>   twice before somebody else sat out once. The bye is now chosen up front
+>   from whoever has had the fewest, so `max - min <= 1` holds by construction.
+> * **The vote card's Yes and No are the same weight.** The first version made
+>   Yes a filled button beside an outlined No — the standard pairing, and
+>   exactly wrong in a room where the polite answer is already yes.
 
 A Looseleaf **live event** is a timed, rotating, in-person session: people arrive,
 scan a QR code on the door, and their phone tells them where to sit, who they're

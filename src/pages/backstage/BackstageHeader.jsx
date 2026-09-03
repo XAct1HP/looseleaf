@@ -5,6 +5,7 @@ const TABS = [
   { to: '/app/backstage', label: 'Overview', end: true },
   { to: '/app/backstage/reports', label: 'Reports' },
   { to: '/app/backstage/events', label: 'Events' },
+  { to: '/app/backstage/live', label: 'Live' },
   { to: '/app/backstage/partners', label: 'Partners' },
   { to: '/app/backstage/spots', label: 'Spots' },
 ]

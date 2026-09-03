@@ -397,6 +397,36 @@ export default function PartnersLanding() {
       </section>
 
       {/* ── closing ───────────────────────────────────────────────────── */}
+      {/* ── the third door ──────────────────────────────────────────
+          A club president landing here is looking for the same thing a
+          restaurant is — a way to put something in front of students — and
+          every route off this page until now said "Become a Partner", which
+          is how somebody ends up filling in "describe your restaurant" for a
+          fraternity.
+
+          It routes to /host rather than into this flow on purpose. A host
+          signs in as themselves with a campus address; making them a
+          `partner_users` row would put a business account and a member
+          account on one person, which is the exact ambiguity the partner
+          platform is built to prevent. */}
+      <section className="mx-auto max-w-[1180px] px-5 pb-4 sm:px-8">
+        <div className="lift-corner rounded-card border border-rule bg-cream/60 px-7 py-7 sm:flex sm:items-center sm:justify-between sm:gap-8">
+          <div className="max-w-[52ch]">
+            <h2 className="font-display text-[23px] font-semibold leading-tight">
+              Not a business — a club, a fraternity, a society?
+            </h2>
+            <p className="mt-2.5 text-[15px] leading-relaxed text-graphite">
+              You want the other thing: run a live speed dating night on Looseleaf. We handle the
+              rotation, the timer and who sits where. It's free, and there's no business
+              information to fill in.
+            </p>
+          </div>
+          <Button to="/host" variant="primary" size="lg" className="mt-5 shrink-0 sm:mt-0">
+            Host an event
+          </Button>
+        </div>
+      </section>
+
       <section className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8 lg:py-20">
         <div className="relative overflow-hidden rounded-sheet border border-navy/10 bg-navy px-7 py-14 text-center text-paper sm:px-14">
           <span className="paper-lines absolute inset-0 opacity-[0.06]" aria-hidden="true" />

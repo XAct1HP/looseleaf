@@ -59,6 +59,21 @@ export const inviteUrl = () => url('/join')
 export const passUrl = (code) => url(`/partners/dashboard/scan?code=${encodeURIComponent(code)}`)
 
 /**
+ * What an event's entrance QR encodes.
+ *
+ * Short on purpose: this gets printed at four inches on a door, photographed
+ * at an angle in bad light, and read by whatever camera app a phone happens to
+ * have. Every character in the URL is another module in the grid, and a denser
+ * grid is a code that fails on the one phone whose owner then gives up and
+ * walks off.
+ *
+ * It is a URL rather than a bare code because a printed QR is opened by the
+ * phone's own camera, not by anything of ours — nobody opens a website in
+ * order to open a camera.
+ */
+export const eventUrl = (code) => url(`/e/${String(code || '').toUpperCase()}`)
+
+/**
  * Share sheet on a phone, clipboard everywhere else. Returns how it went so
  * the caller can say the right thing.
  */
