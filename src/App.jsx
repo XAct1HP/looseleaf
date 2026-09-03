@@ -50,7 +50,7 @@ import Logo from './components/brand/Logo'
  * console, and somebody scanning a poster at a door — on campus wifi, in a
  * hurry — should download none of the dating app.
  */
-const JoinCode = lazy(() => import('./pages/events/JoinCode'))
+const EventsLanding = lazy(() => import('./pages/events/EventsLanding'))
 const LiveEventPage = lazy(() => import('./pages/events/LiveEventPage'))
 const HostHome = lazy(() => import('./pages/host/HostHome'))
 const EventEditor = lazy(() => import('./pages/host/EventEditor'))
@@ -241,13 +241,17 @@ export default function App() {
             short — every character is another module in a grid that has to
             read off a door, at an angle, in bad light. */}
         <Route
-          path="/e"
+          path="/events"
           element={
             <Suspense fallback={<Booting />}>
-              <JoinCode />
+              <EventsLanding />
             </Suspense>
           }
         />
+        {/*  `/e` is what the printed poster spells out underneath the QR, so
+             it has to keep resolving forever. It is one hop to the same code
+             box rather than a second page to keep in step with this one. */}
+        <Route path="/e" element={<Navigate to="/events" replace />} />
         <Route
           path="/e/:code"
           element={

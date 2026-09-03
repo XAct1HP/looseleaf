@@ -404,11 +404,12 @@ export default function PartnersLanding() {
           is how somebody ends up filling in "describe your restaurant" for a
           fraternity.
 
-          It routes to /host rather than into this flow on purpose. A host
-          signs in as themselves with a campus address; making them a
-          `partner_users` row would put a business account and a member
-          account on one person, which is the exact ambiguity the partner
-          platform is built to prevent. */}
+          It leaves this flow entirely rather than adding a third branch to
+          it. Hosting is not a lighter kind of partnership — there is no
+          business, no card, and no `partner_users` row (which would put a
+          business account and a member account on one person, the exact
+          ambiguity the partner platform exists to prevent). It is its own
+          product with its own front door at /events. */}
       <section className="mx-auto max-w-[1180px] px-5 pb-4 sm:px-8">
         <div className="lift-corner rounded-card border border-rule bg-cream/60 px-7 py-7 sm:flex sm:items-center sm:justify-between sm:gap-8">
           <div className="max-w-[52ch]">
@@ -421,8 +422,8 @@ export default function PartnersLanding() {
               information to fill in.
             </p>
           </div>
-          <Button to="/host" variant="primary" size="lg" className="mt-5 shrink-0 sm:mt-0">
-            Host an event
+          <Button to="/events" variant="primary" size="lg" className="mt-5 shrink-0 sm:mt-0">
+            See live events
           </Button>
         </div>
       </section>

@@ -19,15 +19,24 @@ export default function HostShell({ title, subtitle, action, back, children, wid
   const { pathname } = useLocation()
   const atHome = pathname === '/host'
 
+  //  One width for the bar and the content.
+  //
+  //  They used to differ — a 1100px header over a 720px column — and the whole
+  //  page read as slightly broken without it being obvious why: the logo sat
+  //  left of everything under it. Nothing is centred by accident; if the bar
+  //  and the body disagree about where the page starts, they are both wrong.
+  const shell = wide ? 'max-w-[1100px]' : 'max-w-[760px]'
+
   return (
     <div className="min-h-[100dvh] bg-paper">
       <header className="border-b border-rule">
-        <div className="mx-auto flex max-w-[1100px] items-center justify-between px-5 py-4 sm:px-8">
-          <Link to="/host" className="flex items-center gap-2.5">
+        <div className={`mx-auto flex ${shell} items-center justify-between px-5 py-4 sm:px-8`}>
+          {/*  Just the wordmark. "for Partners" earns its suffix because a
+               restaurant owner needs telling they're in the right product;
+               a club president who came here from an events page does not,
+               and "for Hosts" only ever read as a label nobody asked for. */}
+          <Link to="/host" className="flex items-center">
             <Logo />
-            <span className="hidden font-display text-[15px] font-semibold text-graphite sm:inline">
-              for Hosts
-            </span>
           </Link>
           {!atHome && (
             <Link
@@ -41,9 +50,7 @@ export default function HostShell({ title, subtitle, action, back, children, wid
         </div>
       </header>
 
-      <main
-        className={`mx-auto px-5 py-8 sm:px-8 sm:py-12 ${wide ? 'max-w-[1100px]' : 'max-w-[720px]'}`}
-      >
+      <main className={`mx-auto ${shell} px-5 py-8 sm:px-8 sm:py-12`}>
         {(title || back) && (
           <header className="mb-8">
             {back && (

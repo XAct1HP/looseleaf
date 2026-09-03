@@ -34,6 +34,7 @@ export default function EventGate({ event }) {
   const [digits, setDigits] = useState(() => Array.from({ length: OTP_LENGTH }, () => ''))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [resent, setResent] = useState(false)
   const inputs = useRef([])
 
   const typed = digits.join('')
@@ -96,8 +97,38 @@ export default function EventGate({ event }) {
     const landed = Math.min(i + cleaned.length, OTP_LENGTH - 1)
     inputs.current[landed]?.focus()
 
-    const joined = next.join('')
-    if (joined.length === OTP_LENGTH && !joined.includes('')) attempt(joined)
+    //  `next.every(Boolean)`, and not a string test.
+    //
+    //  This was the bug that made a real emailed code do nothing at all: the
+    //  first version checked `!joined.includes('')`, and
+    //  `String.prototype.includes('')` is true for EVERY string — so the
+    //  condition was permanently false and the code was never submitted. The
+    //  boxes filled up, the form sat there, and nothing said why.
+    if (next.every(Boolean)) attempt(next.join(''))
+  }
+
+  const onKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus()
+    if (e.key === 'Enter' && typed.length >= OTP_MIN_LENGTH) {
+      e.preventDefault()
+      attempt(typed)
+    }
+  }
+
+  const resend = async () => {
+    setDigits(Array.from({ length: OTP_LENGTH }, () => ''))
+    setError('')
+    setBusy(true)
+    try {
+      await actions.sendCode(email.trim().toLowerCase())
+      setResent(true)
+      setTimeout(() => setResent(false), 5000)
+      inputs.current[0]?.focus()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (event && !event.join_open) {
@@ -178,9 +209,7 @@ export default function EventGate({ event }) {
                 ref={(el) => (inputs.current[i] = el)}
                 value={d}
                 onChange={(e) => setDigit(i, e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Backspace' && !digits[i] && i > 0) inputs.current[i - 1]?.focus()
-                }}
+                onKeyDown={(e) => onKeyDown(i, e)}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={OTP_LENGTH}
@@ -196,34 +225,57 @@ export default function EventGate({ event }) {
             </p>
           )}
 
-          {typed.length >= OTP_MIN_LENGTH && typed.length < OTP_LENGTH && (
-            <Button
-              type="button"
-              variant="outline"
-              size="lg"
-              full
-              className="mt-4"
-              onClick={() => attempt(typed)}
-              disabled={busy}
-            >
-              Check this code
-            </Button>
-          )}
+          {/*  Always here once enough digits are in, never only in the gap
+               between OTP_MIN_LENGTH and OTP_LENGTH.
 
-          {/*  Not a back button. A mistyped address costs a full minute of
-               Supabase's per-user cooldown, so the way to fix one has to be
-               the most obvious thing on the screen. */}
-          <button
+               `OTP_LENGTH` defaults to 8 and Supabase projects differ — some
+               send six. Somebody typing a six-digit code into eight boxes fills
+               what they were given and then has nothing to press, which reads
+               exactly like the app being broken. A button that is simply there
+               costs nothing and removes the whole class of problem. */}
+          <Button
             type="button"
-            onClick={() => {
-              setStage('email')
-              setError('')
-            }}
-            className="mt-6 text-[13.5px] font-medium underline underline-offset-4"
-            style={{ color: accent.ink }}
+            variant="coral"
+            size="lg"
+            full
+            className="mt-5"
+            onClick={() => attempt(typed)}
+            disabled={busy || typed.length < OTP_MIN_LENGTH}
+            style={typed.length >= OTP_MIN_LENGTH ? { background: accent.plate } : undefined}
           >
-            Wrong email? Change it
-          </button>
+            {busy ? 'Checking…' : 'Verify'}
+          </Button>
+
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-[13.5px]">
+            {/*  Not a back button. A mistyped address costs a full minute of
+                 Supabase's per-user cooldown, so the way to fix one has to be
+                 the most obvious thing on the screen. */}
+            <button
+              type="button"
+              onClick={() => {
+                setStage('email')
+                setError('')
+              }}
+              className="font-medium underline underline-offset-4"
+              style={{ color: accent.ink }}
+            >
+              Wrong email? Change it
+            </button>
+
+            <button
+              type="button"
+              onClick={resend}
+              disabled={busy}
+              className="font-medium text-graphite underline underline-offset-4 disabled:opacity-50"
+            >
+              {resent ? 'Sent again' : 'Send it again'}
+            </button>
+          </div>
+
+          <p className="mt-4 text-[12.5px] leading-relaxed text-mist">
+            Codes can take a few seconds. Check spam if it doesn’t turn up — some university mail
+            servers are slow.
+          </p>
         </div>
       )}
     </div>
