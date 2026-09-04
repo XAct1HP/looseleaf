@@ -1,0 +1,407 @@
+<title>How a Date Pass Works</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper:#FFFDF8;
+    --cream:#FFF6EB;
+    --card:#FFFFFF;
+    --ink:#111C38;
+    --ink-2:#26314D;
+    --body:#566070;
+    --faint:#8B93A3;
+    --rule:#EDE7DC;
+    --rule-2:#DFD5C6;
+    --coral:#FF6468;
+    --coral-deep:#E9484D;
+    --coral-wash:#FFF1EF;
+    --moss:#5C9A72;
+    --moss-deep:#3F7454;
+    --moss-wash:#E6F2EA;
+    --blue:#2F5C99;
+    --blue-wash:#EAF3FF;
+    /* The pass is always the same dark stock, in either theme — it is a
+       picture of a physical-feeling thing, not a surface of this page. */
+    --stock:#111C38;
+    --stock-ink:#FFFDF8;
+    --sans:"DM Sans",Inter,system-ui,-apple-system,sans-serif;
+    --disp:"Fraunces",Lora,Georgia,serif;
+    --mono:"DM Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#12172A; --cream:#181E33; --card:#1B2138;
+      --ink:#F3EFE6; --ink-2:#DCD6C9; --body:#A8B0C2; --faint:#7A8398;
+      --rule:#2B3350; --rule-2:#3A4364;
+      --coral:#FF8386; --coral-deep:#FF8386; --coral-wash:#33212A;
+      --moss:#7FC098; --moss-deep:#7FC098; --moss-wash:#1D2E28;
+      --blue:#9CC0F2; --blue-wash:#1B2740;
+      --stock:#080D1C; --stock-ink:#FFFDF8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#12172A; --cream:#181E33; --card:#1B2138;
+    --ink:#F3EFE6; --ink-2:#DCD6C9; --body:#A8B0C2; --faint:#7A8398;
+    --rule:#2B3350; --rule-2:#3A4364;
+    --coral:#FF8386; --coral-deep:#FF8386; --coral-wash:#33212A;
+    --moss:#7FC098; --moss-deep:#7FC098; --moss-wash:#1D2E28;
+    --blue:#9CC0F2; --blue-wash:#1B2740;
+    --stock:#080D1C; --stock-ink:#FFFDF8;
+  }
+
+  * { box-sizing:border-box; }
+  body { background:var(--paper); color:var(--body); font-family:var(--sans); font-size:16px; line-height:1.62; -webkit-font-smoothing:antialiased; }
+  .wrap { max-width:760px; margin:0 auto; padding:0 22px 110px; }
+
+  h1,h2,h3 { font-family:var(--disp); color:var(--ink); font-weight:600; margin:0; letter-spacing:-.015em; text-wrap:balance; }
+  h1 { font-size:clamp(32px,5.6vw,44px); line-height:1.08; }
+  h2 { font-size:clamp(21px,3vw,25px); line-height:1.2; }
+  h3 { font-size:17px; line-height:1.3; font-family:var(--sans); font-weight:700; }
+  p { margin:0; max-width:64ch; }
+  .eyebrow { font-size:11.5px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--faint); }
+  .mono { font-family:var(--mono); }
+  a { color:var(--ink); text-underline-offset:3px; text-decoration-color:var(--rule-2); }
+  a:focus-visible { outline:2px solid var(--coral); outline-offset:3px; border-radius:4px; }
+
+  /* ── opener ─────────────────────────────────────────── */
+  header.mast { padding:56px 0 34px; display:flex; flex-direction:column; gap:18px; }
+  .leaf { display:flex; align-items:center; gap:9px; }
+  .leaf svg { display:block; }
+  .leaf span { font-family:var(--disp); font-size:17px; font-weight:600; color:var(--ink); letter-spacing:-.01em; }
+  .lede { font-size:18.5px; line-height:1.55; max-width:56ch; }
+  .mast .for { font-size:14px; color:var(--faint); border-top:1px solid var(--rule); padding-top:16px; }
+
+  /* ── the spine ──────────────────────────────────────── */
+  .flow { display:flex; flex-direction:column; margin-top:14px; }
+  .step { display:grid; grid-template-columns:38px 1fr; gap:0 22px; }
+  .rail { position:relative; display:flex; justify-content:center; }
+  /* The line is drawn, not implied: every step here genuinely depends on the
+     one above it, and the reader's first question is "then what?" */
+  .rail::before { content:""; position:absolute; top:36px; bottom:-2px; width:2px; background:var(--rule); }
+  .step:last-child .rail::before { display:none; }
+  .dot { position:relative; z-index:1; width:34px; height:34px; border-radius:50%; background:var(--cream); border:1.5px solid var(--rule-2); color:var(--ink); font-family:var(--mono); font-size:13px; display:flex; align-items:center; justify-content:center; margin-top:2px; }
+  .step.pay .dot { border-color:var(--coral); color:var(--coral-deep); background:var(--coral-wash); }
+  .step.scan .dot { border-color:var(--moss); color:var(--moss-deep); background:var(--moss-wash); }
+  .body { padding:0 0 34px; display:flex; flex-direction:column; gap:11px; }
+  .step h2 { margin-bottom:1px; }
+  .aside { font-size:14.5px; color:var(--faint); border-left:2px solid var(--rule); padding-left:14px; max-width:58ch; }
+  .free { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; font-size:11.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--moss-deep); background:var(--moss-wash); border:1px solid var(--moss); border-radius:100px; padding:3px 10px; }
+
+  /* ── the pass ───────────────────────────────────────── */
+  .figure { margin-top:6px; display:flex; flex-direction:column; gap:10px; }
+  .figcap { font-size:13px; color:var(--faint); }
+
+  .pass { position:relative; background:var(--stock); color:var(--stock-ink); border-radius:24px; max-width:340px; overflow:hidden; box-shadow:0 2px 4px rgba(17,28,56,.05), 0 18px 40px -20px rgba(17,28,56,.45); }
+  .holes { position:absolute; left:14px; top:44px; display:flex; flex-direction:column; gap:34px; opacity:.28; }
+  .holes i { display:block; width:9px; height:9px; border-radius:50%; border:1.5px solid var(--stock-ink); }
+  .pass .stub { padding:26px 26px 0 44px; }
+  .pass .kicker { font-size:10.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:rgba(255,253,248,.55); }
+  .pass .biz { font-family:var(--disp); font-size:23px; font-weight:600; line-height:1.15; margin-top:11px; color:var(--stock-ink); }
+  .pass .deal { font-size:16px; color:rgba(255,253,248,.82); margin-top:5px; }
+  .pass .meta { font-size:12.5px; color:rgba(255,253,248,.55); margin-top:4px; }
+  .tear { position:relative; display:flex; align-items:center; margin-top:22px; }
+  .tear i { display:block; width:22px; height:22px; border-radius:50%; background:var(--paper); }
+  .tear i:first-child { margin-left:-11px; }
+  .tear i:last-child { margin-right:-11px; }
+  .tear span { flex:1; height:0; border-top:1.5px dashed rgba(255,253,248,.28); }
+  .pass .foot { padding:20px 26px 30px; text-align:center; }
+  .qrplate { display:inline-block; background:var(--paper); border-radius:16px; padding:13px; }
+  .qrplate canvas { display:block; }
+  .pass .code { font-size:16.5px; font-weight:700; letter-spacing:.16em; color:rgba(255,253,248,.92); margin-top:15px; font-variant-numeric:tabular-nums; }
+  .pass .say { font-size:13px; color:rgba(255,253,248,.6); margin-top:11px; }
+  .pass .terms { font-size:11px; line-height:1.5; color:rgba(255,253,248,.45); margin-top:16px; max-width:34ch; margin-left:auto; margin-right:auto; }
+
+  /* ── the two scanner screens ────────────────────────── */
+  .screens { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); margin-top:6px; }
+  .screen { border:1px solid var(--rule); border-radius:20px; background:var(--card); padding:6px; }
+  .panel { border-radius:16px; padding:26px 20px; text-align:center; }
+  .panel.ok { background:var(--moss-wash); border:1px solid var(--moss); }
+  .tick { width:52px; height:52px; border-radius:50%; background:var(--moss); color:#FFFDF8; display:flex; align-items:center; justify-content:center; margin:0 auto; }
+  .panel h3 { font-family:var(--disp); font-size:19px; font-weight:600; margin-top:14px; color:var(--ink); }
+  .panel .lbl { font-size:10.5px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--moss-deep); margin-top:18px; }
+  .panel .big { font-family:var(--disp); font-size:22px; font-weight:600; line-height:1.2; color:var(--ink); margin-top:5px; }
+  .panel .sub { font-size:13px; color:var(--moss-deep); margin-top:4px; }
+  .panel .fine { font-size:12px; line-height:1.5; color:var(--body); margin-top:14px; }
+  .panel .status { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--moss-deep); margin-top:16px; }
+  .panel .said { font-size:14px; line-height:1.5; color:var(--moss-deep); margin-top:11px; }
+  .btn { display:block; width:100%; background:var(--coral); color:#FFFDF8; font-family:var(--sans); font-size:15px; font-weight:600; border:none; border-radius:14px; padding:14px; margin-top:12px; }
+  .btn.ghost { background:transparent; color:var(--body); font-weight:500; padding:9px; margin-top:6px; }
+  .screen .note { font-size:11.5px; line-height:1.5; color:var(--faint); text-align:center; padding:8px 10px 4px; }
+
+  /* ── plain sections ─────────────────────────────────── */
+  section.blk { margin-top:44px; padding-top:30px; border-top:1px solid var(--rule); display:flex; flex-direction:column; gap:16px; }
+  .levers { display:flex; flex-direction:column; gap:0; border:1px solid var(--rule); border-radius:16px; background:var(--card); overflow:hidden; }
+  .lever { display:grid; grid-template-columns:190px 1fr; gap:4px 20px; padding:15px 20px; border-bottom:1px solid var(--rule); }
+  .lever:last-child { border-bottom:none; }
+  .lever dt { font-size:14.5px; font-weight:600; color:var(--ink); }
+  .lever dd { margin:0; font-size:14.5px; }
+  @media (max-width:600px) { .lever { grid-template-columns:1fr; } }
+
+  .split { display:grid; gap:16px; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); }
+  .col { border:1px solid var(--rule); border-radius:16px; padding:20px 22px; background:var(--card); display:flex; flex-direction:column; gap:10px; }
+  .col ul { margin:0; padding-left:19px; display:flex; flex-direction:column; gap:7px; font-size:14.5px; }
+  .col li::marker { color:var(--faint); }
+
+  .money { background:var(--cream); border:1px solid var(--rule-2); border-radius:20px; padding:26px 28px; display:flex; flex-direction:column; gap:12px; }
+  .money .line { font-family:var(--disp); font-size:clamp(19px,2.7vw,23px); font-weight:600; line-height:1.3; color:var(--ink); }
+
+  footer.end { margin-top:52px; padding-top:20px; border-top:1px solid var(--rule); font-size:13px; color:var(--faint); }
+  @media (max-width:560px) {
+    .step { grid-template-columns:30px 1fr; gap:0 16px; }
+    .dot { width:28px; height:28px; font-size:12px; }
+    .rail::before { top:30px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="leaf">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M20 4c0 8-5 13-11 13H5c0-8 5-13 11-13h4Z" fill="#FF6468"/>
+        <path d="M5 21c0-5 3-9 9-11" stroke="#111C38" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <span>Loose&nbsp;Leaf <span style="color:var(--faint);font-weight:500">for Partners</span></span>
+    </div>
+
+    <h1>How a Date Pass works</h1>
+    <p class="lede">The whole thing, from signing up to the invoice — so you can decide for yourselves what makes sense at the Comedy Showcase.</p>
+    <p class="for">Written for Claudia and the box office manager. Nothing here needs a technical background, and nothing on this page asks you to commit to anything.</p>
+  </header>
+
+  <div class="flow">
+
+    <!-- 1 -->
+    <div class="step">
+      <div class="rail"><span class="dot">1</span></div>
+      <div class="body">
+        <h2>You register the Comedy Showcase</h2>
+        <span class="free">Free</span>
+        <p>A short form at <span class="mono">hellolooseleaf.com/partners</span>: your name, the address, what kind of night out you are, your hours, a couple of photos. It saves as you go, so you can stop and come back. A person at Loose Leaf reads every application.</p>
+        <p class="aside">No card, no payment details, nothing to cancel. The form never asks for any.</p>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="step">
+      <div class="rail"><span class="dot">2</span></div>
+      <div class="body">
+        <h2>Your Date Spot goes live</h2>
+        <span class="free">Free</span>
+        <p>Once we approve it, the Showcase appears as a <strong style="color:var(--ink)">Date Spot</strong> — a card students see when they're browsing for somewhere to go, with your photos, hours, address and directions.</p>
+        <p class="aside">Being listed costs nothing and always will. You can stop here indefinitely if you want to see what the listing alone does.</p>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="step pay">
+      <div class="rail"><span class="dot">3</span></div>
+      <div class="body">
+        <h2>Adding a payment method unlocks offers</h2>
+        <p>An <strong style="color:var(--ink)">offer</strong> is the discount you attach to your Date Spot. To switch one on, there has to be a card on file — that's the only thing standing between a listing and a running offer.</p>
+        <p>The card is captured on Stripe's own page; Loose Leaf never sees the number. <strong style="color:var(--ink)">Nothing is charged for having one.</strong> It exists so there's somewhere to send the monthly invoice described at the bottom of this page.</p>
+        <p class="aside">This is the only step in the whole flow that involves money changing hands, and it happens once.</p>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="step">
+      <div class="rail"><span class="dot">4</span></div>
+      <div class="body">
+        <h2>You get recommended inside couples' conversations</h2>
+        <p>Loose Leaf is a dating app for the University of Michigan campus. When two students match and start planning where to go, the app suggests real places — chosen by what kind of date they said they wanted, not by who paid.</p>
+        <p>Your offer travels with your card when it appears.</p>
+        <p class="aside">Paying can't buy a place at the top of a list it doesn't belong on. Ask for coffee and a comedy club doesn't appear at all — the fit is decided before anything else is.</p>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="step">
+      <div class="rail"><span class="dot">5</span></div>
+      <div class="body">
+        <h2>A couple claims the offer</h2>
+        <p>They tap once, from inside that conversation. Nothing is charged to them and nothing is charged to you at this point — claiming is not the thing that counts.</p>
+        <p class="aside">By default an offer can only be claimed by two people who matched and are actually planning a date. You can loosen that if you'd rather it be claimable by anyone browsing.</p>
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="step">
+      <div class="rail"><span class="dot">6</span></div>
+      <div class="body">
+        <h2>A Date Pass lands on their phone</h2>
+        <p>A ticket with a QR code and a short reference number, valid for however long you set. It sits in their wallet in the app until they use it or it expires.</p>
+
+        <div class="figure">
+          <div class="pass">
+            <div class="holes" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="stub">
+              <div class="kicker">Your Loose Leaf Date Pass</div>
+              <div class="biz">Ann Arbor Comedy Showcase</div>
+              <div class="deal">Your offer appears here</div>
+              <div class="meta">Valid Sun–Thu</div>
+              <div class="meta">Expires September 18</div>
+            </div>
+            <div class="tear" aria-hidden="true"><i></i><span></span><i></i></div>
+            <div class="foot">
+              <span class="qrplate"><canvas id="qr" width="150" height="150" aria-label="QR code"></canvas></span>
+              <div class="code">LL-4KHD-9RTM</div>
+              <div class="say">Show this at the box office</div>
+              <div class="terms">Your terms line prints here, and on your employee's screen.</div>
+            </div>
+          </div>
+          <p class="figcap">The codes never use the letters O, I or L, or the digits 0 and 1 — so nothing is ambiguous read out loud across a counter.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="step scan">
+      <div class="rail"><span class="dot">7</span></div>
+      <div class="body">
+        <h2>Scanning it is the thing that counts</h2>
+        <p>Your employee opens the Loose Leaf Scanner on a box office phone or tablet, points it at the QR code — or types the number underneath — and gets one of two screens. Then they apply the discount.</p>
+
+        <div class="screens">
+          <div class="screen">
+            <div class="panel ok">
+              <span class="tick" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 9.5 17.5 19.5 6.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <h3>Valid Loose Leaf Date Pass</h3>
+              <div class="lbl">Offer</div>
+              <div class="big">Your offer, in full</div>
+              <div class="sub">The name you gave it</div>
+              <p class="fine">Your terms line, so the person applying the discount is reading your rules rather than remembering them.</p>
+              <div class="status">Status · Unused</div>
+            </div>
+            <button class="btn" type="button" disabled>Confirm redemption</button>
+            <p class="note">Nothing has happened yet. Checking a pass doesn't count it — pressing this does.</p>
+          </div>
+
+          <div class="screen">
+            <div class="panel ok" style="padding-top:38px;padding-bottom:38px">
+              <span class="tick" style="width:64px;height:64px" aria-hidden="true">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M4.5 12.5 9.5 17.5 19.5 6.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <h3 style="font-size:23px">Date verified</h3>
+              <p class="said">Give them the discount. This is now counted in your dashboard.</p>
+            </div>
+            <button class="btn" type="button" disabled>Scan another</button>
+            <p class="note">Five to fifteen seconds, start to finish.</p>
+          </div>
+        </div>
+
+        <p>If the pass isn't good you get a red screen instead of the green one, saying exactly which it is — <em>already used</em>, <em>expired</em>, <em>cancelled</em>, or <em>this offer isn't running right now</em>. There is nothing to interpret and nothing to check anywhere else.</p>
+        <p class="aside">A confirmed pass can't be confirmed again, and two devices scanning the same code at the same moment can't both succeed. Employees who scan get a login that does only this — no billing, no reports, nothing about the customers.</p>
+      </div>
+    </div>
+
+    <!-- 8 -->
+    <div class="step">
+      <div class="rail"><span class="dot">8</span></div>
+      <div class="body">
+        <h2>One invoice at the end of the month</h2>
+        <div class="money">
+          <p class="line">$1.50 per Date Pass your staff actually scanned. Nothing else, ever.</p>
+          <p>No signup fee, no monthly fee, no advertising spend, and nothing for being listed or recommended. A month where nobody walked in is a month that costs nothing.</p>
+        </div>
+        <p>Every scan is stamped at the price on the day it happened, so a future price change can't reach backwards. You can see the running total at any point during the month, alongside the list of redemptions it's built from.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── what's yours to set ─────────────────────────── -->
+  <section class="blk">
+    <div>
+      <p class="eyebrow">Once you're set up</p>
+      <h2 style="margin-top:8px">What the offer is, is entirely yours</h2>
+    </div>
+    <p>Everything below is a setting you control from your dashboard, changeable from any device at any time. Edits go live the moment you save, and you can pause an offer with one tap. You can run up to six at once.</p>
+
+    <dl class="levers">
+      <div class="lever"><dt>The deal</dt><dd>A percentage off · a dollar amount off · buy-one-get-one · something free · an amount off a minimum spend · a package you describe in your own words · anything else you write yourself</dd></div>
+      <div class="lever"><dt>Which days</dt><dd>Any combination of the seven. A Sunday-to-Thursday offer never appears on a Friday.</dd></div>
+      <div class="lever"><dt>What hours</dt><dd>An optional window — from a time, until a time. Leave it empty for all day.</dd></div>
+      <div class="lever"><dt>What dates</dt><dd>An optional start and end, for a limited run.</dd></div>
+      <div class="lever"><dt>How many</dt><dd>A ceiling per month, per day, or in total. Reaching it stops the offer being handed out until it resets.</dd></div>
+      <div class="lever"><dt>How long a pass lasts</dt><dd>How many days somebody has to actually come in after claiming it.</dd></div>
+      <div class="lever"><dt>How often one person</dt><dd>Once ever · once every so many days · as often as they like. Counted from the visit, not from claiming it.</dd></div>
+      <div class="lever"><dt>Who it's for</dt><dd>Only two people planning a date, or anyone browsing Date Spots.</dd></div>
+      <div class="lever"><dt>Your terms</dt><dd>A short line of small print. It prints on the customer's pass <em>and</em> on your employee's screen at the moment they scan.</dd></div>
+    </dl>
+
+    <p class="aside">Worth knowing before you decide anything: a pass is issued to one person, and the app has no way to tell how many people walk in with it. Anything about how many the deal covers lives in your terms line, where your employee will read it.</p>
+  </section>
+
+  <!-- ── who does what ───────────────────────────────── -->
+  <section class="blk">
+    <h2>Who does what</h2>
+    <div class="split">
+      <div class="col">
+        <p class="eyebrow">Loose Leaf handles</p>
+        <ul>
+          <li>Suggesting you to couples planning a date</li>
+          <li>Issuing and expiring Date Passes</li>
+          <li>Enforcing every rule and ceiling you set</li>
+          <li>Counting redemptions as they're scanned</li>
+          <li>Your monthly invoice</li>
+        </ul>
+      </div>
+      <div class="col">
+        <p class="eyebrow">The Comedy Showcase handles</p>
+        <ul>
+          <li>Deciding what the offer is</li>
+          <li>Scanning the pass</li>
+          <li>Applying the discount</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── privacy ─────────────────────────────────────── -->
+  <section class="blk">
+    <h2>What you'll see, and what you won't</h2>
+    <p>Your dashboard shows every redemption as a line: the time, which offer, and the last four characters of the code so you can match it to a receipt. Alongside it, how many dates you've had today, this week and this month.</p>
+    <p><strong style="color:var(--ink)">There are no names anywhere in it.</strong> You'll know that a real Loose Leaf date happened at the Showcase and when — never who was on it, what they talked about, or why we thought you'd suit them. That isn't a setting we've turned off for you; there is nothing there to show.</p>
+  </section>
+
+  <footer class="end">
+    Loose Leaf for Partners · <span class="mono">hellolooseleaf.com/partners</span> · Prepared for the Ann Arbor Comedy Showcase, September 2026. Screens shown are the real ones, with your own offer wording in place of the examples.
+  </footer>
+
+</div>
+
+<script>
+  /* A QR-shaped mark for the illustration above — drawn, not encoded, so it
+     represents the code on a real pass without pretending to be one. Fixed
+     seed so it looks identical to everyone who opens this page. */
+  (function () {
+    var c = document.getElementById('qr');
+    if (!c || !c.getContext) return;
+    var ctx = c.getContext('2d');
+    var N = 25, S = c.width / N, seed = 20260904;
+    function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+    ctx.fillStyle = '#FFFDF8';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.fillStyle = '#111C38';
+
+    function finder(gx, gy) {
+      ctx.fillRect(gx * S, gy * S, S * 7, S * 7);
+      ctx.fillStyle = '#FFFDF8';
+      ctx.fillRect((gx + 1) * S, (gy + 1) * S, S * 5, S * 5);
+      ctx.fillStyle = '#111C38';
+      ctx.fillRect((gx + 2) * S, (gy + 2) * S, S * 3, S * 3);
+    }
+    function inFinder(x, y) {
+      return (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9);
+    }
+    for (var y = 0; y < N; y++) {
+      for (var x = 0; x < N; x++) {
+        if (inFinder(x, y)) continue;
+        if (rnd() > 0.52) ctx.fillRect(x * S, y * S, S, S);
+      }
+    }
+    finder(0, 0); finder(N - 7, 0); finder(0, N - 7);
+  })();
+</script>

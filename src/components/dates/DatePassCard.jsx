@@ -132,7 +132,7 @@ export default function DatePassCard({ pass, compact = false, justRedeemed = fal
             <p className="mt-4 font-sans text-[17px] font-semibold tracking-[0.16em] text-paper/90">
               {pass.code}
             </p>
-            <p className="mt-3 text-[13.5px] text-paper/60">Show this to your server</p>
+            <p className="mt-3 text-[13.5px] text-paper/60">Show this when you arrive</p>
 
             {pass.isDemo && (
               <p className="mx-auto mt-4 max-w-[34ch] rounded-xl bg-white/10 px-3 py-2 text-[12px] leading-relaxed text-paper/70">

@@ -465,6 +465,22 @@ export default function PartnersLanding() {
           with the email they used — you don’t need to become a partner yourself.
         </p>
 
+        {/* The one route to the explainer we send people by email. Kept
+            here rather than in the nav: this page already makes the case,
+            and a second "how it works" button at the top would compete with
+            the thing it is trying to get somebody to press. Whoever needs it
+            is either re-reading a link they were sent or looking for it
+            deliberately. */}
+        <p className="mt-4 text-center text-[13.5px] text-mist">
+          Want the whole process, step by step, before you decide?{' '}
+          <Link
+            to="/partners/how-it-works"
+            className="font-medium text-graphite underline underline-offset-2 hover:text-navy"
+          >
+            How a Date Pass works
+          </Link>
+        </p>
+
         <p className="mt-4 text-center text-[13.5px] text-mist">
           Looking for the student side?{' '}
           <Link to="/" className="font-medium text-graphite underline underline-offset-2 hover:text-navy">

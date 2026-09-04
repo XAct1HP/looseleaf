@@ -60,6 +60,7 @@ const PrintKit = lazy(() => import('./pages/host/PrintKit'))
 const PartnersLanding = lazy(() => import('./pages/partners/PartnersLanding'))
 const PartnerAuth = lazy(() => import('./pages/partners/PartnerAuth'))
 const PartnerOnboarding = lazy(() => import('./pages/partners/PartnerOnboarding'))
+const PartnerHowItWorks = lazy(() => import('./pages/partners/HowItWorks'))
 const PartnerDashboard = lazy(() => import('./pages/partners/DashboardLayout'))
 const PartnerOverview = lazy(() => import('./pages/partners/dashboard/Overview'))
 const PartnerSpot = lazy(() => import('./pages/partners/dashboard/DateSpotEditor'))
@@ -172,6 +173,12 @@ function PartnerRoutes() {
       <Route index element={<PartnersLanding />} />
       <Route path="join" element={<PartnerAuth />} />
       <Route path="login" element={<PartnerAuth />} />
+      {/* The page we send a prospective partner before they sign anything.
+          Not linked from the nav on purpose — somebody ready to sign up
+          should be looking at "Become a Partner", not at an explainer — so
+          it is reached from the email and from one line at the foot of the
+          landing page. */}
+      <Route path="how-it-works" element={<PartnerHowItWorks />} />
       <Route path="onboarding" element={<PartnerOnboarding />} />
 
       <Route path="dashboard" element={<PartnerDashboard />}>
