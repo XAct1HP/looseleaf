@@ -97,11 +97,21 @@ export default function Redemptions() {
                   {r.location && (
                     <span className="hidden text-[12.5px] text-mist sm:block">{r.location}</span>
                   )}
+                  {/* Only when there is one. `redeem_date_pass()` takes an
+                      amount and the scanner deliberately doesn't ask for it —
+                      a confirm screen with a customer waiting gets one
+                      decision, not two — so today this is never set, and a
+                      fixed column of em-dashes down the whole page reads as
+                      broken data rather than as an empty field. The column
+                      comes back on its own the day anything starts recording
+                      it. */}
+                  {r.amountCents != null && (
+                    <span className="shrink-0 text-right text-[13.5px] tabular-nums text-graphite">
+                      ${(r.amountCents / 100).toFixed(2)}
+                    </span>
+                  )}
                   <span className="shrink-0 font-sans text-[12.5px] tracking-[0.1em] text-mist">
                     ····{r.passRef}
-                  </span>
-                  <span className="w-[70px] shrink-0 text-right text-[13.5px] tabular-nums text-graphite">
-                    {r.amountCents != null ? `$${(r.amountCents / 100).toFixed(2)}` : '—'}
                   </span>
                 </li>
               ))}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import Logo from '../../components/brand/Logo'
 import Button from '../../components/ui/Button'
@@ -7,12 +7,13 @@ import {
   IconSettings, IconDiscover, IconPeople,
 } from '../../components/ui/Icons'
 import { usePartnerAccount } from '../../state/partnerAccount'
-import { can } from '../../lib/partnerBilling'
+import { can, billingNotice } from '../../lib/partnerBilling'
 import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
 import ForPartners from '../../components/partners/ForPartners'
 import { InstallLink } from '../../components/partners/InstallNudge'
 import { registerScannerWorker } from '../../lib/pwa'
+import { loginWithNext } from '../../lib/partnerNext'
 import { PartnerOffline } from './PartnerAuth'
 
 /**
@@ -71,7 +72,7 @@ function pageForPath(pathname) {
 export default function DashboardLayout() {
   const { status, partner, partners: list, entitlements, select } = usePartnerAccount()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
 
   // The manifest swap itself is route-level now (see ManifestForRoute in
   // App.jsx) — doing it here missed /partners/login, which is precisely where
@@ -94,6 +95,33 @@ export default function DashboardLayout() {
   const bought = allowed.filter((n) => !n.needs || can(entitlements, n.needs))
   const items = bought.length ? bought : allowed
 
+  // ── Why the ceiling is read here and not only on Billing ────────────────
+  //
+  // `billingNotice()` has always known how to say "new Date Passes are paused,
+  // you're at your limit" — but it was rendered on the Billing page alone, so
+  // the only person who ever saw it was somebody who had already gone looking.
+  // A partner whose offer has quietly stopped being recommended has no reason
+  // to suspect billing; they'd sooner assume Loose Leaf is empty. It belongs
+  // on every page they might be standing on.
+  //
+  // Only fetched for people who hold the billing page. `partner_billing_summary`
+  // refuses everybody else — correctly, since a shift worker has no business
+  // reading their employer's payment history — and telling them about an
+  // invoice they cannot pay is noise they can do nothing about.
+  const canBill = (partner?.pages ?? []).includes('billing')
+  const [billing, setBilling] = useState(null)
+  useEffect(() => {
+    if (!partner || !canBill) return undefined
+    let live = true
+    partners
+      .billingSummary(partner.id)
+      .then((b) => live && setBilling(b))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [partner, canBill])
+
   const home = items[0]?.to ?? '/partners/dashboard/scan'
   const allowedHere = items.some((n) => n.page === pageForPath(pathname))
 
@@ -107,8 +135,18 @@ export default function DashboardLayout() {
 
   if (!partners.partnersEnabled) return <PartnerOffline />
   if (status === 'loading') return <Booting />
-  if (status === 'anon') return <Navigate to="/partners/login" replace />
-  if (status === 'error') return <Navigate to="/partners/login" replace />
+  // ── Carry the destination across the login ──────────────────────────────
+  //
+  // This used to be a bare `/partners/login`, which threw the query string
+  // away — and the query string is sometimes the whole point. A Date Pass QR
+  // encodes `…/scan?code=LL-XXXX-XXXX`, so a staff phone that happened to be
+  // signed out sent its owner to a login screen and then to an empty scanner,
+  // with the customer still holding the pass they had just scanned.
+  //
+  // `loginWithNext` refuses anything that isn't a dashboard path of ours, so
+  // this cannot become a redirect somebody else writes.
+  if (status === 'anon') return <Navigate to={loginWithNext(pathname + search)} replace />
+  if (status === 'error') return <Navigate to={loginWithNext(pathname + search)} replace />
   if (!partner) return <Booting />
 
   if (!items.length) return <NoAccess partner={partner} />
@@ -176,7 +214,7 @@ export default function DashboardLayout() {
             <StatusPill partner={partner} className="mt-2" />
           </div>
 
-          <StatusBanner partner={partner} />
+          <StatusBanner partner={partner} billing={billing} />
           <Outlet />
         </main>
       </div>
@@ -337,7 +375,7 @@ export function StatusPill({ partner, className = '' }) {
  * shown to people who can act on it; telling a shift worker that the card
  * bounced is noise they can do nothing about.
  */
-function StatusBanner({ partner }) {
+function StatusBanner({ partner, billing }) {
   const canBill = (partner.pages ?? []).includes('billing')
   const billingBroken = ['past_due', 'unpaid'].includes(partner.subStatus)
   // No Stripe customer at all means nobody has ever added a card. That is a
@@ -384,6 +422,32 @@ function StatusBanner({ partner }) {
       </Note>
     )
   }
+  // ── The ceiling, said where they are ────────────────────────────────────
+  //
+  // Ordered after the moderation states and the failed payment, and before
+  // "add a card", because those are all more basic facts about the account
+  // than how much headroom is left in it. Reuses `billingNotice()` rather
+  // than writing a second set of words for the same three situations — two
+  // copies of a sentence about somebody's money is how they end up
+  // disagreeing.
+  //
+  // Only the ones that need acting on. `billingNotice` also returns a
+  // perfectly cheerful "you're fine" state for a healthy account, and a
+  // banner that appears on every page to say nothing is wrong is a banner
+  // people learn to look past — including on the day it says something else.
+  const credit = canBill ? billingNotice(billing) : null
+  if (credit && ['bad', 'warn'].includes(credit.tone)) {
+    return (
+      <Note
+        tone={credit.tone === 'bad' ? 'coral' : 'amber'}
+        title={credit.title}
+        action={{ to: '/partners/dashboard/billing', label: credit.cta }}
+      >
+        {credit.body}
+      </Note>
+    )
+  }
+
   if (noCard && canBill) {
     return (
       <Note
@@ -403,6 +467,10 @@ function Note({ tone, title, children, action }) {
   const tones = {
     coral: 'border-coral/30 bg-coral-wash text-coral-deep',
     blue: 'border-notebook/50 bg-notebook-soft text-[#2F5C99]',
+    // Its own tone rather than borrowing blue. "You have about four
+    // redemptions of headroom" is not news and it is not an emergency — it
+    // is the one in between, and the two neighbours already had colours.
+    amber: 'border-[#C9821F]/30 bg-[#FBF3E4] text-[#7A5210]',
   }
   return (
     <div className={`mb-6 flex flex-wrap items-start gap-4 rounded-card border px-5 py-4 ${tones[tone]}`}>

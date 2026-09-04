@@ -204,19 +204,41 @@ export default function Team() {
       )}
 
       {sent && (
-        <div className="mb-6 rounded-2xl border border-moss/30 bg-moss-soft px-4 py-3.5 text-[13.5px] leading-relaxed text-[#3F7454]">
-          <p>
-            Invitation sent to {sent}. They can sign in at{' '}
-            <span className="font-medium">looseleaf/partners</span> with that address right away —
-            they don’t need an account first, and they must not go through “Become a Partner”.
-          </p>
+        <div
+          className={`mb-6 rounded-2xl border px-4 py-3.5 text-[13.5px] leading-relaxed ${
+            sent.emailed
+              ? 'border-moss/30 bg-moss-soft text-[#3F7454]'
+              : 'border-[#F2E6D6] bg-cream text-graphite'
+          }`}
+        >
+          {sent.emailed ? (
+            <p>
+              <span className="font-medium">We’ve emailed {sent.email}.</span> They can sign in with
+              that address right away — they don’t need an account first, and they must not go
+              through “Become a Partner”.
+            </p>
+          ) : (
+            /* The honest version. The row is written and they can log in the
+               moment they try; what didn't happen is anybody telling them. */
+            <p>
+              <span className="font-medium text-navy">
+                {sent.email} is on your team — but we couldn’t email them.
+              </span>{' '}
+              Let them know yourself: they go to{' '}
+              <span className="font-medium text-navy">hellolooseleaf.com/partners/login</span> and
+              enter that exact address. There’s nothing for them to sign up for, and they must not
+              go through “Become a Partner”.
+            </p>
+          )}
           {/* Said here because this is the moment the owner is thinking about
               that person, and the next thing they'll do is try to explain it
               across a counter. */}
           <button
             type="button"
             onClick={() => setPrinting(true)}
-            className="focus-ring mt-2 rounded-lg font-medium text-[#3F7454] underline underline-offset-2 hover:text-navy"
+            className={`focus-ring mt-2 rounded-lg font-medium underline underline-offset-2 hover:text-navy ${
+              sent.emailed ? 'text-[#3F7454]' : 'text-graphite'
+            }`}
           >
             Print them a card for the counter
           </button>
@@ -389,8 +411,12 @@ export default function Team() {
         holdsAccount={holdsAccount}
         hasPasses={hasPasses}
         onInvite={async (email, role) => {
-          await partners.invite(partner.id, email, role)
-          setSent(email)
+          const result = await partners.invite(partner.id, email, role)
+          // Two different sentences below, and which one shows is the whole
+          // reason `invite()` bothers to report this. "We emailed them" and
+          // "go and tell them" ask completely different things of the person
+          // reading it, and guessing wrong wastes a shift.
+          setSent({ email, emailed: Boolean(result?.emailed) })
           setInviting(false)
           await load()
         }}

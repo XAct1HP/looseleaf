@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import PartnerShell from '../../components/partners/PartnerShell'
 import Button from '../../components/ui/Button'
 import { Star } from '../../components/brand/Doodles'
@@ -8,6 +8,7 @@ import * as partners from '../../services/partners'
 import * as auth from '../../services/live/auth'
 import { usePartnerAccount } from '../../state/partnerAccount'
 import { OTP_LENGTH, OTP_MIN_LENGTH } from '../../lib/supabase'
+import { safeNext } from '../../lib/partnerNext'
 
 /**
  * Partner sign-in, in the same shape students get: an emailed code, no
@@ -21,9 +22,15 @@ import { OTP_LENGTH, OTP_MIN_LENGTH } from '../../lib/supabase'
  */
 export default function PartnerAuth() {
   const { pathname } = useLocation()
+  const [params] = useSearchParams()
   const navigate = useNavigate()
   const { refresh } = usePartnerAccount()
   const joining = pathname.endsWith('/join')
+
+  // Where they were going when they were asked to sign in — a scanner with a
+  // customer's code already on it, most of the time. Validated on the way in
+  // rather than on the way out, so an unusable value is simply not there.
+  const next = safeNext(params.get('next'))
 
   const [step, setStep] = useState('email')
   const [name, setName] = useState('')
@@ -90,7 +97,18 @@ export default function PartnerAuth() {
       // send them and leaves the context holding the same answer, so the
       // dashboard doesn't boot from a list fetched while nobody was signed in.
       const mine = await refresh()
-      navigate(mine.length ? '/partners/dashboard' : '/partners/onboarding', { replace: true })
+      // Somebody with no business yet is on their way to the invitation
+      // screen, so the destination goes with them rather than being dropped —
+      // a first-time staff member scanning a pass is exactly the person this
+      // whole path is for, and accepting the invitation is one tap in between.
+      navigate(
+        mine.length
+          ? (next ?? '/partners/dashboard')
+          : next
+            ? `/partners/onboarding?next=${encodeURIComponent(next)}`
+            : '/partners/onboarding',
+        { replace: true }
+      )
     } catch (err) {
       setError(err.message)
       setBusy(false)

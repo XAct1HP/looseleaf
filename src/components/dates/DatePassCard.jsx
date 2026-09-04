@@ -28,15 +28,27 @@ import { passUrl } from '../../lib/site'
  * rather than `sm:pl-12`: the same clearance from the holes, applied to both
  * sides, so centred means centred at every width.
  */
-export default function DatePassCard({ pass, compact = false }) {
+export default function DatePassCard({ pass, compact = false, justRedeemed = false }) {
   const expired = pass.status === 'expired' || new Date(pass.expiresAt) < new Date()
   const used = pass.status === 'redeemed'
   const dead = expired || used || pass.status === 'void'
 
+  // ── The one dead state that is good news ────────────────────────────────
+  //
+  // A used pass is normally history, and history is grey. But `justRedeemed`
+  // means the wallet watched this happen — somebody behind a counter scanned
+  // it thirty seconds ago while its owner stood there — and at that moment the
+  // card is not a record, it is the answer to *did that work?*
+  //
+  // Only the wallet can tell the difference, so only the wallet passes it in.
+  // A pass rendered anywhere else is history by default, which is the right
+  // way round: the flourish has to be earned by having witnessed the event.
+  const fresh = used && justRedeemed
+
   return (
     <article
       className={`relative overflow-hidden rounded-sheet border shadow-lift ${
-        dead ? 'border-rule bg-navy/70' : 'border-navy/10 bg-navy'
+        fresh ? 'border-moss/60 bg-navy' : dead ? 'border-rule bg-navy/70' : 'border-navy/10 bg-navy'
       } text-paper`}
     >
       <span className="paper-lines pointer-events-none absolute inset-0 opacity-[0.05]" aria-hidden="true" />
@@ -44,8 +56,12 @@ export default function DatePassCard({ pass, compact = false }) {
 
       {/* stub */}
       <header className="relative px-7 pt-7 sm:pl-12">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-paper/55">
-          Your Loose Leaf Date Pass
+        <p
+          className={`text-[11px] font-semibold uppercase tracking-[0.11em] ${
+            fresh ? 'text-moss' : 'text-paper/55'
+          }`}
+        >
+          {fresh ? 'Redeemed ✓' : 'Your Loose Leaf Date Pass'}
         </p>
         <h3 className="mt-3 font-display text-[26px] font-semibold leading-tight">
           {pass.partnerName}
@@ -74,13 +90,29 @@ export default function DatePassCard({ pass, compact = false }) {
       <div className="relative px-7 pb-8 pt-5 text-center sm:px-12">
         {dead ? (
           <div className="py-6">
-            <p className="font-display text-[22px] font-semibold text-paper/70">
-              {used ? 'Already used' : expired ? 'This one expired' : 'Cancelled'}
+            <p
+              className={`font-display text-[22px] font-semibold ${
+                fresh ? 'text-paper' : 'text-paper/70'
+              }`}
+            >
+              {fresh
+                ? 'That went through.'
+                : used
+                  ? 'Already used'
+                  : expired
+                    ? 'This one expired'
+                    : 'Cancelled'}
             </p>
-            <p className="mx-auto mt-2 max-w-[32ch] text-[13.5px] leading-relaxed text-paper/50">
-              {used
-                ? 'Hope it was a good one.'
-                : 'You can unlock it again from the Date Spot if the offer is still running.'}
+            <p
+              className={`mx-auto mt-2 max-w-[32ch] text-[13.5px] leading-relaxed ${
+                fresh ? 'text-paper/75' : 'text-paper/50'
+              }`}
+            >
+              {fresh
+                ? 'Scanned just now. Enjoy the date.'
+                : used
+                  ? 'Hope it was a good one.'
+                  : 'You can unlock it again from the Date Spot if the offer is still running.'}
             </p>
           </div>
         ) : (

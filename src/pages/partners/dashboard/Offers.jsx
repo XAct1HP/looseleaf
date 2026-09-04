@@ -45,7 +45,6 @@ const blank = {
   max_total_redemptions: '',
   max_monthly_redemptions: 100,
   max_daily_redemptions: '',
-  new_customers_only: false,
   multi_use: false,
   pass_valid_days: 14,
   //  Both default to the careful end. A restaurant that wants to be more
@@ -558,15 +557,15 @@ function OfferSheet({ offer, onClose, onSave, busy }) {
             </span>
           </label>
 
-          <label className="mt-3 flex items-start gap-3 rounded-2xl border border-rule bg-white px-4 py-3">
-            <input
-              type="checkbox"
-              checked={Boolean(form.new_customers_only)}
-              onChange={(e) => set({ new_customers_only: e.target.checked })}
-              className="mt-0.5 h-4 w-4 accent-[#FF6468]"
-            />
-            <span className="text-[14px] text-navy">New customers only</span>
-          </label>
+          {/* "New customers only" was here, and nothing anywhere read it.
+              It is gone rather than implemented, for a reason worth keeping:
+              Loose Leaf knows who has redeemed a Loose Leaf offer, never who
+              has walked through your door before — so even a working version
+              of that checkbox would have promised something it cannot know.
+              "Once per person, ever" below is the same intent, stated as a
+              rule the database can actually keep. A control that quietly
+              means nothing is worse than no control at all: a business ticks
+              it, believes it, and prices around it. */}
         </div>
 
         {/* ── who, and how often ─────────────────────────────────────────
@@ -680,7 +679,6 @@ function clean(o) {
     max_total_redemptions: nul(o.max_total_redemptions),
     max_monthly_redemptions: nul(o.max_monthly_redemptions),
     max_daily_redemptions: nul(o.max_daily_redemptions),
-    new_customers_only: Boolean(o.new_customers_only),
     multi_use: Boolean(o.multi_use),
     pass_valid_days: o.pass_valid_days || 14,
     per_person_rule: o.per_person_rule || 'cooldown',

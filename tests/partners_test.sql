@@ -512,7 +512,7 @@ declare
 begin
   select * into s from partner_credit_state(v_partner);
   perform assert(s.tier_id = 'new', 'a new business starts on the bottom rung');
-  perform assert(s.limit_cents = 2500, 'and is extended the new-partner ceiling');
+  perform assert(s.limit_cents = 7500, 'and is extended the new-partner ceiling');
   perform assert(s.has_card, 'the card written in section 3 is seen');
   perform assert(s.fee_cents = 150, 'the fee is the platform fee');
   perform assert(s.can_issue and s.can_redeem, 'with room left, the business can trade');
@@ -552,10 +552,10 @@ begin
 
   insert into date_pass_redemptions
     (pass_id, partner_id, offer_id, redeemed_at, fee_cents, bill_status)
-  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 16);
+  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 50);
 
   select * into s from partner_credit_state(v_partner);
-  perform assert(s.unbilled_cents = 2550,
+  perform assert(s.unbilled_cents = 7650,
                  'outstanding is the sum of every redemption not yet paid for');
   perform assert(not s.can_issue, 'over the ceiling, the offer stops being handed out');
   perform assert(s.can_redeem, 'but a pass already issued is still honoured');
@@ -599,7 +599,7 @@ begin
 
   insert into date_pass_redemptions
     (pass_id, partner_id, offer_id, redeemed_at, fee_cents, bill_status)
-  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 8);
+  select v_pass, v_partner, v_offer, now(), 150, 'invoiced' from generate_series(1, 16);
 
   select * into s from partner_credit_state(v_partner);
   perform assert(not s.can_redeem, 'past the grace band, redemption stops as well');
@@ -653,7 +653,7 @@ begin
 
   v_tier := record_partner_invoice_paid(v_partner, 'in_test_1', 3600);
   perform assert(v_tier = 'known', 'one paid invoice moves a partner up a rung');
-  perform assert(partner_credit_limit_cents(v_partner) = 7500,
+  perform assert(partner_credit_limit_cents(v_partner) = 20000,
                  'and the ceiling rises with it, with no intervention');
   perform assert(partner_unbilled_cents(v_partner) = 150,
                  'settled redemptions stop counting as exposure');
@@ -663,7 +663,7 @@ begin
    where partner_id = v_partner;
   perform assert(refresh_partner_credit(v_partner) = 'trusted',
                  'three invoices and $150 lifetime reaches Trusted');
-  perform assert(partner_credit_limit_cents(v_partner) = 20000, 'worth $200 of credit');
+  perform assert(partner_credit_limit_cents(v_partner) = 50000, 'worth $500 of credit');
 end $$;
 
 --  And falls on its own too. Every rung above the first requires a clean
@@ -2281,6 +2281,151 @@ begin
     'no listing survives with no account behind it');
 end $$;
 
+
+-- ═════════════════════════════════════════════════════════════════════════
+--  22. what the counter reads, and telling somebody they were invited
+-- ═════════════════════════════════════════════════════════════════════════
+--
+--  20260904120000. Sitting above section 21 rather than below it because 21
+--  deletes the fixture business on its way out, and both of these need it.
+--
+--  Two defects found while preparing to onboard the first real partner. They
+--  look unrelated and are the same mistake: something correct that nobody had
+--  ever read from the position of the person who would meet it.
+
+--  22a. An offer type with no case fell through to the offer's internal
+--  title. That is harmless on six screens and wrong on the seventh — the one
+--  held by somebody applying a discount with a customer in front of them,
+--  which is the only screen in the product where the wording *is* the
+--  transaction.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_offer   uuid;
+  v_pass    uuid;
+  r record;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+
+  insert into partner_offers (partner_id, title, offer_type, amount_off_cents,
+                              min_spend_cents, days_of_week, status,
+                              requires_date, per_person_rule)
+  values (v_partner, 'Weeknight Date', 'spend_threshold', 500,
+          3000, array[0,1,2,3,4,5,6], 'active',
+          false, 'unlimited')
+  returning id into v_offer;
+
+  insert into date_passes (code, offer_id, partner_id, issued_to, expires_at, status)
+  values ('LL-SPEND01', v_offer, v_partner, current_setting('test.ada')::uuid,
+          now() + interval '7 days', 'issued')
+  returning id into v_pass;
+
+  select * into r from partner_lookup_pass(v_partner, 'LL-SPEND01');
+  perform assert(r.offer_summary = '$5.00 off $30.00 or more',
+                 'a minimum-spend offer reads as the deal, not as its internal name');
+  perform assert(r.offer_title = 'Weeknight Date',
+                 'the title is still there — it is just not doing the summary''s job');
+
+  --  A couple package is the case where the whole meaning lives in the
+  --  description, so it is spelled out rather than left to the fallthrough.
+  update partner_offers
+     set offer_type = 'package',
+         description = 'Two tickets to any Thursday show, $20'
+   where id = v_offer;
+
+  select * into r from partner_lookup_pass(v_partner, 'LL-SPEND01');
+  perform assert(r.offer_summary = 'Two tickets to any Thursday show, $20',
+                 'a package reads as what the business wrote');
+
+  --  And the fallthrough still holds for anything with no case at all, which
+  --  is what protects every offer type added after this one.
+  update partner_offers set offer_type = 'custom' where id = v_offer;
+  select * into r from partner_lookup_pass(v_partner, 'LL-SPEND01');
+  perform assert(r.offer_summary = 'Two tickets to any Thursday show, $20',
+                 'an unrecognised type still reads as something, never as blank');
+
+  delete from date_passes where id = v_pass;
+  delete from partner_offers where id = v_offer;
+end $$;
+
+--  22b. The invitation mailer's read. Everything here is about what it
+--  *cannot* do: an invitation is not a capability, and a function that exists
+--  so we can send an email must not become the one place that quietly hands
+--  one out.
+do $$
+declare
+  v_partner uuid := current_setting('test.partner')::uuid;
+  v_invite  uuid;
+  r record;
+  ok boolean := false;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  v_invite := invite_partner_member(v_partner, 'boxoffice@a2comedy.com', 'staff');
+
+  select * into r from partner_invite_notice(v_invite);
+  perform assert(r.invite_email = 'boxoffice@a2comedy.com',
+                 'whoever sent the invitation can read who to write to');
+  perform assert(r.invite_role = 'staff', 'and what to tell them they are');
+  perform assert(r.partner_name is not null, 'and which business to name');
+
+  --  Nothing that could be forwarded into access. The invitation is still
+  --  accepted by `accept_partner_invite()` against the address in the
+  --  invitee's own token, so the mailer never sees a token and neither does
+  --  the email: the link in it goes to the ordinary login page.
+  perform assert(v_invite is not null and r.expires_at > now(),
+                 'an open invitation reports when it stops being one');
+
+  --  A member without the team page is exactly the person this would leak
+  --  to: staff can see the scanner and nothing else, and an invitation is
+  --  somebody else's business.
+  perform act_as(current_setting('test.ada')::uuid);
+  begin
+    perform partner_invite_notice(v_invite);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'somebody who could not have sent it cannot read it back');
+
+  --  Revoking has to close this too, or withdrawing an invitation would
+  --  achieve nothing except stopping the next email.
+  perform act_as(current_setting('test.biz')::uuid);
+  perform revoke_partner_invite(v_invite);
+
+  ok := false;
+  begin
+    perform partner_invite_notice(v_invite);
+  exception when others then ok := true;
+  end;
+  perform assert(ok, 'a withdrawn invitation is no longer readable');
+end $$;
+
+--  22c. The ceiling a brand-new partner meets. The number is a business
+--  decision and lives in a table so it can be tuned with an UPDATE — but the
+--  *relationship* is not: the bottom rung has to clear a plausible first
+--  month, because a partner cannot have paid an invoice yet and is therefore
+--  stuck on it for a whole billing cycle no matter how well they trade.
+do $$
+declare
+  v_limit int;
+  v_grace int;
+  v_fee   int := redemption_fee_cents();
+begin
+  select limit_cents, grace_cents into v_limit, v_grace
+    from partner_credit_tiers where id = 'new';
+
+  perform assert(v_limit / v_fee >= 40,
+                 'a new partner gets at least forty redemptions before an invoice must clear');
+  perform assert(v_grace >= v_fee * 10,
+                 'and enough grace that a queue of issued passes is still honoured');
+
+  --  Each rung has to be worth climbing to, or the ladder is decoration.
+  perform assert(
+    (select limit_cents from partner_credit_tiers where id = 'known')   > v_limit and
+    (select limit_cents from partner_credit_tiers where id = 'trusted') >
+      (select limit_cents from partner_credit_tiers where id = 'known') and
+    (select limit_cents from partner_credit_tiers where id = 'anchor')  >
+      (select limit_cents from partner_credit_tiers where id = 'trusted'),
+    'the ladder still climbs');
+end $$;
 
 -- ═══════════════════════════════════════════════════════════════════════════
 --  21. deleting an offer, removing a business

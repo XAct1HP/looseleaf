@@ -102,14 +102,32 @@ cp supabase/functions/.env.example supabase/functions/.env   # fill it in
 supabase secrets set --env-file supabase/functions/.env
 
 supabase functions deploy partner-billing-setup
+supabase functions deploy partner-billing-sync
 supabase functions deploy partner-portal
 supabase functions deploy partner-meter-redemptions --no-verify-jwt
 supabase functions deploy stripe-webhook            --no-verify-jwt
+supabase functions deploy partner-invite-email
 supabase functions deploy delete-account
 ```
 
 `delete-account` is not a billing function; it is here because it is the
-other thing that cannot run in the browser. Until it is deployed, both
+other thing that cannot run in the browser.
+
+`partner-invite-email` isn't a billing function either. It sends the email that
+tells somebody they were added to a business, and it needs one secret of its
+own:
+
+```
+RESEND_API_KEY=re_…                                   # the account that already sends auth mail
+RESEND_FROM=Loose Leaf <partners@hellolooseleaf.com>  # optional; that is the default
+```
+
+**It is safe to skip, and it degrades honestly.** With no key set the function
+answers `{ sent: false, reason: 'not_configured' }`, the invitation is still
+created, and the Team page prints the other sentence — *"they're on your team,
+but we couldn't email them; tell them yourself"* — rather than pretending mail
+went out. Which is the behaviour every invitation had before this function
+existed, so the worst case of not deploying it is the status quo. Until it is deployed, both
 delete buttons fail with an error — see [ACCOUNT-DELETION.md](ACCOUNT-DELETION.md).
 
 `partner-checkout` and `partner-report-usage` are gone — delete them from the

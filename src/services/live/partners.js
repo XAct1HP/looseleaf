@@ -214,6 +214,22 @@ export async function setRolePages(partnerId, role, pages) {
   return data
 }
 
+/**
+ * Add somebody to a business, and then tell them.
+ *
+ * The two halves are told apart on purpose. `invite_partner_member` is the
+ * one that matters: it writes the row that will let them in. The email is a
+ * courtesy on top, sent by an edge function because a Resend key must never
+ * reach a browser — and it is explicitly *not allowed to fail the invite*.
+ *
+ * Until this existed the second half simply didn't happen, which meant the
+ * person with the least context on Loose Leaf was the one nobody told. But
+ * mail bounces, mail is misconfigured, and a deployment that hasn't set
+ * Resend up yet is a perfectly normal state to be in. So the return value
+ * says which of those happened and the Team page says the right sentence:
+ * `{ id, emailed }`, where `emailed: false` means "your invitation is saved,
+ * now go and tell them yourself" rather than "something went wrong".
+ */
 export async function invite(partnerId, email, role = 'staff') {
   const { data, error } = await supabase.rpc('invite_partner_member', {
     p_partner: partnerId,
@@ -221,7 +237,25 @@ export async function invite(partnerId, email, role = 'staff') {
     p_role: role,
   })
   bail(error)
-  return data
+  return { id: data, emailed: await sendInviteEmail(data) }
+}
+
+/**
+ * Best-effort, and swallows everything. There is no failure here worth
+ * showing as an error — the invitation is already saved, and the only thing
+ * the caller needs from this is a boolean deciding which sentence to print.
+ */
+export async function sendInviteEmail(inviteId) {
+  if (!inviteId) return false
+  try {
+    const { data, error } = await supabase.functions.invoke('partner-invite-email', {
+      body: { invite_id: inviteId },
+    })
+    if (error) return false
+    return Boolean(data?.sent)
+  } catch {
+    return false
+  }
 }
 
 export async function revokeInvite(inviteId) {

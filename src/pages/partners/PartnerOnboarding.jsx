@@ -13,6 +13,7 @@ import { PARTNER_CATEGORIES, DATE_TYPE_TAGS, VIBE_TAGS, daysText } from '../../d
 import { fee } from '../../lib/partnerBilling'
 import { geocode } from '../../lib/geocode'
 import { PartnerOffline } from './PartnerAuth'
+import { safeNext, loginWithNext } from '../../lib/partnerNext'
 
 /**
  * ── Getting a business onto Loose Leaf ──────────────────────────────────────
@@ -176,7 +177,7 @@ export default function PartnerOnboarding() {
   // that stops a signed-in owner being sent here by a stale answer — by the
   // time `status` is 'ready', `existing` is real and the effect above has
   // already redirected.
-  if (status === 'anon') return <Navigate to="/partners/login" replace />
+  if (status === 'anon') return <Navigate to={loginWithNext(params.get('next'))} replace />
 
   if (status === 'loading' || invites === null) {
     return (
@@ -192,7 +193,11 @@ export default function PartnerOnboarding() {
         invites={invites}
         onAccepted={async () => {
           await refresh()
-          navigate('/partners/dashboard', { replace: true })
+          // Usually the dashboard. Sometimes the scanner with a customer's
+          // code still on it — a staff member's very first minute on Loose
+          // Leaf can begin with somebody holding out a phone, and accepting
+          // the invitation shouldn't lose what they were doing.
+          navigate(safeNext(params.get('next')) ?? '/partners/dashboard', { replace: true })
         }}
         onDecline={() => setInvites([])}
       />
@@ -286,8 +291,6 @@ export default function PartnerOnboarding() {
       cover_path: draft.coverPath,
       phone: draft.phone || null,
       hours: draft.hours,
-      logo_path: draft.logoPath,
-      cover_path: draft.coverPath,
       is_published: false,
     })
   }
@@ -329,6 +332,9 @@ export default function PartnerOnboarding() {
             : null,
           min_spend_cents: draft.offer.type === 'spend_threshold' ? draft.offer.minSpendCents : null,
           free_item: draft.offer.type === 'free_item' ? draft.offer.freeItem : null,
+          description: ['package', 'custom'].includes(draft.offer.type)
+            ? draft.offer.description || null
+            : null,
           terms: draft.offer.terms || null,
           days_of_week: draft.offer.days,
           max_monthly_redemptions: draft.offer.monthlyCap || null,
@@ -728,6 +734,7 @@ const OFFER_TYPES = [
 const blankOffer = {
   title: '',
   type: 'percent_off',
+  description: '',
   percentOff: 15,
   amountOffCents: null,
   minSpendCents: null,
@@ -794,6 +801,27 @@ function OfferStep({ offer, onChange, feeCents = 150 }) {
             </Field>
           )}
 
+          {/* The two types whose entire meaning is the sentence somebody
+              writes. This field was on the dashboard's offer sheet and not
+              here, and `submit()` didn't send it either — so a package
+              created during signup had nothing but its internal title, and
+              that title is what a member of staff would have read off the
+              scanner while applying the discount. */}
+          {['package', 'custom'].includes(o.type) && (
+            <Field
+              label="Describe it"
+              hint="This is the line your staff will see on the scanner, so write it the way you'd say it."
+              htmlFor="of-desc"
+            >
+              <TextInput
+                id="of-desc"
+                value={o.description ?? ''}
+                onChange={(v) => onChange({ ...o, description: v })}
+                placeholder="Two tickets to any Thursday show, $20"
+              />
+            </Field>
+          )}
+
           <Field label="Which days?" hint="A Sunday–Thursday offer is never shown on a Friday.">
             <DayPicker value={o.days} onChange={(d) => onChange({ ...o, days: d })} />
           </Field>
@@ -849,7 +877,10 @@ function offerSummary(o) {
     case 'spend_threshold':
       return `${dollars(o.amountOffCents)} off ${dollars(o.minSpendCents)}+`
     default:
-      return o.title || 'Loose Leaf offer'
+      // Same order the scanner uses: what they wrote, then the name they gave
+      // it. A preview that reads differently from the counter screen is a
+      // preview of the wrong thing.
+      return o.description || o.title || 'Loose Leaf offer'
   }
 }
 
