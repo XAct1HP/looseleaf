@@ -1,0 +1,699 @@
+<title>Comedy Showcase Onboarding</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --paper:#FFFDF8;
+    --cream:#FFF6EB;
+    --card:#FFFFFF;
+    --ink:#111C38;
+    --ink-soft:#26314D;
+    --body:#566070;
+    --faint:#8B93A3;
+    --rule:#EDE7DC;
+    --rule-strong:#DFD5C6;
+    --coral:#E9484D;
+    --coral-bright:#FF6468;
+    --coral-wash:#FFF1EF;
+    --moss:#3F7454;
+    --moss-wash:#E6F2EA;
+    --blue:#2F5C99;
+    --blue-wash:#EAF3FF;
+    --amber:#9C6510;
+    --amber-wash:#FBF3E4;
+    --shadow:0 1px 2px rgba(17,28,56,.04), 0 10px 28px -16px rgba(17,28,56,.20);
+    --mono:"DM Mono","SFMono-Regular",ui-monospace,Menlo,Consolas,monospace;
+    --sans:"DM Sans",Inter,system-ui,-apple-system,sans-serif;
+    --disp:"Fraunces",Lora,Georgia,serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:#12172A;
+      --cream:#181E33;
+      --card:#1B2138;
+      --ink:#F3EFE6;
+      --ink-soft:#DCD6C9;
+      --body:#A8B0C2;
+      --faint:#7A8398;
+      --rule:#2B3350;
+      --rule-strong:#3A4364;
+      --coral:#FF8386;
+      --coral-bright:#FF8386;
+      --coral-wash:#33212A;
+      --moss:#7FC098;
+      --moss-wash:#1D2E28;
+      --blue:#9CC0F2;
+      --blue-wash:#1B2740;
+      --amber:#E5B15C;
+      --amber-wash:#2E2718;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -18px rgba(0,0,0,.7);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:#12172A; --cream:#181E33; --card:#1B2138;
+    --ink:#F3EFE6; --ink-soft:#DCD6C9; --body:#A8B0C2; --faint:#7A8398;
+    --rule:#2B3350; --rule-strong:#3A4364;
+    --coral:#FF8386; --coral-bright:#FF8386; --coral-wash:#33212A;
+    --moss:#7FC098; --moss-wash:#1D2E28;
+    --blue:#9CC0F2; --blue-wash:#1B2740;
+    --amber:#E5B15C; --amber-wash:#2E2718;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 30px -18px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing:border-box; }
+  body {
+    background:var(--paper);
+    color:var(--body);
+    font-family:var(--sans);
+    font-size:16px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:860px; margin:0 auto; padding:0 22px 120px; }
+
+  h1,h2,h3,h4 { color:var(--ink); font-family:var(--disp); font-weight:600; text-wrap:balance; margin:0; letter-spacing:-.015em; }
+  h1 { font-size:clamp(34px,5.2vw,46px); line-height:1.08; }
+  h2 { font-size:clamp(25px,3.4vw,31px); line-height:1.15; }
+  h3 { font-size:19px; line-height:1.28; }
+  h4 { font-size:16px; line-height:1.35; font-family:var(--sans); font-weight:700; }
+  p { margin:0; max-width:66ch; }
+  a { color:var(--ink); text-decoration-color:var(--rule-strong); text-underline-offset:3px; }
+  a:focus-visible, summary:focus-visible { outline:2px solid var(--coral-bright); outline-offset:3px; border-radius:4px; }
+  code, .mono { font-family:var(--mono); font-size:.88em; }
+  code { background:var(--cream); border:1px solid var(--rule); border-radius:5px; padding:.08em .38em; color:var(--ink-soft); word-break:break-word; }
+
+  .eyebrow { font-size:11.5px; font-weight:700; letter-spacing:.13em; text-transform:uppercase; color:var(--faint); }
+
+  /* ── masthead ─────────────────────────────────────── */
+  .mast { padding:52px 0 28px; border-bottom:2px solid var(--ink); display:flex; flex-direction:column; gap:16px; }
+  .mast .meta { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:13px; color:var(--faint); }
+  .mast .lede { font-size:18px; line-height:1.55; color:var(--body); max-width:60ch; }
+
+  section { padding-top:52px; display:flex; flex-direction:column; gap:20px; }
+  .sechead { display:flex; flex-direction:column; gap:9px; padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  .stack { display:flex; flex-direction:column; gap:16px; }
+  .stack-sm { display:flex; flex-direction:column; gap:9px; }
+
+  /* ── verdict ──────────────────────────────────────── */
+  .verdict { background:var(--cream); border:1px solid var(--rule); border-left:5px solid var(--coral-bright); border-radius:18px; padding:24px 26px; display:flex; flex-direction:column; gap:14px; margin-top:30px; }
+  .verdict h2 { font-size:22px; }
+
+  /* ── status pills ─────────────────────────────────── */
+  .pill { display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:700; letter-spacing:.045em; text-transform:uppercase; padding:3px 9px; border-radius:100px; border:1px solid; white-space:nowrap; }
+  .pill::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor; }
+  .p-built { color:var(--moss); border-color:var(--moss); background:var(--moss-wash); }
+  .p-untested { color:var(--amber); border-color:var(--amber); background:var(--amber-wash); }
+  .p-manual { color:var(--blue); border-color:var(--blue); background:var(--blue-wash); }
+  .p-missing { color:var(--coral); border-color:var(--coral); background:var(--coral-wash); }
+
+  /* ── ledger table ─────────────────────────────────── */
+  .tablewrap { overflow-x:auto; border:1px solid var(--rule); border-radius:14px; background:var(--card); }
+  table { border-collapse:collapse; width:100%; min-width:520px; font-size:14.5px; }
+  th { text-align:left; font-size:11.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; color:var(--faint); padding:12px 16px; border-bottom:1px solid var(--rule); background:var(--cream); }
+  td { padding:12px 16px; border-bottom:1px solid var(--rule); vertical-align:top; color:var(--body); }
+  tr:last-child td { border-bottom:none; }
+  td strong, td b { color:var(--ink); font-weight:600; }
+  .num { font-variant-numeric:tabular-nums; white-space:nowrap; }
+
+  /* ── steps ────────────────────────────────────────── */
+  ol.steps { list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:2px; counter-reset:s; }
+  ol.steps > li { counter-increment:s; display:grid; grid-template-columns:30px 1fr; gap:14px; padding:13px 0; border-bottom:1px dashed var(--rule); }
+  ol.steps > li:last-child { border-bottom:none; }
+  ol.steps > li::before { content:counter(s); font-family:var(--mono); font-size:12.5px; font-weight:500; color:var(--ink); background:var(--cream); border:1px solid var(--rule-strong); border-radius:50%; width:26px; height:26px; display:flex; align-items:center; justify-content:center; margin-top:1px; }
+  ol.steps .t { color:var(--ink); font-weight:600; display:block; margin-bottom:3px; }
+  ol.steps .d { font-size:14.5px; }
+
+  ul.plain { margin:0; padding:0 0 0 20px; display:flex; flex-direction:column; gap:7px; }
+  ul.plain li { max-width:64ch; }
+  ul.plain li::marker { color:var(--faint); }
+
+  /* ── findings ─────────────────────────────────────── */
+  .finding { display:grid; grid-template-columns:auto 1fr; gap:0 16px; border:1px solid var(--rule); border-radius:14px; background:var(--card); padding:18px 20px 18px 0; box-shadow:var(--shadow); }
+  .finding .stripe { width:5px; border-radius:100px; grid-row:1/3; margin-left:-1px; }
+  .sev-crit .stripe { background:var(--coral-bright); }
+  .sev-should .stripe { background:var(--amber); }
+  .sev-nice .stripe { background:var(--rule-strong); }
+  .finding .hd { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; margin-bottom:7px; }
+  .finding h4 { flex:1 1 260px; }
+  .finding .tag { font-family:var(--mono); font-size:11px; color:var(--faint); }
+  .finding p { font-size:14.5px; }
+  .finding .fix { font-size:14px; color:var(--ink-soft); margin-top:8px; }
+  .finding .fix b { font-weight:700; }
+
+  .note { border:1px solid var(--rule); border-left:4px solid var(--blue); background:var(--blue-wash); border-radius:12px; padding:15px 18px; font-size:14.5px; }
+  .note.warn { border-left-color:var(--amber); background:var(--amber-wash); }
+  .note.bad { border-left-color:var(--coral-bright); background:var(--coral-wash); }
+  .note b { color:var(--ink); }
+
+  /* ── the forwardable insert ───────────────────────── */
+  .tear { display:flex; align-items:center; gap:14px; margin:78px 0 0; }
+  .tear span { font-family:var(--mono); font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--coral); white-space:nowrap; }
+  .tear i { flex:1; height:0; border-top:2px dashed var(--rule-strong); }
+
+  .insert { margin-top:22px; background:var(--cream); border:1px solid var(--rule-strong); border-radius:20px; padding:36px 34px 42px 52px; position:relative; overflow:hidden; }
+  .insert::before { content:""; position:absolute; left:22px; top:44px; bottom:44px; width:9px; border-radius:100px;
+    background:repeating-linear-gradient(to bottom, var(--rule-strong) 0 9px, transparent 9px 74px); opacity:.85; }
+  .insert h2 { font-size:clamp(24px,3.4vw,30px); }
+  .insert h3 { margin-top:6px; }
+  .insert section { padding-top:34px; }
+  .insert .sechead { border-bottom-color:var(--rule-strong); }
+  .insert p, .insert li { color:var(--body); }
+  .insert .card { background:var(--card); border:1px solid var(--rule); border-radius:14px; padding:18px 20px; }
+
+  .counter { background:var(--ink); color:#FFFDF8; border-radius:18px; padding:24px 26px; display:flex; flex-direction:column; gap:14px; }
+  .counter .eyebrow { color:rgba(255,253,248,.55); }
+  .counter h3 { color:#FFFDF8; }
+  .counter ol { list-style:none; margin:0; padding:0; counter-reset:c; display:flex; flex-direction:column; gap:11px; }
+  .counter ol li { counter-increment:c; display:grid; grid-template-columns:24px 1fr; gap:12px; align-items:start; font-size:16px; color:rgba(255,253,248,.9); }
+  .counter ol li::before { content:counter(c); width:22px; height:22px; border-radius:50%; background:var(--coral-bright); color:#111C38; font-family:var(--mono); font-size:12px; font-weight:500; display:flex; align-items:center; justify-content:center; margin-top:2px; }
+  .counter ol li b { color:#FFFDF8; }
+  .counter .foot { font-size:13px; color:rgba(255,253,248,.55); border-top:1px solid rgba(255,253,248,.15); padding-top:12px; }
+
+  .urls { display:flex; flex-direction:column; gap:0; border:1px solid var(--rule); border-radius:14px; background:var(--card); overflow:hidden; }
+  .urls > div { display:grid; grid-template-columns:180px 1fr; gap:4px 18px; padding:13px 18px; border-bottom:1px solid var(--rule); }
+  .urls > div:last-child { border-bottom:none; }
+  .urls dt, .urls .k { font-size:13.5px; color:var(--faint); }
+  .urls .v { font-family:var(--mono); font-size:13.5px; color:var(--ink); word-break:break-all; }
+  @media (max-width:620px) { .urls > div { grid-template-columns:1fr; } }
+
+  details { border:1px solid var(--rule); border-radius:12px; background:var(--card); padding:0 18px; }
+  details[open] { padding-bottom:16px; }
+  summary { cursor:pointer; padding:14px 0; font-weight:600; color:var(--ink); font-size:15px; list-style:none; display:flex; justify-content:space-between; gap:12px; }
+  summary::-webkit-details-marker { display:none; }
+  summary::after { content:"+"; font-family:var(--mono); color:var(--faint); }
+  details[open] summary::after { content:"–"; }
+
+  .foot { margin-top:70px; padding-top:22px; border-top:1px solid var(--rule); font-size:13px; color:var(--faint); }
+  @media (prefers-reduced-motion:no-preference) { html { scroll-behavior:smooth; } }
+  @media (max-width:560px) { .insert { padding:28px 20px 34px 34px; } .insert::before { left:12px; } }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <div class="eyebrow">Loose Leaf for Partners · codebase audit</div>
+    <h1>Ann Arbor Comedy Showcase: what the app actually does today</h1>
+    <p class="lede">An audit of the live partner onboarding, Date Pass redemption and billing code — followed by a plain-English setup guide written for Claudia and her box office manager.</p>
+    <div class="meta">
+      <span>4 September 2026</span>
+      <span>Audited against <code>main</code>, 25 migrations through <span class="mono">20260903140000</span></span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <div class="eyebrow">The short answer</div>
+    <h2>The product is built. The plumbing behind the money has never been switched on.</h2>
+    <p>Everything Claudia and her box office would touch — registration, the Date Spot, the offer editor, staff logins, the scanner, the valid/invalid screens, the redemption ledger — exists and works as described. Roles are real, the scanner is a real page a box office phone can install, and staff genuinely cannot see billing or customer data.</p>
+    <p>What is <em>not</em> proven is the last mile: Stripe has never been configured or run end to end, the metering job that turns redemptions into an invoice has to be created by hand, and no invitation email is ever sent to a staff member you add. There are five things below I'd fix or confirm before Claudia opens a browser.</p>
+    <p><b style="color:var(--ink)">Recommendation:</b> send her the guide as “here's how it works,” but don't walk her through <em>Add a card</em> until you've done one full dry run with a throwaway business. Details in <a href="#fixes">Recommended fixes</a>.</p>
+  </div>
+
+  <!-- ══════════ 1 · ONBOARDING ══════════ -->
+  <section id="onboarding">
+    <div class="sechead">
+      <div class="eyebrow">Audit 1</div>
+      <h2>How a business actually becomes a partner</h2>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Screen</th><th>Route</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Partner marketing page</strong></td><td class="mono">/partners</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Register a business</strong></td><td class="mono">/partners/join</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Log in — owners, managers <em>and</em> staff</strong></td><td class="mono">/partners/login</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>7-step setup wizard</strong></td><td class="mono">/partners/onboarding</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Dashboard</strong></td><td class="mono">/partners/dashboard</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Scanner</strong></td><td class="mono">/partners/dashboard/scan</td><td><span class="pill p-built">Built</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The exact sequence</h3>
+    <ol class="steps">
+      <li><span><span class="t">Claudia opens <span class="mono">/partners</span> and presses “Become a Partner.”</span><span class="d">Lands on <code>/partners/join</code>. Two fields: her name and an email. No <span class="mono">.edu</span> required — the partner side deliberately allows any address.</span></span></li>
+      <li><span><span class="t">A one-time code is emailed to her.</span><span class="d">Passwordless. Supabase sends the code (via Resend for deliverability); she types it and she's in. <b>That code is the whole of “email verification”</b> — there is no separate confirm-your-email step.</span></span></li>
+      <li><span><span class="t">She fills in seven steps, and each one saves as she goes.</span><span class="d">Closing the laptop halfway loses the step she was on, not the four before it.</span></span></li>
+      <li><span><span class="t">Submitting sets the business to <span class="mono">pending</span>.</span><span class="d">She lands on the dashboard with a “Pending review” pill and a banner reading <em>“With us for review.”</em> Everything is editable; students just can't see the venue yet.</span></span></li>
+      <li><span><span class="t">You approve it in Backstage → Partners.</span><span class="d"><span class="pill p-manual">Manual step</span> <code>partner_is_live()</code> returns true only once a human sets the status to <span class="mono">active</span>. Rejecting requires a note, which is shown to them verbatim.</span></span></li>
+      <li><span><span class="t">Only when she wants an offer <em>live</em> does money appear.</span><span class="d">Offers → “Save and turn it on” is blocked until a card is on file. Billing → “Add a card” redirects to a Stripe-hosted page; card details never touch the Loose Leaf app.</span></span></li>
+    </ol>
+
+    <h3>What the seven steps ask for</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Step</th><th>Fields</th><th>Required</th></tr></thead>
+        <tbody>
+          <tr><td><strong>1 · Business</strong></td><td>Your name · <em>“I own it” or “I manage it”</em> · business name · category · short description (300 char) · website · phone</td><td>Name, role, business name, category</td></tr>
+          <tr><td><strong>2 · Location</strong></td><td>Street, city, state, ZIP · walk minutes from campus · miles from campus</td><td>Street address</td></tr>
+          <tr><td><strong>3 · Date profile</strong></td><td>Date types (what kinds of date you suit) · vibe tags (max 4) · price range · one line for the card (90 char)</td><td>Date types, price range</td></tr>
+          <tr><td><strong>4 · Photos</strong></td><td>Logo + one cover photo. More can be added later (12 allowed).</td><td>Neither</td></tr>
+          <tr><td><strong>5 · Hours</strong></td><td>Opening hours per day</td><td>No</td></tr>
+          <tr><td><strong>6 · Offer</strong></td><td>Optional at this stage — saved as a draft either way</td><td>No</td></tr>
+          <tr><td><strong>7 · Review</strong></td><td>Shows the actual Date Spot card a student will see, plus “Cost to be here: Free”</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>The Date Spot is not a separate thing she creates.</b> It is written automatically from steps 3–5 and published when you approve the business. There is no second “create your listing” flow to explain.
+    </div>
+
+    <div class="note warn">
+      <b>No card, no Stripe, no payment method anywhere in onboarding.</b> The review screen says so explicitly: <em>“Nothing is charged, and we don't ask for a card.”</em> Billing is deferred to the moment an offer goes live, and that is the only gate.
+    </div>
+
+    <h3>What she can manage afterwards</h3>
+    <p>An owner sees nine pages: <b>Overview</b> (this month's dates), <b>Date Spot</b> (photos, hours, tags, address), <b>Offers</b>, <b>Scan a pass</b>, <b>Redemptions</b> (the ledger), <b>Analytics</b> (how much Loose Leaf traffic reaches the door), <b>Team</b>, <b>Billing</b>, <b>Settings</b> (including a grid controlling what managers and staff can reach).</p>
+  </section>
+
+  <!-- ══════════ 2 · REDEMPTION ══════════ -->
+  <section id="redemption">
+    <div class="sechead">
+      <div class="eyebrow">Audit 2</div>
+      <h2>What a redemption actually is</h2>
+    </div>
+
+    <h3>Before they arrive</h3>
+    <ul class="plain">
+      <li>By default an offer is marked <b>“Only for two people planning a date”</b> (<code>requires_date</code> defaults to true). The pass unlocks from inside a chat between two people who matched — not from browsing. If the venue unticks it, it can also be unlocked from Campus → Date Spots.</li>
+      <li>Unlocking calls <code>issue_date_pass()</code>, which mints a code in the format <span class="mono">LL-XXXX-XXXX</span>. The alphabet deliberately excludes <span class="mono">O I L 0 1</span>, so nothing is ambiguous read aloud at a counter.</li>
+      <li>The pass expires after the offer's <b>pass lifetime</b> (default 14 days) and lives in the student's wallet at <code>/app/passes</code>, reached from their profile.</li>
+      <li>Asking twice hands back the same pass rather than minting a second one.</li>
+    </ul>
+
+    <h3>What's on the customer's phone</h3>
+    <p>A dark ticket-shaped card: venue name, the offer in large type, the days it's valid, the expiry date, a QR code, the code printed underneath it, and the line <em>“Show this to your server.”</em> Any terms the venue wrote appear as small print at the bottom.</p>
+
+    <h3>What the employee does</h3>
+    <ol class="steps">
+      <li><span><span class="t">Opens the scanner.</span><span class="d"><code>/partners/dashboard/scan</code> — installed on the home screen it opens straight here. Three ways in: tap <b>Open the camera</b>, type the code, or point the phone's own camera at the QR (the QR encodes a link back to this page with the code pre-filled).</span></span></li>
+      <li><span><span class="t">The code is checked, read-only.</span><span class="d"><code>partner_lookup_pass()</code>. Nothing has happened yet. Green tick + <b>“Valid Loose Leaf Date Pass”</b>, the offer in 28px type, the terms, and <b>Status · Unused</b>. Or a red cross with one of four plain sentences: <em>“Already used.” · “This pass has expired.” · “This pass was cancelled.” · “This offer isn't running right now.”</em></span></span></li>
+      <li><span><span class="t">Presses <b>Confirm redemption</b>.</span><span class="d">The screen warns underneath: <em>“Press this once they're actually here. It can't be undone.”</em></span></span></li>
+      <li><span><span class="t">The database does the work under a row lock.</span><span class="d"><code>redeem_date_pass()</code> re-checks staff permission and the account's billing state, re-checks void / used / expired / not-running, writes a row to <code>date_pass_redemptions</code> with the <b>$1.50 fee stamped onto it</b>, flips the pass to <span class="mono">redeemed</span>, and logs a <span class="mono">verified_date</span> event.</span></span></li>
+      <li><span><span class="t">Full-screen green confirmation.</span><span class="d">A large tick, <b>“Date verified ✓”</b>, and <em>“Give them the discount. This is now counted in your dashboard.”</em> Plus a <b>Scan another</b> button.</span></span></li>
+    </ol>
+
+    <h3>How a second scan is prevented</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Layer</th><th>What stops it</th></tr></thead>
+        <tbody>
+          <tr><td><strong>The same pass, twice</strong></td><td>The pass row is locked (<code>for update</code>) and its status becomes <span class="mono">redeemed</span>. A second scan returns <em>“Already used.”</em> before the confirm button ever appears. Overridable per offer with “Let one pass be used more than once” — <b>off by default</b>.</td></tr>
+          <tr><td><strong>The same person, again next week</strong></td><td>Per-offer rule: <em>once ever</em> / <em>once every N days</em> (default 30) / <em>as often as they like</em>. The clock runs from the <b>visit</b>, not the unlock.</td></tr>
+          <tr><td><strong>Too many overall</strong></td><td>Per-month, per-day and lifetime caps on the offer. Hitting the monthly cap stops the offer being handed out until the 1st.</td></tr>
+          <tr><td><strong>Two racing devices</strong></td><td>The row lock. One wins, the other reads <em>“Already used.”</em></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Where it shows up afterwards</h3>
+    <ul class="plain">
+      <li><b>Redemptions</b> — a ledger row: time, offer name, the <em>last four characters</em> of the code, and nothing that could become a person. No names, ever, by construction.</li>
+      <li><b>Overview / Analytics</b> — today, this week, this month; and a funnel from “shown to a student” through to “walked in.”</li>
+      <li><b>Billing</b> — this month's count × $1.50, last month's total, and a credit meter.</li>
+    </ul>
+
+    <div class="note warn">
+      <b>The customer's phone does not update live.</b> Nothing pushes to it. Next time they open Date Passes the card is greyed out with “Already used.” In a box office queue this can produce a “…did that work?” beat. The employee's green screen is the only confirmation in the room.
+    </div>
+  </section>
+
+  <!-- ══════════ 3 · STAFF ══════════ -->
+  <section id="staff">
+    <div class="sechead">
+      <div class="eyebrow">Audit 3</div>
+      <h2>Staff, devices and the scanner</h2>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Question</th><th>Answer</th></tr></thead>
+        <tbody>
+          <tr><td>Does every employee need their own login?</td><td><b>No — but they can have one.</b> Staff roles are fully built.</td></tr>
+          <tr><td>Can several employees share one account?</td><td><b>Yes.</b> A session persists in the browser, so one sign-in on the box office tablet stays signed in indefinitely. Nothing forces re-authentication.</td></tr>
+          <tr><td>Can several devices scan at once?</td><td><b>Yes.</b> No single-session limit; every check happens per-request in Postgres.</td></tr>
+          <tr><td>Is there a dedicated scanner page?</td><td><b>Yes.</b> <code>/partners/dashboard/scan</code>, installable as its own home-screen app called <b>Loose Leaf Scanner</b> with its own icon (deliberately not the dating app's leaf).</td></tr>
+          <tr><td>Does the device need a camera?</td><td><b>No.</b> Typing the code is a first-class path, not a fallback, and the field is sized for a thumb.</td></tr>
+          <tr><td>Can they bookmark or save it?</td><td><b>Yes</b> — bookmark, or Add to Home Screen. There's a built-in walkthrough that detects the phone, plus a printable counter card with a QR that opens it.</td></tr>
+          <tr><td>Does an employee see the whole dashboard?</td><td><b>No.</b> A Staff login gets a scanner-only shell: logo, venue name, Add to home screen, Log out, scanner. No navigation at all.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>The three roles</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Role</th><th>Gets</th><th>Cannot</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Owner</strong></td><td>Everything, plus Settings and the grid that decides what the other two reach</td><td>—</td></tr>
+          <tr><td><strong>Manager</strong></td><td>Scanner and Team by default; hires and removes staff</td><td>Create an owner who could then remove them</td></tr>
+          <tr><td><strong>Staff</strong></td><td>The scanner. That's the whole login.</td><td>See billing, analytics, offers, or anything about the people on the date</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Two rules are structural, not settings: <b>scanning can never be revoked</b> from a team member, and <b>Settings can never be granted</b> to one.</p>
+
+    <div class="note bad">
+      <b>The gap that matters for a box office: no invitation email is sent.</b> Adding <span class="mono">boxoffice@…</span> in Team creates the invitation and then nothing happens — the invitee is never told. Somebody has to tell them out loud, or by their own email, that they should go to <code>/partners/login</code> and enter that exact address. On first sign-in they see a “<em>Ann Arbor Comedy Showcase added you</em> → Accept” screen. Invitations expire after 14 days.
+    </div>
+
+    <p>The second consequence: signing in on a <em>new</em> device sends a code to that address, so whoever holds that inbox has to be reachable. For a rotating box office, a <b>shared address the whole team can open</b> — <span class="mono">boxoffice@a2comedy.com</span> — is the configuration that actually survives contact with a Thursday night.</p>
+
+    <p>So the ideal you described — <em>open this page → scan → valid/invalid → apply the discount</em> — is what the app already does, with one asterisk: the page lives behind a login, and getting that login onto each device is the setup cost.</p>
+  </section>
+
+  <!-- ══════════ 5 · OFFER ══════════ -->
+  <section id="offer">
+    <div class="sechead">
+      <div class="eyebrow">Audit 4</div>
+      <h2>What an offer can be</h2>
+    </div>
+
+    <p>The offer editor is <b>structured, not free-form</b> — but with a free-text escape hatch. Seven types, and the first five compute their own wording at the counter.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Type</th><th>Fields</th><th>What the employee sees on scan</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Percentage off</strong></td><td>a percent</td><td><span class="mono">15% off</span></td></tr>
+          <tr><td><strong>Dollars off</strong></td><td>an amount</td><td><span class="mono">$5.00 off</span></td></tr>
+          <tr><td><strong>Something free</strong></td><td>item name</td><td><span class="mono">Free dessert</span></td></tr>
+          <tr><td><strong>Buy one, get one</strong></td><td>—</td><td><span class="mono">Buy one, get one</span></td></tr>
+          <tr><td><strong>Off a minimum spend</strong></td><td>amount + minimum</td><td>⚠ falls back to the offer <em>title</em> — see fix #9</td></tr>
+          <tr><td><strong>A couple package</strong></td><td>free-text description</td><td>the description</td></tr>
+          <tr><td><strong>Something else</strong></td><td>free-text description</td><td>the description</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Every restriction currently supported</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Control</th><th>What it does</th><th>Default</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Days of the week</strong></td><td>A Sun–Thu offer is never shown on a Friday</td><td class="num">Sun–Thu</td></tr>
+          <tr><td><strong>Time of day</strong></td><td>From / until, e.g. 4 PM to close</td><td>All day</td></tr>
+          <tr><td><strong>Date range</strong></td><td>Starts on / ends on</td><td>Open-ended</td></tr>
+          <tr><td><strong>Per month</strong></td><td>Stops being handed out until the 1st</td><td class="num">100</td></tr>
+          <tr><td><strong>Per day / total ever</strong></td><td>Optional harder caps</td><td>None</td></tr>
+          <tr><td><strong>Pass lifetime</strong></td><td>Days to actually come in after unlocking</td><td class="num">14</td></tr>
+          <tr><td><strong>Same person, how often</strong></td><td>Once ever · once every N days · unlimited</td><td class="num">Every 30 days</td></tr>
+          <tr><td><strong>Only for two people planning a date</strong></td><td>Only unlockable from a match's chat</td><td>On</td></tr>
+          <tr><td><strong>Multi-use pass</strong></td><td>Lets one pass be scanned more than once</td><td>Off</td></tr>
+          <tr><td><strong>Terms</strong></td><td>240 characters of small print, shown on the pass <em>and</em> on the scanner</td><td>Empty</td></tr>
+          <tr><td><strong>Offers live at once</strong></td><td>Cap read from the plan</td><td class="num">6</td></tr>
+          <tr><td><strong>New customers only</strong></td><td>⚠ checkbox is saved but <b>never read by anything</b> — see fix #11</td><td>Off</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Can they do “two discounted tickets”?</h3>
+    <p><b>Yes, but the “two” lives in words, not in the system.</b> There is no quantity field. The clean expressions available today:</p>
+    <ul class="plain">
+      <li><b>“Buy one, get one”</b> — the native type, and the closest thing to a two-ticket deal the scanner will render on its own.</li>
+      <li><b>“Dollars off”</b> with terms reading <em>“Valid on two admissions to the same show. One pass per couple.”</em></li>
+      <li><b>“A couple package”</b> with a description like <em>“Two tickets to any Thursday show, $20.”</em></li>
+    </ul>
+    <div class="note warn">
+      <b>Worth saying to Claudia out loud:</b> a Date Pass is issued to <em>one</em> student, and the system has no idea whether one person or two walked in. Whatever “two tickets” means operationally has to be written into the terms — the software will not enforce it.
+    </div>
+  </section>
+
+  <!-- ══════════ 6 · BILLING ══════════ -->
+  <section id="billing">
+    <div class="sechead">
+      <div class="eyebrow">Audit 5</div>
+      <h2>The fee structure: built vs. switched on</h2>
+    </div>
+
+    <h4 style="color:var(--moss)">A · What the code actually implements</h4>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Piece</th><th>Where</th><th>State</th></tr></thead>
+        <tbody>
+          <tr><td><strong>$1.50 per redemption</strong>, stamped onto the row at scan time so a future price change can't rewrite history</td><td class="mono">platform_billing.redemption_fee_cents = 150</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>No signup fee, no monthly subscription price</strong></td><td>onboarding has no payment step at all</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Invoiced monthly in arrears</strong> via a $0/month Stripe subscription used purely as an invoicing container (so you get Smart Retries, dunning and portal history)</td><td class="mono">partner-billing-setup</td><td><span class="pill p-untested">Never run live</span></td></tr>
+          <tr><td><strong>Redemptions reported to Stripe on a schedule</strong>, never inside the scan — a customer at a counter must not wait on Stripe</td><td class="mono">partner-meter-redemptions</td><td><span class="pill p-untested">Never run live</span></td></tr>
+          <tr><td><strong>Credit ceiling enforced in Postgres</strong> — the answer to “what stops a venue running up a tab?”</td><td class="mono">partner_credit_state()</td><td><span class="pill p-built">Built</span></td></tr>
+          <tr><td><strong>Two thresholds, not one</strong>: over the limit stops <em>issuing</em> new passes; a grace band on top means a student holding a valid pass is never turned away at a counter over an unpaid invoice</td><td class="mono">partner_can_issue / can_redeem</td><td><span class="pill p-built">Built</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4 style="color:var(--amber); margin-top:14px">B · What is still manual or unproven</h4>
+    <ul class="plain">
+      <li><b>Nothing has ever run against real Stripe.</b> The meter, the metered price, the webhook endpoint, the customer portal config and the retry policy all have to be created by hand in the Stripe dashboard. The runbook is <code>docs/STRIPE-PAY-PER-REDEMPTION.md</code>; it has never been executed.</li>
+      <li><b>The metering job has to be scheduled by hand</b> (pg_cron, or any external scheduler). If it doesn't exist, redemptions sit at <span class="mono">bill_status = 'pending'</span> forever — recorded correctly, invoiced never. The venue would get the discounts and no bill.</li>
+      <li><b>Approving a partner is you, in Backstage.</b> Not automated, and shouldn't be.</li>
+      <li><b>The new-partner credit limit is $25.</b> At $1.50 each that is <b>16 redemptions</b>, then a $10 grace band (≈6 more already-issued passes honoured). After that, new passes silently stop going out until an invoice is paid — and there is no Backstage UI to raise it, only SQL.</li>
+    </ul>
+
+    <div class="note">
+      <b>So the sentence you want to send is true</b> — “no monthly fee, no upfront cost, $1.50 only when a Date Pass is successfully redeemed, billed monthly” — <b>provided you finish the Stripe configuration before the first scan.</b> The product genuinely charges nothing else; the risk is that it charges nothing at all.
+    </div>
+  </section>
+
+  <!-- ══════════ 7 · FIXES ══════════ -->
+  <section id="fixes">
+    <div class="sechead">
+      <div class="eyebrow">Audit 6</div>
+      <h2>Recommended fixes before onboarding Comedy Showcase</h2>
+    </div>
+
+    <h3 style="color:var(--coral)">Critical before launch</h3>
+    <div class="stack">
+      <div class="finding sev-crit"><div class="stripe"></div><div>
+        <div class="hd"><h4>Stripe has never been configured or tested end to end</h4><span class="tag">#1</span></div>
+        <p>Two failure modes, both landing on Claudia. If <code>partner-billing-setup</code> isn't deployed with live keys, “Add a card” errors out at the exact moment she's trying to turn the offer on. If the metering job isn't scheduled, every redemption is recorded and never billed.</p>
+        <p class="fix"><b>Fix:</b> run the whole runbook against a throwaway partner — register, approve, add a card, issue a pass, scan it, force a meter run, confirm an invoice appears in Stripe — before Claudia touches it.</p>
+      </div></div>
+
+      <div class="finding sev-crit"><div class="stripe"></div><div>
+        <div class="hd"><h4>Invitation emails are not sent</h4><span class="tag">#2</span></div>
+        <p>Claudia adds the box office address and nothing arrives. She has no way of knowing that, and the employee has no way of knowing they were added. Everything about the staff flow assumes somebody says it out loud.</p>
+        <p class="fix"><b>Fix:</b> ship the invitation email (Resend is already wired for auth mail), or — as a stopgap — the guide below makes the hand-off explicit and step 8 tells her exactly what to say. The guide compensates; it doesn't repair it.</p>
+      </div></div>
+
+      <div class="finding sev-crit"><div class="stripe"></div><div>
+        <div class="hd"><h4>$25 credit limit is ~16 redemptions</h4><span class="tag">#3</span></div>
+        <p>A comedy venue with two shows a week could pass that in the first fortnight. New passes then stop being issued mid-month, invisibly from their side — the offer just quietly disappears from students' recommendations.</p>
+        <p class="fix"><b>Fix:</b> raise the <span class="mono">new</span> tier default, or set a per-partner override for the Comedy Showcase before they go live. It's a one-line SQL update today.</p>
+      </div></div>
+
+      <div class="finding sev-crit"><div class="stripe"></div><div>
+        <div class="hd"><h4>Confirm production is actually serving live mode</h4><span class="tag">#4</span></div>
+        <p>If <span class="mono">VITE_DATA_MODE</span> isn't <span class="mono">supabase</span> on the deployed site, <code>/partners/join</code> shows a page reading <em>“This part needs the real Loose Leaf”</em> — a demo-mode notice with setup instructions in it. That's what Claudia would see.</p>
+        <p class="fix"><b>Fix:</b> open <span class="mono">hellolooseleaf.com/partners/join</span> in a private window and confirm you get the name-and-email form.</p>
+      </div></div>
+
+      <div class="finding sev-crit"><div class="stripe"></div><div>
+        <div class="hd"><h4>Confirm the Ann Arbor campus is open</h4><span class="tag">#5</span></div>
+        <p>A campus opens at 50 finished profiles; below that students land on a waitlist. An approved venue with a live offer that no student can unlock is a worse outcome than not signing them yet.</p>
+        <p class="fix"><b>Fix:</b> check the count, and set Claudia's expectations about volume in the first month <em>in the email</em> rather than letting the dashboard tell her.</p>
+      </div></div>
+    </div>
+
+    <h3 style="color:var(--amber); margin-top:12px">Should improve</h3>
+    <div class="stack">
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>The QR deep-link is lost if the device isn't signed in</h4><span class="tag">#6</span></div>
+        <p>The pass QR encodes <code>/partners/dashboard/scan?code=LL-…</code>. On a signed-in device that's lovely — point the native camera, land on a checked pass. On a signed-out one the layout redirects to <code>/partners/login</code> with <code>replace</code>, dropping the code. The employee then logs in and finds an empty scanner.</p>
+        <p class="fix"><b>Fix:</b> stash the code through the login redirect and re-apply it after sign-in.</p>
+      </div></div>
+
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>Nothing confirms the redemption on the customer's side</h4><span class="tag">#7</span></div>
+        <p>No live update, no toast, no push. In a queue the couple has only the employee's word. A small “this pass was just redeemed” state on the student's card would remove a whole class of awkward counter conversation.</p>
+      </div></div>
+
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>The onboarding offer step can't describe a package</h4><span class="tag">#8</span></div>
+        <p>“A couple package” and “Something else” both need a description — the dashboard offer sheet has that field, the onboarding wizard's version doesn't, and doesn't save it. Pick either of those two during signup and the scanner falls back to showing the title.</p>
+        <p class="fix"><b>Fix:</b> add the field to the wizard. Until then, the guide below routes Claudia to build the offer <em>from the dashboard</em>, which sidesteps it.</p>
+      </div></div>
+
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>“Off a minimum spend” shows the wrong thing at the counter</h4><span class="tag">#9</span></div>
+        <p><code>partner_lookup_pass()</code> has no case for <span class="mono">spend_threshold</span>, so it falls through to the title. The dashboard says “$5 off $30+”; the employee's screen says “Weeknight Date.” The counter screen is the one place the wording has to be exact.</p>
+      </div></div>
+
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>The Redemptions ledger's amount column is always empty</h4><span class="tag">#10</span></div>
+        <p><code>redeem_date_pass()</code> accepts a ticket amount; the scanner never passes one. Every row reads “—”. Either capture it (one optional field on the confirm screen) or drop the column — an empty column reads as broken data.</p>
+      </div></div>
+
+      <div class="finding sev-should"><div class="stripe"></div><div>
+        <div class="hd"><h4>“New customers only” is a control that does nothing</h4><span class="tag">#11</span></div>
+        <p>It's on the offer form, it's saved to the column, and no function anywhere reads it. A venue could tick it, believe it's enforced, and be wrong.</p>
+        <p class="fix"><b>Fix:</b> implement it or hide it. Don't ship a checkbox that lies.</p>
+      </div></div>
+    </div>
+
+    <h3 style="color:var(--faint); margin-top:12px">Nice to have</h3>
+    <div class="stack">
+      <div class="finding sev-nice"><div class="stripe"></div><div>
+        <div class="hd"><h4>A short scanner URL</h4><span class="tag">#12</span></div>
+        <p><span class="mono">/partners/dashboard/scan</span> is three words longer than it needs to be and contains “dashboard,” which is exactly what you're telling staff they don't need. A <span class="mono">/scan</span> alias reads better on a printed card and out loud.</p>
+      </div></div>
+      <div class="finding sev-nice"><div class="stripe"></div><div>
+        <div class="hd"><h4>A Backstage screen for credit limits</h4><span class="tag">#13</span></div>
+        <p><code>staff_set_partner_credit()</code> exists; nothing calls it. Raising a venue's ceiling means opening the SQL editor.</p>
+      </div></div>
+      <div class="finding sev-nice"><div class="stripe"></div><div>
+        <div class="hd"><h4>Nothing has been tested on a physical iPhone</h4><span class="tag">#14</span></div>
+        <p>The box office phone is very likely an iPhone. The QR decoder, the home-screen install and the camera path are all verified only in headless Chromium, and two of three past install bugs were found in seconds on a real handset and by nothing in a test suite.</p>
+      </div></div>
+    </div>
+  </section>
+
+  <!-- ══════════ THE INSERT ══════════ -->
+  <div class="tear"><span>Forward from here</span><i></i></div>
+
+  <div class="insert">
+    <div class="eyebrow">For Claudia Hall · Ann Arbor Comedy Showcase</div>
+    <h2 style="margin-top:8px">Getting the Comedy Showcase on Loose Leaf</h2>
+    <p style="margin-top:12px; font-size:17px; line-height:1.55;">Everything below is written to be forwarded to whoever runs your box office. It doesn't assume any technical knowledge, and the part your staff have to learn is five steps long.</p>
+
+    <section>
+      <div class="sechead"><h3>How the partnership works</h3></div>
+      <p>Loose Leaf is a free dating app for the University of Michigan campus. When two students match and start planning a date, the app suggests real local places to go — and where a place has an offer for Loose Leaf couples, the couple can unlock a <b>Date Pass</b>: a ticket on their phone with a QR code and a short reference number.</p>
+      <p>They bring it to your box office. Your employee scans it, sees a green <em>valid</em> screen with your offer written on it, and applies the discount. That's the whole product.</p>
+      <div class="card" style="margin-top:6px">
+        <p style="font-size:15px"><b style="color:var(--ink)">There is no cost to be listed.</b> No setup fee, no monthly fee, no advertising spend. Loose Leaf charges <b>$1.50 only when one of your staff actually scans a pass</b>, and invoices that once at the end of the month. A month with no redemptions costs nothing.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>Step 1 — Setting up (Claudia, about 15 minutes, once)</h3></div>
+      <ol class="steps">
+        <li><span><span class="t">Go to hellolooseleaf.com/partners and press “Become a Partner.”</span><span class="d">Enter your name and the email address you actually check. You'll get a short code by email — type it in. There is no password to create or remember, ever.</span></span></li>
+        <li><span><span class="t">Fill in the seven-step form about the Showcase.</span><span class="d">Name, address, what kind of night out you are, a couple of photos, your hours. When it asks whether you own or manage the venue, answer honestly — either way you get full control of the account. It saves as you go, so you can stop and come back.</span></span></li>
+        <li><span><span class="t">Skip the “Offer” step for now and submit.</span><span class="d">You'll build the offer properly from your dashboard in a moment, where there are more options. Submitting sends the Showcase to us for review — a person reads every application, usually within a day.</span></span></li>
+        <li><span><span class="t">We approve you, and the Showcase appears on the app.</span><span class="d">You'll be able to see everything in your dashboard before that; students just can't see you until we've said yes.</span></span></li>
+        <li><span><span class="t">Create your offer: Offers → New offer.</span><span class="d">See “Choosing your offer” below for what you can set.</span></span></li>
+        <li><span><span class="t">Add a card: Billing → Add a card.</span><span class="d">This happens on Stripe's own secure page — Loose Leaf never sees the number. Nothing is charged for having a card on file. It's needed only so we can invoice you for redemptions that actually happen.</span></span></li>
+        <li><span><span class="t">Turn the offer on: Offers → “Save and turn it on.”</span><span class="d">It's in front of couples straight away. You can pause it any time, from any device.</span></span></li>
+      </ol>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>Step 2 — Setting up the box office (once, about 5 minutes)</h3></div>
+      <p><b style="color:var(--ink)">The simplest setup, and the one we'd recommend for a rotating box office:</b> create <em>one</em> Loose Leaf login for the box office rather than one per employee, using a shared address the whole team can reach — something like <span class="mono">boxoffice@a2comedy.com</span>.</p>
+      <ol class="steps">
+        <li><span><span class="t">In your dashboard, go to Team → Add someone.</span><span class="d">Enter the box office email address and choose the role <b>Staff</b>. A Staff login can do exactly one thing: scan a pass. It cannot see your billing, your analytics, your offers, or anything at all about the customers.</span></span></li>
+        <li><span><span class="t">Tell your box office manager directly that you've done it.</span><span class="d">We don't email them automatically yet, so this bit is on you — a message saying “I've added <span class="mono">boxoffice@a2comedy.com</span> to Loose Leaf, go to <b>hellolooseleaf.com/partners/login</b> and log in with it” is all it takes.</span></span></li>
+        <li><span><span class="t">On the box office phone or tablet, open hellolooseleaf.com/partners/login.</span><span class="d">Enter that address, get the code from the inbox, type it in, and press <b>Accept</b> on the welcome screen. The scanner opens.</span></span></li>
+        <li><span><span class="t">Add it to the home screen.</span><span class="d">Tap <b>Install</b> (or <b>Add to home screen</b>) at the top of that screen and follow the steps — it knows what kind of phone you're on. You get an app icon called <b>Loose Leaf Scanner</b> that opens straight to the camera. No hunting for a browser tab mid-rush.</span></span></li>
+        <li><span><span class="t">Repeat on any other device you want to scan from.</span><span class="d">You can use as many phones, tablets or computers as you like, at the same time, all on that one login. It stays signed in — nobody has to log in again at the start of a shift.</span></span></li>
+        <li><span><span class="t">Optional: Team → Print a counter card.</span><span class="d">One printed sheet with a QR code. Anyone who scans it gets the setup steps for their own phone. Tape it by the till.</span></span></li>
+      </ol>
+      <div class="card" style="margin-top:6px">
+        <p style="font-size:15px"><b style="color:var(--ink)">If you'd rather give people their own logins,</b> you can — add each employee's email as Staff, and each one gets the same scanner-only screen. It's the same amount of work per person, so it's a question of whether you want redemptions attributable to individuals.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>When a Loose Leaf customer arrives</h3></div>
+      <div class="counter">
+        <div class="eyebrow">At the box office · 5–15 seconds</div>
+        <ol>
+          <li>The customer shows you a dark <b>Date Pass</b> on their phone, with a QR code and a code like <span class="mono">LL-4KHD-9RTM</span>.</li>
+          <li>Open the <b>Loose Leaf Scanner</b> on the box office phone.</li>
+          <li>Tap <b>Open the camera</b> and hold their code in the square — or just type the code in the box underneath.</li>
+          <li>A <b>green screen</b> shows your offer in large type. Tap <b>Confirm redemption</b>.</li>
+          <li>It says <b>“Date verified ✓”</b>. Apply the discount. Done — we count it automatically.</li>
+        </ol>
+        <p class="foot">If it's not valid you get a red screen instead, saying exactly why: <em>already used</em>, <em>expired</em>, <em>cancelled</em>, or <em>this offer isn't running right now</em>. Nothing to interpret, and nothing you need to check anywhere else.</p>
+      </div>
+      <p style="margin-top:14px">Two small things worth knowing: the codes never contain the letters O, I or L or the digits 0 and 1, so they're unambiguous read out loud; and once a pass is confirmed it cannot be scanned again.</p>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>Choosing your offer</h3></div>
+      <p>You haven't decided yet, and you don't have to before signing up — the offer is edited from your dashboard whenever you like. Here's what's available.</p>
+      <p><b style="color:var(--ink)">The shape of the deal.</b> A percentage off; a dollar amount off; something free; buy-one-get-one; a set amount off a minimum spend; a “couple package” you describe in your own words; or anything else you write yourself.</p>
+      <p><b style="color:var(--ink)">Two discounted tickets works.</b> The neatest options for a comedy room are <em>buy one, get one</em>, or a dollar amount off with the terms reading “valid on two admissions to the same show.” Worth knowing: the pass is issued to one person, and the app can't tell how many people walk in — so whatever “two tickets” means for you needs to be written in the terms your staff can see on screen.</p>
+      <p><b style="color:var(--ink)">When it runs.</b> Specific days of the week (a Sunday–Thursday offer never appears on a Friday), a time window like 4 PM to close, and a start and end date if it's a limited run.</p>
+      <p><b style="color:var(--ink)">How many.</b> A cap per month, per day, or in total. Once a cap is reached the offer simply stops being handed out until it resets — you're never surprised by volume.</p>
+      <p><b style="color:var(--ink)">How often one person can use it.</b> Once ever, once every so many days (30 by default), or as often as they like. This counts from the visit, not from unlocking — a pass nobody brought in costs you nothing.</p>
+      <p><b style="color:var(--ink)">Who it's for.</b> By default an offer only unlocks for two people who matched and are planning a date, so what walks in is a date rather than somebody who came for a discount. You can loosen that if you'd rather.</p>
+      <p><b style="color:var(--ink)">Small print.</b> A short terms line that appears both on the customer's pass and on your employee's screen when they scan it — so the person applying the discount is reading your rules, not remembering them.</p>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>Pricing</h3></div>
+      <div class="card">
+        <p style="font-size:17px; color:var(--ink); font-family:var(--disp); font-weight:600; line-height:1.35;">No monthly fee. No upfront cost. Loose Leaf charges $1.50 only when a Date Pass is successfully redeemed.</p>
+        <p style="margin-top:10px; font-size:15px;">Redemptions are counted automatically as your staff scan them, and billed once at the end of the month. A month where nobody came in costs nothing. Being listed, being recommended, your photos, your hours and your dashboard are all free and always will be.</p>
+      </div>
+    </section>
+
+    <section>
+      <div class="sechead"><h3>What each side handles</h3></div>
+      <div class="tablewrap" style="border-color:var(--rule-strong)">
+        <table>
+          <thead><tr><th>Loose Leaf handles</th><th>The Comedy Showcase handles</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Suggesting you to couples planning a date · issuing and expiring Date Passes · counting every redemption · enforcing your caps and rules · your monthly invoice · keeping customer information away from your account entirely</td>
+              <td>Deciding the offer · scanning the pass · applying the discount</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:10px">One thing that isn't in either column, deliberately: <b>your dashboard never shows who was on the date.</b> You see that a valid Loose Leaf date happened, when, on which offer, and the last four characters of the code so you can match it to a receipt. Nothing more exists to show you.</p>
+    </section>
+  </div>
+
+  <!-- ══════════ 9 · EMAIL KIT ══════════ -->
+  <section id="kit">
+    <div class="sechead">
+      <div class="eyebrow">Audit 7</div>
+      <h2>Your follow-up email kit</h2>
+    </div>
+
+    <h3>The URLs</h3>
+    <div class="urls">
+      <div><span class="k">Claudia starts here</span><span class="v">hellolooseleaf.com/partners</span></div>
+      <div><span class="k">…or straight to signup</span><span class="v">hellolooseleaf.com/partners/join</span></div>
+      <div><span class="k">Everyone logs in here</span><span class="v">hellolooseleaf.com/partners/login</span></div>
+      <div><span class="k">The scanner</span><span class="v">hellolooseleaf.com/partners/dashboard/scan</span></div>
+      <div><span class="k">Scanner + install steps</span><span class="v">hellolooseleaf.com/partners/dashboard/scan?install=1</span></div>
+    </div>
+    <p style="font-size:14.5px">All five are relative to <code>VITE_SITE_URL</code>; the app falls back to <span class="mono">hellolooseleaf.com</span> if that isn't set, including on Vercel previews. Confirm the deployed domain matches before you paste them.</p>
+
+    <h3>Credentials and setup considerations to explain</h3>
+    <ul class="plain">
+      <li><b>There are no passwords.</b> Every sign-in is an emailed code. Say this explicitly — a box office manager will otherwise ask you for a username.</li>
+      <li><b>An invitation is tied to one exact address.</b> Forwarding the email doesn't pass it on, and a typo means the employee gets “Nothing is waiting for that address.”</li>
+      <li><b>Tell Claudia she must tell her manager.</b> This is the single most likely thing to go wrong, because nothing in the product will prompt her.</li>
+      <li><b>Warn against “Become a Partner” for staff.</b> A staff member who lands on the marketing page sees one coral button and can register the Showcase a second time. The login page and the counter card both say so, but say it in the email too.</li>
+      <li><b>A card is required before an offer can go live</b> — not to be listed. Frame the sequence as <em>sign up → get approved → build the offer → add a card → switch it on</em> so the card doesn't arrive as a surprise.</li>
+    </ul>
+
+    <h3>Screenshots worth capturing</h3>
+    <ul class="plain">
+      <li>A Date Pass on a student's phone — this is the single most useful image, because it's the thing the box office has to recognise.</li>
+      <li>The scanner's green <b>valid</b> screen with a real offer on it, and the <b>Date verified ✓</b> screen after confirming.</li>
+      <li>One red state — <em>“Already used.”</em> is the most reassuring one to show.</li>
+      <li>The staff-only shell, to prove visually that an employee sees nothing but a scanner.</li>
+      <li>The Offers sheet, so Claudia can see the days/times/caps controls before she has an account.</li>
+    </ul>
+
+    <h3>Worth recording</h3>
+    <p>One <b>60–90 second screen recording of a single redemption</b> — pass on a phone, scan, green screen, confirm, verified — would do more than the entire written guide. A box office manager will watch that once and be done.</p>
+    <p>A second, shorter one covering <em>add a staff member → log in on the counter phone → add to home screen</em> is worth it too, precisely because it's the step with no email behind it.</p>
+    <p>Skip a general product walkthrough. The venue doesn't need to understand the dating app.</p>
+
+    <h3>Would I hold the guide?</h3>
+    <div class="note bad">
+      <b>Send the explanation; hold the walkthrough.</b> Fixes #4 and #5 are five minutes of checking and could invalidate the whole thing — if the deployed site is in demo mode or the campus is closed, Claudia's first click produces a page you don't want her to read. Fix #1 is the one that would embarrass you mid-setup: “Add a card” failing in front of a partner is a much worse first impression than a slower onboarding.
+      <br><br>
+      Practically: reply to Claudia now with the “How the partnership works,” “When a customer arrives” and “Pricing” sections — those are what her box office manager needs to answer the operational question she's actually asking. Hold steps 1 and 2 until you've done a dry run, then send them as “you're clear to set up.”
+    </div>
+  </section>
+
+  <p class="foot">Audited against the working tree on 4 September 2026. Every route, function name, default value and on-screen sentence quoted above was read out of the codebase rather than inferred. Nothing described as built is unimplemented; everything unproven is labelled.</p>
+
+</div>

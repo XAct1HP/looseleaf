@@ -1058,6 +1058,80 @@ begin
   perform assert(ok, 'a killed event admits nobody');
 end $$;
 
+-- ─── 16b. the host console's clock ────────────────────────────────────────
+--
+--  The console's timer sat at 0:00 for an entire event. It was reading the
+--  round from `event_state`, which is addressed by a participant's join token
+--  — and a host has none, so it got the poster, the time, and no round at
+--  all. The round comes through the host's own endpoint now. Three things
+--  have to be true of it: it is there, it is timing and nothing else, and the
+--  console polling it is enough to keep the room moving on its own.
+
+do $$
+declare
+  v_ev uuid; v_u uuid; i int; v_code text;
+  v_sum jsonb; v_round jsonb; v_before int; v_after int;
+begin
+  perform act_as(current_setting('test.host')::uuid);
+  v_ev := create_live_event('Clock Night', null, 'Room 9', now());
+  select code into v_code from live_events where id = v_ev;
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_set_live_event_status(v_ev, 'approved');
+
+  for i in 1..4 loop
+    insert into auth.users (email) values ('clock' || i || '@ev.edu') returning id into v_u;
+    perform act_as(v_u);
+    perform join_live_event(v_code, 'C' || i, '{}'::jsonb);
+  end loop;
+
+  perform act_as(current_setting('test.host')::uuid);
+  perform update_live_event(v_ev, jsonb_build_object(
+    'round_seconds', 120, 'break_seconds', 30, 'planned_rounds', 2, 'advance', 'auto'));
+  perform start_live_event(v_ev);
+
+  v_sum   := host_event_summary(v_ev);
+  v_round := v_sum -> 'round';
+
+  perform assert(v_sum ? 'now',
+                 'the host is given the server clock, like every phone');
+  perform assert(v_round is not null and jsonb_typeof(v_round) = 'object',
+                 '★ and the round — without one the console counts down from nothing');
+  perform assert((v_round ->> 'index')::int = 1, 'the round it is actually on');
+  perform assert((v_round ->> 'ends_at')::timestamptz > now(),
+                 'ending in the future, which is what makes the number move');
+  perform assert((select count(*) from jsonb_object_keys(v_round)) = 3,
+                 '★ timing only — index, starts_at, ends_at, and nothing that names anybody');
+  perform assert((v_sum ->> 'status') = 'running', 'and the status, read after advancing');
+
+  --  A host alone in the room testing the thing should not watch a round
+  --  overrun forever waiting for somebody else's phone to wake up.
+  select count(*) into v_before from live_event_rounds where event_id = v_ev;
+  update live_event_rounds
+     set starts_at = starts_at - interval '5 minutes',
+         ends_at   = ends_at   - interval '5 minutes'
+   where event_id = v_ev;
+
+  v_sum := host_event_summary(v_ev);
+  select count(*) into v_after from live_event_rounds where event_id = v_ev;
+  perform assert(v_after = v_before + 1,
+                 '★ the console''s own poll starts the next round, with no phone awake');
+  perform assert((v_sum ->> 'rounds')::int = v_after,
+                 'and its counts are the ones from after that advance, not before');
+
+  --  Past the last planned round, the poll that stops the clock is the poll
+  --  that says the event is over.
+  update live_event_rounds
+     set starts_at = starts_at - interval '5 minutes',
+         ends_at   = ends_at   - interval '5 minutes'
+   where event_id = v_ev;
+  v_sum := host_event_summary(v_ev);
+  perform assert((v_sum ->> 'status') = 'ended',
+                 'an ending is reported on the poll that ends it, not the one after');
+
+  perform assert(v_sum::text not like '%C1%',
+                 'and none of this gave the host a name they did not have');
+end $$;
+
 -- ─── 17. suspending a host ────────────────────────────────────────────────
 --
 --  Last, deliberately: this kills every event the host has, so anything that

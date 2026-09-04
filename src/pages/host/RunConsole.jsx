@@ -34,6 +34,7 @@ export default function RunConsole() {
   const [summary, setSummary] = useState({})
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [offset, setOffset] = useState(0)
 
   const refresh = useCallback(async () => {
     try {
@@ -45,6 +46,9 @@ export default function RunConsole() {
       setData(d)
       setRoster(r)
       setSummary(s)
+      //  The console corrects for its own clock exactly as a phone does, from
+      //  the timestamp that came back with the round it is about to draw.
+      setOffset(clockOffset(s?.now))
       setError('')
     } catch (e) {
       setError(e.message)
@@ -71,6 +75,10 @@ export default function RunConsole() {
 
   const ev = data.event
   const accent = themeOf(ev)
+  //  Both come from the same poll, but `summary` is built *after* the server
+  //  advances the event and `getEvent` runs concurrently with it — so on the
+  //  poll that ends an event, this is the one that knows.
+  const status = summary.status ?? ev.status
   const here = Number(summary.here ?? 0)
   const registered = Number(summary.registered ?? 0)
   const rounds = Number(summary.rounds ?? 0)
@@ -108,7 +116,7 @@ export default function RunConsole() {
       wide
       action={
         <div className="flex items-center gap-3">
-          <StatusPill status={ev.status} />
+          <StatusPill status={status} />
           <code className="font-display text-[19px] font-semibold tracking-[0.16em] text-mist">
             {ev.code}
           </code>
@@ -128,7 +136,7 @@ export default function RunConsole() {
             className="rounded-card border border-rule p-6 text-center sm:p-10"
             style={{ background: accent.wash }}
           >
-            {ev.status === 'approved' ? (
+            {status === 'approved' ? (
               <>
                 <p className="font-display text-[52px] font-semibold leading-none" style={{ color: accent.ink }}>
                   {here}
@@ -142,13 +150,19 @@ export default function RunConsole() {
                 </p>
               </>
             ) : (
-              <RunClock ev={ev} rounds={rounds} accent={accent} />
+              <RunClock
+                ev={ev}
+                round={summary.round}
+                offset={offset}
+                rounds={rounds}
+                accent={accent}
+              />
             )}
           </div>
 
           {/* ── controls ── */}
           <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {ev.status === 'approved' && (
+            {status === 'approved' && (
               <Button
                 variant="coral"
                 size="lg"
@@ -163,7 +177,7 @@ export default function RunConsole() {
               </Button>
             )}
 
-            {ev.status === 'running' && (
+            {status === 'running' && (
               <>
                 <Button
                   variant="coral"
@@ -185,7 +199,7 @@ export default function RunConsole() {
               </>
             )}
 
-            {ev.status === 'paused' && (
+            {status === 'paused' && (
               <Button
                 variant="coral"
                 size="lg"
@@ -198,7 +212,7 @@ export default function RunConsole() {
               </Button>
             )}
 
-            {['running', 'paused'].includes(ev.status) && (
+            {['running', 'paused'].includes(status) && (
               <Button
                 variant="danger"
                 size="lg"
@@ -210,7 +224,7 @@ export default function RunConsole() {
               </Button>
             )}
 
-            {ev.status === 'ended' && ev.likes_enabled && ev.reveal !== 'never' && (
+            {status === 'ended' && ev.likes_enabled && ev.reveal !== 'never' && (
               <Button
                 variant="coral"
                 size="lg"
@@ -313,39 +327,22 @@ export default function RunConsole() {
   )
 }
 
-function RunClock({ ev, rounds, accent }) {
-  const [round, setRound] = useState(null)
-  const [offset, setOffset] = useState(0)
-
-  //  The console reads the same clock everybody else does, through the same
-  //  endpoint, so the number on the projector and the number in forty pockets
-  //  cannot drift apart.
-  useEffect(() => {
-    let cancelled = false
-    const tick = async () => {
-      try {
-        const s = await events.state(ev.code)
-        if (cancelled) return
-        setOffset(clockOffset(s?.now))
-        setRound(s?.round ?? null)
-      } catch {
-        /* the poll above already surfaces a real failure */
-      }
-    }
-    tick()
-    const t = setInterval(tick, 4000)
-    return () => {
-      cancelled = true
-      clearInterval(t)
-    }
-  }, [ev.code])
-
-  const [, setTick] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setTick((n) => n + 1), 1000)
-    return () => clearInterval(t)
-  }, [])
-
+function RunClock({ ev, round, offset, rounds, accent }) {
+  //  The round arrives on the console's own poll, from `host_event_summary`.
+  //
+  //  It used to come from `events.state(ev.code)` — the endpoint every phone
+  //  polls — on the reasoning that one clock for the room cannot drift. The
+  //  reasoning was right and the call was wrong: `event_state` is addressed by
+  //  a participant's join token, and a host has none, so it answered with the
+  //  poster and the time and no round at all. `left` was 0 on every render and
+  //  the number on the projector never moved. The host endpoint returns the
+  //  same `now` and the same `ends_at` off the same row, so the two screens
+  //  still cannot disagree.
+  //
+  //  There is no interval here: the parent re-renders once a second, and
+  //  `left` is recomputed from the clock rather than counted down, so a laptop
+  //  that slept through a round wakes up showing the right number instead of
+  //  a confident wrong one.
   const left = round ? secondsUntil(round.ends_at, offset) : 0
 
   return (
