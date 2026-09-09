@@ -34,6 +34,10 @@ export default function DateNudge({
   onDismiss,
   onShown,
   surface = 'chat',
+  // The staff test thread. Real recommendations, no marks left: see the note
+  // in `services/dates.js`. It is not the surface, on purpose — the surface
+  // that reaches Postgres has to be the real one or the test stops testing.
+  test = false,
 }) {
   const { state: store } = useStore()
   const couple = useMemo(() => coupleContext(store.me, person), [store.me, person])
@@ -58,6 +62,7 @@ export default function DateNudge({
         dates.logRecommendation(list[0].id, {
           surface,
           conversationId,
+          test,
           rank: 1,
           fit: list[0].fit,
         })
@@ -68,12 +73,12 @@ export default function DateNudge({
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversationId, couple, surface])
+  }, [conversationId, couple, surface, test])
 
   if (state !== 'ready' || !spot) return null
 
   function swap() {
-    dates.logRecommendation(spot.id, { surface, conversationId, outcome: 'swapped' })
+    dates.logRecommendation(spot.id, { surface, conversationId, test, outcome: 'swapped' })
     const [next, ...remaining] = pool
     if (!next) {
       setState('empty')
@@ -81,7 +86,7 @@ export default function DateNudge({
     }
     setPool(remaining)
     setSpot(next)
-    dates.logRecommendation(next.id, { surface, conversationId, fit: next.fit })
+    dates.logRecommendation(next.id, { surface, conversationId, test, fit: next.fit })
   }
 
   return (

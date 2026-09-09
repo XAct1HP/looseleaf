@@ -40,6 +40,10 @@ export default function DatePlanner({
   person,
   conversationId,
   surface = 'planner',
+  // The staff test thread. Real recommendations, no marks left: see the note
+  // in `services/dates.js`. Kept separate from the surface on purpose — the
+  // surface that reaches Postgres has to be the real one.
+  test = false,
   onClose,
   onConfirm,
 }) {
@@ -94,6 +98,7 @@ export default function DatePlanner({
         dates.logRecommendation(s.id, {
           surface,
           conversationId,
+          test,
           rank: i + 1,
           fit: s.fit,
         })
@@ -104,12 +109,13 @@ export default function DatePlanner({
     } finally {
       setLoading(false)
     }
-  }, [type, vibes, budget, conversationId, couple, surface])
+  }, [type, vibes, budget, conversationId, couple, surface, test])
 
   function finish(spot, issuedPass) {
     dates.logRecommendation(spot.id, {
       surface,
       conversationId,
+      test,
       fit: spot.fit,
       outcome: 'chosen',
     })
@@ -133,7 +139,7 @@ export default function DatePlanner({
     }
     setLoading(true)
     try {
-      const issued = await dates.unlockOffer(spot.offer.id, { conversationId, surface })
+      const issued = await dates.unlockOffer(spot.offer.id, { conversationId, surface, test })
       setPass({
         ...issued,
         offerSummary: spot.offer.summary,
@@ -288,6 +294,7 @@ export default function DatePlanner({
                   dates.logRecommendation(s.id, {
                     surface,
                     conversationId,
+                    test,
                     outcome: 'dismissed',
                   })
                   setResults(results.filter((r) => r.id !== s.id))

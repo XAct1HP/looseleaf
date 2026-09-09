@@ -23,10 +23,13 @@
  *   resolvable by id and by nothing else.
  *
  *   And it is not counted. The thread's recommendations run against the real
- *   `recommend_date_spots` — that is the whole point of it — but they carry
- *   `surface: 'test'`, which `services/dates.js` refuses to log and refuses to
- *   issue a Date Pass for. A staff member poking at this must not turn up in a
- *   real business's funnel, and must not spend one of their redemptions.
+ *   `recommend_date_spots` on the real `'chat'` / `'planner'` surface — that is
+ *   the whole point of it — but they carry a client-side `test: true`, which
+ *   `services/dates.js` refuses to log and refuses to issue a Date Pass for. A
+ *   staff member poking at this must not turn up in a real business's funnel,
+ *   and must not spend one of their redemptions. The flag is not the surface:
+ *   sending `'test'` to Postgres skipped the `chat_recommendations` gate, so
+ *   the thread saw places a real chat would not.
  *
  * What it *cannot* fake: the database half of the couple. `recommend_date_spots`
  * reads the other person's interests out of the conversation, and there is no

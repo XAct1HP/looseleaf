@@ -116,11 +116,23 @@ export default function Chat() {
    * conversation id that doesn't exist being handed to Postgres as a uuid.
    *
    * So the crossing is made once, here, rather than being remembered in each
-   * component: a null conversation and a surface of 'test', which
+   * component: a null conversation and a `test` flag, which
    * `services/dates.js` refuses to log and refuses to issue a pass for.
+   *
+   * The flag is deliberately NOT the surface. `recommend_date_spots` branches
+   * on `p_surface`: `'chat'` additionally requires the business to hold
+   * `chat_recommendations`, and an unrecognised value sails straight past that
+   * gate — so sending `'test'` had the test thread quietly seeing places a
+   * real chat would not, which is the exact opposite of what a test is for.
+   * The surface that reaches Postgres is the real one; the flag never leaves
+   * the client (`live.recommend` names the parameters it forwards, so it
+   * cannot reach the RPC even by accident).
+   *
+   * Anything that suppresses side effects for a simulated user has to be a
+   * client-side flag. The moment it becomes a value the server branches on,
+   * the simulation stops matching the thing it simulates.
    */
   const isTest = Boolean(convo?.isTest)
-  const surface = isTest ? 'test' : 'chat'
   const spotConversationId = isTest ? null : convo?.id ?? null
 
   if (!convo || !person) {
@@ -166,13 +178,12 @@ export default function Chat() {
           <span className="min-w-0">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-[16px] font-medium leading-tight text-navy">{person.firstName}</span>
-              {isTest ? (
-                <span className="shrink-0 rounded-full border border-notebook/50 bg-notebook-soft px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-[0.06em] text-[#2F5C99]">
-                  Test
-                </span>
-              ) : (
-                <IconVerified size={13} className="shrink-0 text-notebook-deep" />
-              )}
+              {/* No "Test" pill here or in the match list — the thread has to
+                  read as an ordinary match while it is being demonstrated.
+                  What says so instead is the banner further down, which is
+                  inside the thread where somebody actually reading it is, and
+                  carries the "Start it over" button anyway. */}
+              <IconVerified size={13} className="shrink-0 text-notebook-deep" />
             </span>
             <span className="block truncate text-[12.5px] text-mist">
               {person.major} ’{person.gradYear} · Michigan
@@ -296,7 +307,8 @@ export default function Chat() {
             <div className="!mt-7">
               <DateNudge
                 conversationId={spotConversationId}
-                surface={surface}
+                surface="chat"
+                test={isTest}
                 person={person}
                 reason={nudge.reason}
                 onShown={() => actions.noteNudgeShown(convo.id)}
@@ -348,7 +360,8 @@ export default function Chat() {
         dateType={dateType}
         person={person}
         conversationId={spotConversationId}
-        surface={isTest ? 'test' : 'planner'}
+        surface="planner"
+        test={isTest}
         onClose={() => {
           setPlanning(false)
           setDateType(null)

@@ -34,16 +34,23 @@ export async function recommend(opts = {}) {
 }
 
 /**
- * `surface: 'test'` is the staff test thread in `data/testThread.js`. It gets
- * real recommendations — that is what it is for — but it is not a student, so
- * it must not turn into a real business's numbers or a real business's money.
+ * `test: true` is the staff test thread in `data/testThread.js`. It gets real
+ * recommendations — that is what it is for — but it is not a student, so it
+ * must not turn into a real business's numbers or a real business's money.
  * Both refusals live here rather than in the components, because a choke point
  * one function wide is a rule and a check in three components is a hope.
+ *
+ * This used to key on `surface === 'test'`, and that was a bug in both
+ * directions. `recommend_date_spots` branches on the surface it is given: a
+ * `'chat'` requires the business to hold `chat_recommendations`, and an
+ * unrecognised value skips that check — so the test thread was seeing places a
+ * real chat would not. The surface is now always a real one, and the thing
+ * that suppresses side effects is this flag, which never reaches Postgres.
  */
-const isTestSurface = (opts) => opts?.surface === 'test'
+const isTest = (opts) => opts?.test === true
 
 export async function unlockOffer(offerId, opts = {}) {
-  if (isTestSurface(opts)) {
+  if (isTest(opts)) {
     throw new Error('This is a test conversation — it can’t unlock a real Date Pass.')
   }
   if (isDemo) return (await demo()).unlockOffer(offerId, opts)
@@ -61,7 +68,7 @@ export function logSpotView(spotId) {
 }
 
 export function logRecommendation(spotId, opts) {
-  if (isTestSurface(opts)) return
+  if (isTest(opts)) return
   if (isDemo) {
     if (opts?.outcome === 'dismissed') demoDismissed = [...demoDismissed, spotId]
     return
