@@ -19,6 +19,13 @@ import * as partners from '../../../services/partners'
  * happen on Stripe's own pages, reached through a URL minted by an edge
  * function that holds the secret key — the browser only ever sees a redirect.
  *
+ * `demo_mode` is read in two places and never displayed. A demonstration
+ * account reads as an ordinary paying partner on purpose — the person being
+ * walked through this page is being shown the product, and a banner saying
+ * "this is pretend" would be showing them something else. What it changes is
+ * only what can be clicked: both buttons on this page lead to Stripe, and a
+ * demo account has no Stripe customer to lead to.
+ *
  * The one thing worth reading twice: coming back from Stripe with
  * `?billing=ok` is a *hint*, not proof. All it does here is trigger a refetch
  * and show a "give it a moment" line. The card becomes real when the webhook
@@ -246,15 +253,23 @@ export default function Billing() {
           <p className="mt-1.5 max-w-[58ch] text-[13.5px] leading-relaxed text-graphite">
             {notice.body}
           </p>
-          <Button
-            variant={notice.tone === 'ask' ? 'coral' : 'outline'}
-            size="md"
-            className="mt-4"
-            onClick={summary?.has_card ? manage : addCard}
-            disabled={Boolean(busy)}
-          >
-            {busy ? 'Opening…' : notice.cta}
-          </Button>
+          {/* The sentence stays; the button doesn't. Every route out of here
+              ends at Stripe, and a demo account has no Stripe customer to end
+              up at — so the one thing this button could do is throw an error
+              in the middle of a demonstration. The notice itself is worth
+              keeping: running out of headroom is a real part of how this
+              works, and showing it happen is the point. */}
+          {!summary?.demo_mode && (
+            <Button
+              variant={notice.tone === 'ask' ? 'coral' : 'outline'}
+              size="md"
+              className="mt-4"
+              onClick={summary?.has_card ? manage : addCard}
+              disabled={Boolean(busy)}
+            >
+              {busy ? 'Opening…' : notice.cta}
+            </Button>
+          )}
         </div>
       )}
 
@@ -295,7 +310,7 @@ export default function Billing() {
             </div>
           </dl>
 
-          {summary?.has_card && (
+          {summary?.has_card && !summary?.demo_mode && (
             <div className="mt-5 flex flex-wrap items-center gap-3 border-t border-rule pt-4">
               <Button variant="outline" size="md" onClick={manage} disabled={busy === 'portal'}>
                 {busy === 'portal' ? 'Opening…' : 'Manage billing'}

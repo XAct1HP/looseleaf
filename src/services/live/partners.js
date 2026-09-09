@@ -684,6 +684,26 @@ export async function staffRemovePartner(partnerId) {
   bail(error)
 }
 
+/**
+ * Put a business into demo mode, or take it out.
+ *
+ * On means it trades as though a card were on file — offers run, passes issue
+ * and redeem, the ledger and the credit meter fill up normally — while nothing
+ * is ever metered to Stripe or counted as Loose Leaf revenue. The database
+ * refuses to do this to a business with any Stripe history, so the button
+ * cannot be pointed at a real partner by accident.
+ *
+ * Off waives whatever the demonstration ran up, which is why this is an RPC
+ * and not an update: the flag and the cleanup have to move together.
+ */
+export async function staffSetDemoMode(partnerId, on) {
+  const { error } = await supabase.rpc('staff_set_partner_demo_mode', {
+    p_partner: partnerId,
+    p_on: on,
+  })
+  bail(error)
+}
+
 export async function staffRevenue() {
   const { data, error } = await supabase.rpc('staff_partner_revenue')
   bail(error)

@@ -80,6 +80,45 @@ export default function Partners() {
   }
 
   /**
+   * Demo mode: this business trades as though a card were on file.
+   *
+   * It exists for showing the product to a business that has not signed up
+   * yet. Offers turn on, passes issue and redeem, and the billing page fills
+   * up at the real $1.50 — none of which is reachable otherwise, because all
+   * of it is gated on a payment method. Nothing is metered to Stripe and
+   * nothing lands in our revenue.
+   *
+   * The confirm is on the way *out*, not the way in, because that direction
+   * is the destructive one: leaving demo mode waives the redemptions the
+   * demonstration ran up, so they can never be billed to a real card attached
+   * later. Turning it on is refused outright by the database for any business
+   * with Stripe history, so this button cannot do damage to a real partner.
+   */
+  async function toggleDemo(partner) {
+    if (
+      partner.demo_mode &&
+      !window.confirm(
+        `Take ${partner.name} out of demo mode?\n\n` +
+          'Their offers stop being issuable until a real card is added, and the ' +
+          'redemptions from the demo are written off so they can never be billed.'
+      )
+    ) {
+      return
+    }
+
+    setBusy(partner.id)
+    setError(null)
+    try {
+      await partners.staffSetDemoMode(partner.id, !partner.demo_mode)
+      await load()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /**
    * Gone, not suspended. Everything under the business goes with it — team,
    * Date Spot, offers, passes, credit row — which is what makes it the right
    * tool for a test account and the wrong one for a business that has traded.
@@ -193,6 +232,11 @@ export default function Partners() {
                         {p.sub_status === 'active' ? 'card on file' : p.sub_status}
                       </Chip>
                     )}
+                    {p.demo_mode && (
+                      <Chip tone="blue" className="!px-2.5 !py-1 !text-[11.5px]">
+                        demo
+                      </Chip>
+                    )}
                   </div>
 
                   <p className="mt-1.5 text-[13px] text-mist">
@@ -251,6 +295,14 @@ export default function Partners() {
                       Reinstate
                     </Button>
                   )}
+                  <Button
+                    size="sm"
+                    variant={p.demo_mode ? 'primary' : 'outline'}
+                    onClick={() => toggleDemo(p)}
+                    disabled={busy === p.id}
+                  >
+                    {p.demo_mode ? 'Demo on' : 'Demo'}
+                  </Button>
                   <button
                     type="button"
                     onClick={() => setRemoving(p)}

@@ -549,6 +549,49 @@ paying at once. It should stay small relative to cash on hand.
 
 ---
 
+## 10b · Demo mode, and why a partner might not be billing
+
+Backstage → Partners has a **Demo** button on every business. It sets
+`partners.demo_mode`, which makes `partner_has_card()` answer yes for that
+account and nothing else. Offers go live, passes issue and redeem, the ledger
+fills at the real $1.50 and the credit ladder applies exactly as it does to
+anybody — because all of that flows from `partner_credit_state()`, which asks
+`partner_has_card()` and never asks anything else about Stripe.
+
+It exists so that Loose Leaf can be *shown* to a business. Everything past
+"turn an offer on" is gated on a payment method, so without it a demonstration
+either stops at the dull part or wants a real card first.
+
+**If a partner's redemptions are sitting at `pending` and never becoming
+invoice lines, check this flag first.** Two places know about it:
+
+- `redemptions_awaiting_meter()` skips demo partners, so no meter event is
+  ever sent and no invoice line can exist.
+- `staff_partner_revenue()` skips them too — pretend dollars stay out of the
+  "earned this month" and "outstanding" figures on the Backstage page.
+
+Two guards make it safe to leave in production:
+
+- **Turning it on is refused** for any business with a Stripe customer or a
+  redemption that has been metered, invoiced, paid or failed. It is a tool for
+  accounts invented for a meeting, and the database will not let it be pointed
+  at one that trades.
+- **Turning it off waives** whatever the demonstration ran up. Those rows are
+  `pending` like anybody's; without this, attaching a real card to that same
+  business later would let the metering worker find them and bill somebody for
+  scans that never happened. They become `waived` rather than being deleted —
+  the visit did happen, it just costs nothing.
+
+The partner's own dashboard is deliberately unlabelled: it reads as an
+ordinary paying account, because the person being walked through it is being
+shown the product. The only thing `demo_mode` changes on that page is that
+the buttons leading to Stripe are not rendered, since there is no Stripe
+customer for them to lead to.
+
+Covered by section 23 of `tests/partners_test.sql`.
+
+---
+
 ## 11 · End-to-end check, in a sandbox
 
 Do not skip this. Nothing in this repo has ever run against real Stripe.

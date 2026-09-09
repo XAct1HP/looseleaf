@@ -2554,5 +2554,263 @@ begin
                  'but the person''s login survives — it is theirs, not the business''s');
 end $$;
 
+-- ═══════════════════════════════════════════════════════════════════════════
+--  23. demo mode
+-- ═══════════════════════════════════════════════════════════════════════════
+--  20260909120000. A restaurant being *shown* Loose Leaf cannot be shown the
+--  half of it that matters, because everything past "turn an offer on" is
+--  gated on a payment method — so a demonstration either stops at the dull
+--  part or asks the person giving it to hand Stripe a real card first. Demo
+--  mode says a flagged partner has one, and changes nothing else.
+--
+--  These assertions guard the two edges of that. The value of the feature is
+--  that a demo is the real product, so the ordinary functions have to do the
+--  ordinary things — the offer goes live through `public_offers`, the pass is
+--  minted by `issue_date_pass`, the counter honours it, the ledger fills at
+--  $1.50, and the credit ceiling still bites. The risk of the feature is that
+--  pretend money becomes real money, so both places it could are named:
+--  the metering worker's queue, and Loose Leaf's own revenue.
+--
+--  Sits after 21 because 21g removes `test.partner`; everything here builds
+--  its own business rather than borrowing one.
+
+--  23a. the wall a demonstration actually hits
+do $$
+declare
+  v_partner uuid;
+  v_offer   uuid;
+  s record; n int;
+begin
+  insert into partners (name, category, status)
+  values ('Frito Petitos', 'restaurant', 'active')
+  returning id into v_partner;
+
+  insert into partner_members (partner_id, partner_user_id, role)
+  values (v_partner, current_setting('test.biz')::uuid, 'owner');
+
+  --  Every day, no date required, no per-person cap — the same reasons
+  --  section 3 gives for the fixture offer. This section is about billing.
+  insert into partner_offers (partner_id, title, offer_type, percent_off,
+                              days_of_week, status, max_monthly_redemptions,
+                              requires_date, per_person_rule)
+  values (v_partner, 'Free chips with any burrito', 'percent_off', 20,
+          array[0,1,2,3,4,5,6], 'active', 500, false, 'unlimited')
+  returning id into v_offer;
+
+  perform set_config('test.demo_partner', v_partner::text, false);
+  perform set_config('test.demo_offer',   v_offer::text, false);
+
+  perform assert(exists (select 1 from partner_credit where partner_id = v_partner),
+                 'a new business gets its credit row without anybody creating one');
+  perform assert(not partner_is_demo(v_partner),
+                 'and is nobody''s demonstration until somebody says so');
+
+  select * into s from partner_credit_state(v_partner);
+  perform assert(not s.has_card, 'a business that has never seen Stripe has no card');
+  perform assert(not s.can_issue and s.reason = 'no_card',
+                 'so it cannot hand out a single pass — which is the wall a demo hits');
+
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+  select count(*) into n from public_offers where id = v_offer;
+  reset role;
+  perform assert(n = 0, 'and its offer is not shown to a student at all');
+end $$;
+
+--  23b. and it is staff work to lift it
+do $$
+declare v_partner uuid := current_setting('test.demo_partner')::uuid; ok boolean := false;
+begin
+  perform act_as(current_setting('test.biz')::uuid);
+  begin
+    perform staff_set_partner_demo_mode(v_partner, true);
+  exception when others then
+    ok := sqlerrm like '%Not authorised%';
+  end;
+  perform assert(ok, 'a business cannot put itself into demo mode');
+
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_set_partner_demo_mode(v_partner, true);
+  perform assert(partner_is_demo(v_partner), 'staff can');
+end $$;
+
+--  23c. the demonstration is the product, not a picture of it. Every function
+--  here is the one a real partner's traffic goes through.
+do $$
+declare
+  v_partner uuid := current_setting('test.demo_partner')::uuid;
+  v_offer   uuid := current_setting('test.demo_offer')::uuid;
+  s record; r record; n int; v_code text;
+begin
+  select * into s from partner_credit_state(v_partner);
+  perform assert(s.has_card, 'a demo account reads as having a payment method');
+  perform assert(s.can_issue and s.can_redeem, 'so it can issue passes and honour them');
+  perform assert(s.reason is null, 'with nothing standing in the way');
+
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+  select count(*) into n from public_offers where id = v_offer;
+  reset role;
+  perform assert(n = 1, 'the offer is live to students, through the ordinary view');
+
+  select * into r from issue_date_pass(v_offer, null, 'planner');
+  v_code := r.pass_code;
+  perform assert(v_code like 'LL-%', 'a real pass, from the real function');
+
+  perform act_as(current_setting('test.biz')::uuid);
+  select * into r from redeem_date_pass(v_partner, v_code, 1800);
+  perform assert(r.ok, 'and it redeems at the counter like any other');
+
+  perform assert((select fee_cents from date_pass_redemptions where partner_id = v_partner) = 150,
+                 'landing in the ledger at the real fee, not a token one');
+  perform assert((select bill_status from date_pass_redemptions where partner_id = v_partner) = 'pending',
+                 'in the ordinary pending state — nothing downstream has a demo case');
+end $$;
+
+--  23d. what the person being shown this is looking at
+do $$
+declare v_partner uuid := current_setting('test.demo_partner')::uuid; j jsonb;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  j := partner_billing_summary(v_partner);
+
+  perform assert((j->>'this_month_count')::int = 1,
+                 'the billing page counts the redemption');
+  perform assert((j->>'this_month_cents')::int = 150,
+                 'at $1.50, the same arithmetic as everybody else');
+  perform assert((j->>'has_card')::boolean,
+                 'and the page reads as an ordinary paying account');
+  perform assert((j->>'demo_mode')::boolean,
+                 'demo_mode rides along for the client to decide what is safe to click');
+end $$;
+
+--  23e. the first place pretend money could become real money
+do $$
+declare v_partner uuid := current_setting('test.demo_partner')::uuid; n int;
+begin
+  select count(*) into n from redemptions_awaiting_meter(500) where partner_id = v_partner;
+  perform assert(n = 0, 'a demo redemption is never handed to the metering worker');
+
+  --  The filter is not load-bearing today — a demo account has no Stripe
+  --  customer, which would exclude it anyway. It is here so the guarantee is
+  --  a rule somebody wrote down rather than a side effect of a different
+  --  condition, and this is the assertion that tells the difference.
+  insert into partner_subscriptions (partner_id, plan_id, status, stripe_customer_id)
+  values (v_partner, 'free', 'active', 'cus_demo_must_never_be_billed');
+
+  select count(*) into n from redemptions_awaiting_meter(500) where partner_id = v_partner;
+  perform assert(n = 0, 'and still is not, with a customer id sitting right there on the account');
+end $$;
+
+--  23f. the second: Loose Leaf's own books
+do $$
+declare
+  v_partner uuid := current_setting('test.demo_partner')::uuid;
+  v_offer   uuid := current_setting('test.demo_offer')::uuid;
+  v_pass    uuid;
+  before_month bigint; after_month bigint;
+  before_out   bigint; after_out   bigint;
+  j jsonb;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  j := staff_partner_revenue();
+  before_month := (j->'this_month'->>'cents')::bigint;
+  before_out   := (j->>'outstanding_cents')::bigint;
+
+  --  A busy demo fortnight, straight into the ledger. Fifty at $1.50 plus the
+  --  one from 23c is $76.50, over the $75 a new partner is extended.
+  insert into date_passes (code, offer_id, partner_id, issued_to, expires_at, status)
+  values ('LL-DEMOFILL', v_offer, v_partner, current_setting('test.bo')::uuid,
+          now() + interval '7 days', 'redeemed')
+  returning id into v_pass;
+
+  insert into date_pass_redemptions
+    (pass_id, partner_id, offer_id, redeemed_at, fee_cents, bill_status)
+  select v_pass, v_partner, v_offer, now(), 150, 'pending' from generate_series(1, 50);
+
+  j := staff_partner_revenue();
+  after_month := (j->'this_month'->>'cents')::bigint;
+  after_out   := (j->>'outstanding_cents')::bigint;
+
+  perform assert(after_month = before_month,
+                 'fifty demo redemptions add nothing to what Loose Leaf earned this month');
+  perform assert(after_out = before_out,
+                 'and nothing to what it is owed');
+end $$;
+
+--  23g. the credit ladder is real too, which is the part worth demonstrating
+do $$
+declare
+  v_partner uuid := current_setting('test.demo_partner')::uuid;
+  v_offer   uuid := current_setting('test.demo_offer')::uuid;
+  s record; n int;
+begin
+  select * into s from partner_credit_state(v_partner);
+  perform assert(s.unbilled_cents = 7650, 'a demo''s spending is real to the credit meter');
+  perform assert(s.limit_cents = 7500, 'measured against the ordinary new-partner ceiling');
+  perform assert(not s.can_issue and s.reason = 'at_limit',
+                 'so a demo can be run into that ceiling on purpose, in front of somebody');
+  perform assert(s.can_redeem,
+                 'and the grace band still honours passes already in hands');
+
+  perform act_as(current_setting('test.ada')::uuid);
+  set local role authenticated;
+  select count(*) into n from public_offers where id = v_offer;
+  reset role;
+  perform assert(n = 0, 'including the part where the offer quietly stops being shown');
+end $$;
+
+--  23h. leaving demo mode writes the demonstration off
+--
+--  This is the half that stops a demo becoming a bill. The rows sit in the
+--  ledger as `pending` like anybody's; if this business later attached a real
+--  card, the metering worker would find them and charge somebody for scans
+--  that never happened.
+do $$
+declare v_partner uuid := current_setting('test.demo_partner')::uuid; s record; n int;
+begin
+  perform act_as(current_setting('test.staff')::uuid);
+  perform staff_set_partner_demo_mode(v_partner, false);
+  perform assert(not partner_is_demo(v_partner), 'demo mode comes back off');
+
+  select * into s from partner_credit_state(v_partner);
+  perform assert(not s.has_card, 'and the pretend card goes with it');
+
+  select count(*) into n from date_pass_redemptions
+   where partner_id = v_partner and bill_status = 'pending';
+  perform assert(n = 0, 'nothing of the demonstration is left billable');
+
+  select count(*) into n from date_pass_redemptions
+   where partner_id = v_partner and bill_status = 'waived';
+  perform assert(n = 51, 'every row is written off rather than deleted — the visit happened');
+
+  perform assert(partner_unbilled_cents(v_partner) = 0,
+                 'so a card attached tomorrow cannot be charged for a meeting last month');
+end $$;
+
+--  23i. and it refuses to be pointed at a business that actually trades
+do $$
+declare v_real uuid; ok boolean := false;
+begin
+  insert into partners (name, category, status)
+  values ('Somewhere Real', 'cafe', 'active')
+  returning id into v_real;
+
+  insert into partner_subscriptions (partner_id, plan_id, status, stripe_customer_id,
+                                     payment_method_at)
+  values (v_real, 'free', 'active', 'cus_a_real_business', now());
+
+  perform act_as(current_setting('test.staff')::uuid);
+  begin
+    perform staff_set_partner_demo_mode(v_real, true);
+  exception when others then
+    ok := sqlerrm like '%real billing history%';
+  end;
+  perform assert(ok,
+    'a business that has been through Stripe cannot be turned into a demonstration — '
+    'the flag would stop its redemptions being billed');
+  perform assert(not partner_is_demo(v_real), 'and it is left exactly as it was');
+end $$;
+
 \echo ''
 \echo 'All partner invariants held.'
