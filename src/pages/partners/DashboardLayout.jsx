@@ -378,11 +378,30 @@ export function StatusPill({ partner, className = '' }) {
 function StatusBanner({ partner, billing }) {
   const canBill = (partner.pages ?? []).includes('billing')
   const billingBroken = ['past_due', 'unpaid'].includes(partner.subStatus)
-  // No Stripe customer at all means nobody has ever added a card. That is a
-  // perfectly normal state to sit in for weeks — a business can be listed,
-  // photographed and recommended without one — so this reads as a next step
-  // rather than as something being wrong.
-  const noCard = !partner.subStatus || partner.subStatus === 'incomplete'
+
+  // Nobody has ever added a card. That is a perfectly normal state to sit in
+  // for weeks — a business can be listed, photographed and recommended
+  // without one — so this reads as a next step rather than as something
+  // being wrong.
+  //
+  // Ask the database, not the Stripe subscription row. `has_card` comes from
+  // `partner_credit_state()`, which is the same answer the Billing page, the
+  // Offers page, the scanner and `public_offers` all act on; `subStatus` is a
+  // second definition of the same question, and the two disagree for a demo
+  // account — which is the whole point of one, and was enough to leave this
+  // banner nagging on every screen of a demonstration.
+  //
+  // Nothing is guessed while the summary is in flight. `subStatus` was doing
+  // that job — it is on the partner record already, so it painted instantly —
+  // and the cost is a banner that appears and then takes itself back on every
+  // page load of a demo account. A nudge that is a beat late is much cheaper
+  // than one that is briefly wrong, and the same null also covers the fetch
+  // having failed, where "you have no card" is a claim we cannot make.
+  //
+  // A card-less partner who somehow never gets a summary is not left in the
+  // dark: Offers and the scanner ask the same question at the point where it
+  // actually stops them doing something.
+  const noCard = billing ? !billing.has_card : false
 
   if (partner.status === 'rejected') {
     return (
